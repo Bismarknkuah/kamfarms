@@ -21,13 +21,13 @@
     "prisma:studio": "prisma studio --schema=prisma/schema.prisma"
   },
   "dependencies": {
-    "prisma": "5.22.0",
-    "@prisma/client": "5.22.0"
+    "@prisma/client": "^5.22.0"
   },
   "devDependencies": {
+    "argon2": "^0.40.3",
+    "prisma": "^5.22.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.5.4",
-    "argon2": "^0.40.3"
+    "typescript": "^5.5.4"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

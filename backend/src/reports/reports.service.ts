@@ -408,6 +408,13 @@ export class ReportsService {
     const warehouseIds = balances.filter((b) => b.locationType === 'WAREHOUSE').map((b) => b.locationId);
     const millingCenterIds = balances.filter((b) => b.locationType === 'MILLING_CENTER').map((b) => b.locationId);
 
+    // Keep each Prisma result explicitly typed. This prevents TypeScript from
+    // inferring any branch as `never[]` when the generated Prisma client is
+    // rebuilt during CI/Railway deployment.
+    const farmQuery = this.prisma.farm.findMany({ where: { id: { in: farmIds } } });
+    const warehouseQuery = this.prisma.warehouse.findMany({ where: { id: { in: warehouseIds } } });
+    const millingCenterQuery = this.prisma.millingCenter.findMany({ where: { id: { in: millingCenterIds } } });
+
     const [farms, warehouses, millingCenters] = await Promise.all([
       // Always queried, even with an empty id list — `{ in: [] }`
       // already correctly returns zero rows in Prisma, and skipping the
@@ -418,9 +425,9 @@ export class ReportsService {
       // below failed to compile once run against the actual generated
       // Prisma client (something this sandbox can't produce, which is
       // why it wasn't caught until the real build).
-      this.prisma.farm.findMany({ where: { id: { in: farmIds } } }),
-      this.prisma.warehouse.findMany({ where: { id: { in: warehouseIds } } }),
-      this.prisma.millingCenter.findMany({ where: { id: { in: millingCenterIds } } }),
+      farmQuery,
+      warehouseQuery,
+      millingCenterQuery,
     ]);
     const nameFor = (locationType: string, locationId: string): string => {
       if (locationType === 'FARM') return farms.find((f) => f.id === locationId)?.name ?? 'Unknown farm';

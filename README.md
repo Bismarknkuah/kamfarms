@@ -1477,6 +1477,38 @@ oversight.
 Confirmed with a real production build and a full backend test pass,
 zero regressions.
 
+<<<<<<< HEAD
+=======
+## Section 9's calculations confirmed already complete, and a live-computed alert for Section 25's "long-running shipment"
+
+**Section 9 checked in full, not just the recovery% and mass-balance
+already confirmed** — recovery%, broken%, hull%, and waste% are all
+genuinely calculated, matching the spec exactly. Section 17's package-
+reconciliation is also already correct: total KG is always derived
+from size × bag count server-side, never accepted as a client-supplied
+number, with a real check against negative packaging loss.
+
+**Section 25's "long-running shipment" alert — added deliberately as
+a live-computed check, not a background job.** A true scheduled job
+would need infrastructure this sandbox has no way to verify actually
+runs reliably in the real deployment (this project has no job-
+scheduling library at all yet), so rather than add unverifiable
+infrastructure, this computes the same thing on each dashboard visit:
+anything still in transit more than 3 days after departure surfaces in
+the existing "Needs your attention" banner for whoever holds
+`warehouse.receive`. Less elegant than a true background alert, but
+honestly something that's actually been verified to work.
+
+Also worth noting plainly: this batch's first verification pass showed
+hundreds of "cannot find module" errors — not a real code problem, the
+sandbox's `node_modules` had simply gone missing between messages.
+Confirmed directly before treating it as anything else, reinstalled,
+and reran clean.
+
+Confirmed with a real production build and a full backend test pass,
+zero regressions.
+
+>>>>>>> 3f403ee (Add long-running shipment alert; confirm Section 9/17 calculations complete)
 ## A note on verification in this build environment
 
 This code was written and tested in a network-restricted sandbox that

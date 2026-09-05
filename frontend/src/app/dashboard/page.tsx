@@ -129,6 +129,28 @@ export default function DashboardPage() {
           .catch(() => null),
       );
     }
+<<<<<<< HEAD
+=======
+    if (hasPermission('warehouse.receive')) {
+      // Section 25's "long-running shipment / unreceived shipment"
+      // alert — computed live on each visit rather than a background
+      // job, since this sandbox has no way to verify a scheduled job
+      // actually runs reliably in the real deployment. Anything still
+      // in transit more than 3 days after departure is worth a flag —
+      // it likely either arrived without being logged, or is stuck.
+      items.push(
+        shipmentsApi
+          .list(accessToken)
+          .then((shipments) => {
+            const threeDaysAgo = new Date();
+            threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+            const overdue = shipments.filter((s) => !s.receivedAt && new Date(s.departedAt) < threeDaysAgo);
+            return overdue.length > 0 ? { label: 'Shipments overdue — departed 3+ days ago, still unreceived', count: overdue.length, href: '/shipments' } : null;
+          })
+          .catch(() => null),
+      );
+    }
+>>>>>>> 3f403ee (Add long-running shipment alert; confirm Section 9/17 calculations complete)
     if (hasPermission('sales.approve')) {
       items.push(
         salesOrdersApi

@@ -1,1 +1,14 @@
 node_modules
+.env
+
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+
+# Build output
+backend/dist/
+backend/tsconfig.build.tsbuildinfo
+
+# Local Prisma backup
+prisma/schema.prisma.backup

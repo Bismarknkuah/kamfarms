@@ -773,13 +773,13 @@ model InventoryBalance {
   @@map("inventory_balances")
 }
 
-/** Section 24's exact requirement: nobody types "warehouse stock =
- * 5,000 bags." A correction is its own real, approved, permanent
- * transaction — the original balance-affecting history it corrects
- * stays completely untouched. Mirrors InventoryBalance's own flexible
- * dimension shape (exactly one of paddyGrade or product+packagingSize
- * set, matching whatever's actually being corrected) rather than
- * inventing a different convention for the same three location types. */
+// Section 24's exact requirement: nobody types "warehouse stock =
+// 5,000 bags." A correction is its own real, approved, permanent
+// transaction — the original balance-affecting history it corrects
+// stays completely untouched. Mirrors InventoryBalance's own flexible
+// dimension shape (exactly one of paddyGrade or product+packagingSize
+// set, matching whatever's actually being corrected) rather than
+// inventing a different convention for the same three location types.
 model InventoryAdjustment {
   id               String              @id @default(uuid())
   adjustmentNumber String              @unique @map("adjustment_number") // ADJ-2026-000123
@@ -1038,13 +1038,13 @@ model Shipment {
   @@map("shipments")
 }
 
-/** Section 23's exact requirement: a transfer between warehouses is
- * never just a number changing in two places, and it's never a single
- * step either — dispatch and receipt are genuinely separate events with
- * their own timestamps and their own possible variance, the same
- * two-step shape Shipment already uses for farm-to-warehouse paddy
- * movement. Stock genuinely passes through EXTERNAL (the same in-
- * transit pseudo-location paddy already uses) between the two. */
+// Section 23's exact requirement: a transfer between warehouses is
+// never just a number changing in two places, and it's never a single
+// step either — dispatch and receipt are genuinely separate events with
+// their own timestamps and their own possible variance, the same
+// two-step shape Shipment already uses for farm-to-warehouse paddy
+// movement. Stock genuinely passes through EXTERNAL (the same in-
+// transit pseudo-location paddy already uses) between the two.
 model StockTransfer {
   id                String              @id @default(uuid())
   transferNumber    String              @unique @map("transfer_number") // TRF-2026-000123

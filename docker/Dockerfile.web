@@ -1,0 +1,21 @@
+# Used for local `docker compose up` only. On Vercel, this Dockerfile is
+# not used at all — Vercel builds frontend/ directly via its Next.js
+# builder; see docs/DEPLOYMENT.md.
+FROM node:20-alpine AS build
+WORKDIR /repo
+COPY package.json .npmrc ./
+COPY frontend/package.json frontend/package.json
+RUN npm install --workspace=frontend --include-workspace-root --legacy-peer-deps
+COPY frontend frontend
+RUN npm run build --workspace=frontend
+
+FROM node:20-alpine
+WORKDIR /repo
+ENV NODE_ENV=production
+COPY --from=build /repo/frontend/.next frontend/.next
+COPY --from=build /repo/frontend/node_modules frontend/node_modules
+COPY --from=build /repo/frontend/package.json frontend/package.json
+COPY --from=build /repo/frontend/public frontend/public
+WORKDIR /repo/frontend
+EXPOSE 3000
+CMD ["npm", "run", "start"]

@@ -1,0 +1,67 @@
+# Multi-stage build for the KAM-ROMS backend. Explicit and fully
+# self-contained on purpose — after chasing three separate Nixpacks-
+# custom-command surprises (Root Directory resolution, unpinned prisma
+# CLI causing a silent registry fallback, and build output not reliably
+# carrying into the runtime phase), a plain Dockerfile removes an entire
+# class of "guess what the platform's build heuristics do" risk. Railway
+# is configured (railway.json) to build this file directly rather than
+# infer a Nixpacks plan from a custom buildCommand string.
+#
+# BUILD_MARKER: 2026-09-02-r4 — bump this comment on every push that
+# touches backend/ source. Editing this file at all invalidates Docker's
+# build cache from this point forward (BuildKit keys each layer on the
+# preceding layers' content hash), so a stale cached "success" that
+# didn't actually produce backend/dist/main.js can never be silently
+# reused across a real source change again.
+FROM node:20-alpine AS build
+WORKDIR /repo
+# Prisma's query/schema engine needs a real OpenSSL runtime to detect
+# which binary variant to use — node:20-alpine doesn't ship one at all.
+# Without this, the engine process fails to start and its (non-JSON)
+# error output breaks Prisma's own CLI parser: "Could not parse schema
+# engine response: SyntaxError: Unexpected token 'E', 'Error load'...".
+# This is Prisma's own documented fix for Alpine images, not a guess.
+RUN apk add --no-cache openssl
+COPY package.json .npmrc ./
+COPY backend/package.json backend/package.json
+COPY prisma prisma
+RUN npm install --workspace=backend --include-workspace-root --include=dev --legacy-peer-deps
+COPY backend backend
+RUN npx prisma@5.22.0 generate --schema=prisma/schema.prisma
+RUN npm run build --workspace=backend
+# Fail the build loudly right here if the compiled entrypoint is missing,
+# rather than shipping a broken image that only fails at container start.
+# Lists what actually got produced (or the absence of dist/ entirely) so
+# a failure here is diagnosable from the build log alone, not another
+# guessing round.
+RUN if [ -f backend/dist/main.js ]; then \
+      echo "OK: backend/dist/main.js present ($(wc -c < backend/dist/main.js) bytes)"; \
+    else \
+      echo "BUILD FAILED: backend/dist/main.js was not produced by nest build."; \
+      echo "Contents of backend/dist (if any):"; \
+      ls -la backend/dist 2>&1 || echo "backend/dist does not exist at all."; \
+      exit 1; \
+    fi
+
+FROM node:20-alpine
+WORKDIR /repo
+ENV NODE_ENV=production
+# Same reason as the build stage — this is where `prisma migrate deploy`
+# actually invokes the schema engine, at container start.
+RUN apk add --no-cache openssl
+# npm workspaces hoists dependencies to the root node_modules whenever
+# possible — verified directly for this project: backend/node_modules is
+# never created at all, everything (including backend-only packages like
+# argon2) ends up under /repo/node_modules. Node's require() resolution
+# walks up parent directories from the requiring file, so
+# backend/dist/main.js still finds everything via this one copy — a
+# second COPY targeting backend/node_modules would fail outright since
+# that path structurally doesn't exist for this project's dependency
+# tree, which is exactly the bug this comment replaces.
+COPY --from=build /repo/node_modules node_modules
+COPY --from=build /repo/backend/dist backend/dist
+COPY --from=build /repo/prisma prisma
+EXPOSE 4000
+# Migrations run at container start (idempotent — only applies pending
+# ones) so there's never a manual SSH-in-and-migrate step.
+CMD ["sh", "-c", "npx prisma@5.22.0 migrate deploy --schema=prisma/schema.prisma && node backend/dist/main.js"]

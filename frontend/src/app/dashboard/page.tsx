@@ -589,24 +589,25 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, me]);
 
+  // Loading state – do not use DashboardShell (it requires `me`)
   if (loading) {
     return (
-      <DashboardShell>
+      <div className="flex min-h-screen items-center justify-center bg-rice-50">
         <p className="text-sm text-ink-500">
           Loading your dashboard…
         </p>
-      </DashboardShell>
+      </div>
     );
   }
 
+  // Error / no session state
   if (error || !me) {
     return (
-      <DashboardShell>
+      <div className="flex min-h-screen items-center justify-center bg-rice-50">
         <p className="text-sm text-red-600">
-          {error ??
-            'Unable to load your session.'}
+          {error ?? 'Unable to load your session.'}
         </p>
-      </DashboardShell>
+      </div>
     );
   }
 
@@ -616,7 +617,7 @@ export default function DashboardPage() {
   );
 
   return (
-    <DashboardShell>
+    <DashboardShell me={me}>
       <div className="mb-8">
         <h1 className="font-display text-2xl text-paddy-900">
           Welcome, {me.firstName}{' '}

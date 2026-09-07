@@ -43,6 +43,12 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
   const [farms, setFarms] = useState<Farm[]>([]);
   const [grades, setGrades] = useState<PaddyGrade[]>([]);
   const [recent, setRecent] = useState<PaddyEntry[]>([]);
+  // A real, confirmed bug fixed here, the same class as the warehouse
+  // requests page: this fetch's failure was silently swallowed,
+  // meaning a genuine load failure looked exactly like "no entries
+  // yet" - the section simply vanished either way, with zero way to
+  // tell the two apart.
+  const [recentError, setRecentError] = useState<string | null>(null);
   const [farmId, setFarmId] = useState('');
   const [autoSelectedFarm, setAutoSelectedFarm] = useState(false);
   const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
@@ -89,7 +95,7 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
       }
     }).catch(() => {});
     paddyGradesApi.list(accessToken).then(setGrades).catch(() => {});
-    paddyEntriesApi.list(accessToken).then((entries) => setRecent(entries.slice(0, 5))).catch(() => {});
+    paddyEntriesApi.list(accessToken).then((entries) => setRecent(entries.slice(0, 5))).catch((err: unknown) => setRecentError(err instanceof ApiError ? err.message : 'Failed to load your recent entries.'));
   };
   useEffect(load, [accessToken]);
 
@@ -306,6 +312,12 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
         </div>
       )}
 
+      {recentError && (
+        <div className="mt-5 border-t border-paddy-200 pt-4">
+          <p className="text-xs text-red-600">{recentError}</p>
+        </div>
+      )}
+
       {recent.length > 0 && (
         <div className="mt-5 border-t border-paddy-200 pt-4">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Your recent entries</p>
@@ -366,6 +378,11 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
   const [grades, setGrades] = useState<PaddyGrade[]>([]);
   const [orders, setOrders] = useState<DeliveryOrder[]>([]);
   const [reports, setReports] = useState<DeliveryReport[]>([]);
+  // A real, confirmed bug fixed here, the same class as the warehouse
+  // requests and paddy intake pages: this fetch's failure was silently
+  // swallowed, meaning a genuine load failure looked exactly like "no
+  // reports yet" - the section simply vanished either way.
+  const [reportsLoadError, setReportsLoadError] = useState<string | null>(null);
   const [farmId, setFarmId] = useState('');
   const [autoSelectedFarm, setAutoSelectedFarm] = useState(false);
 
@@ -415,7 +432,7 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
     warehousesApi.directory(accessToken).then(setWarehouses).catch(() => {});
     paddyGradesApi.list(accessToken).then(setGrades).catch(() => {});
     deliveryOrdersApi.list(accessToken).then((list) => setOrders(list.slice(0, 10))).catch(() => {});
-    deliveryReportsApi.list(accessToken).then((list) => setReports(list.slice(0, 5))).catch(() => {});
+    deliveryReportsApi.list(accessToken).then((list) => setReports(list.slice(0, 5))).catch((err: unknown) => setReportsLoadError(err instanceof ApiError ? err.message : 'Failed to load your recent reports.'));
   };
   useEffect(load, [accessToken]);
 
@@ -742,6 +759,12 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
       {formError && <p className="mt-2 text-sm text-red-600">{formError}</p>}
       {success && <p className="mt-2 text-sm font-medium text-paddy-700">{success}</p>}
 
+      {reportsLoadError && (
+        <div className="mt-5 border-t border-paddy-200 pt-4">
+          <p className="text-xs text-red-600">{reportsLoadError}</p>
+        </div>
+      )}
+
       {reports.length > 0 && (
         <div className="mt-5 border-t border-paddy-200 pt-4">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Recent dispatch reports</p>
@@ -998,6 +1021,9 @@ export function InventoryAdjustmentRequestAction({ accessToken, meId }: { access
   const [products, setProducts] = useState<Product[]>([]);
   const [sizes, setSizes] = useState<PackagingSize[]>([]);
   const [recent, setRecent] = useState<InventoryAdjustment[]>([]);
+  // Same class of bug as the paddy intake and dispatch recent lists -
+  // this fetch's failure was silently swallowed.
+  const [recentError, setRecentError] = useState<string | null>(null);
 
   const [paddyGradeId, setPaddyGradeId] = useState('');
   const [productId, setProductId] = useState('');
@@ -1015,7 +1041,7 @@ export function InventoryAdjustmentRequestAction({ accessToken, meId }: { access
     paddyGradesApi.list(accessToken).then(setGrades).catch(() => {});
     masterDataApi.products(accessToken).then(setProducts).catch(() => {});
     masterDataApi.packagingSizes(accessToken).then(setSizes).catch(() => {});
-    inventoryAdjustmentsApi.list(accessToken).then((list) => setRecent(list.slice(0, 5))).catch(() => {});
+    inventoryAdjustmentsApi.list(accessToken).then((list) => setRecent(list.slice(0, 5))).catch((err: unknown) => setRecentError(err instanceof ApiError ? err.message : 'Failed to load your recent requests.'));
   };
   useEffect(load, [accessToken]);
 
@@ -1090,6 +1116,12 @@ export function InventoryAdjustmentRequestAction({ accessToken, meId }: { access
       >
         {submitting ? 'Submitting…' : 'Request correction'}
       </button>
+
+      {recentError && (
+        <div className="mt-5 border-t border-paddy-200 pt-4">
+          <p className="text-xs text-red-600">{recentError}</p>
+        </div>
+      )}
 
       {recent.length > 0 && (
         <div className="mt-5 border-t border-paddy-200 pt-4">

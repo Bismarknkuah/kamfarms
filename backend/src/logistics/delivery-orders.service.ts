@@ -75,9 +75,16 @@ export class DeliveryOrdersService {
 
     const balances = await this.ledger.getBalancesForLocation('FARM', dto.farmId);
     const available = balances.find((b) => b.paddyGradeId === dto.paddyGradeId);
-    if (!available || Number(available.quantityKg) < totalKg) {
+    // Validated against bag count, not KG - a real fix, not a cosmetic
+    // one: farms track and report paddy in bags first, with weight
+    // often only ever an estimate (STANDARD_PADDY_BAG_WEIGHT_KG above),
+    // so rejecting a real request over a KG figure nobody actually
+    // measured was the wrong check to begin with. KG stays available
+    // for anyone who does have a scale, but bags is what's actually
+    // enforced.
+    if (!available || available.bagCount < dto.bagCount) {
       throw new BadRequestException({
-        message: `Farm only has ${available ? Number(available.quantityKg).toFixed(2) : '0'} KG available for this grade - cannot request ${totalKg} KG.`,
+        message: `Farm only has ${available ? available.bagCount : 0} bag(s) available for this grade - cannot request ${dto.bagCount} bag(s).`,
         errorCode: 'INSUFFICIENT_FARM_STOCK',
       });
     }

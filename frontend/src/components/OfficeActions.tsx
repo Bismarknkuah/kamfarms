@@ -813,12 +813,18 @@ export function PaddyRequestApprovalQueue({ accessToken }: { accessToken: string
   const [declining, setDeclining] = useState(false);
 
   const [formError, setFormError] = useState<string | null>(null);
+  // A real, confirmed gap alongside the empty-state one above: this
+  // fetch's own failure was silently swallowed, meaning a genuine
+  // 500/403 looked exactly like "no requests yet" - the two are very
+  // different situations and shouldn't be indistinguishable.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = () => {
+    setLoadError(null);
     paddyRequestsApi.list(accessToken).then((list) => {
       setRequests(list.filter((r) => r.status === 'PENDING' || r.status === 'ACCEPTED'));
       setAcceptedUnlinked(list.filter((r) => r.status === 'ACCEPTED' && !r.linkedOrder));
-    }).catch(() => {});
+    }).catch((err: unknown) => setLoadError(err instanceof ApiError ? err.message : 'Failed to load paddy requests.'));
     deliveryOrdersApi.list(accessToken).then((list) => setRecentOrders(list.slice(0, 15))).catch(() => {});
     farmsApi.list(accessToken).then(setFarms).catch(() => {});
   };
@@ -877,7 +883,19 @@ export function PaddyRequestApprovalQueue({ accessToken }: { accessToken: string
     }
   };
 
-  if (requests.length === 0 && acceptedUnlinked.length === 0) return null;
+  // A real, confirmed bug fixed here: this returned null with zero
+  // explanation whenever there were no pending requests - genuinely
+  // indistinguishable from the page being broken, which is exactly
+  // what made an earlier working state look identical to a real
+  // outage. A clear empty state now shows instead, so "nothing here
+  // yet" and "something's wrong" never look the same again.
+  if (requests.length === 0 && acceptedUnlinked.length === 0) {
+    return (
+      <div className="rounded-2xl border border-paddy-100 bg-white p-8 text-center text-sm text-ink-500">
+        {loadError ? <span className="text-red-600">{loadError}</span> : 'No paddy requests from warehouses right now - this page will show them here as soon as one comes in.'}
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">

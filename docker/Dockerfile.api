@@ -1,0 +1,100 @@
+# Multi-stage build for the KAM-ROMS backend. Explicit and fully
+# self-contained on purpose - after chasing three separate Nixpacks-
+# custom-command surprises (Root Directory resolution, unpinned prisma
+# CLI causing a silent registry fallback, and build output not reliably
+# carrying into the runtime phase), a plain Dockerfile removes an entire
+# class of "guess what the platform's build heuristics do" risk. Railway
+# is configured (railway.json) to build this file directly rather than
+# infer a Nixpacks plan from a custom buildCommand string.
+#
+# BUILD_MARKER: 2026-09-07-r5 - bump this comment on every push that
+# touches backend/ source. Editing this file at all invalidates Docker's
+# build cache from this point forward (BuildKit keys each layer on the
+# preceding layers' content hash), so a stale cached "success" that
+# didn't actually produce backend/dist/main.js can never be silently
+# reused across a real source change again.
+FROM node:20-alpine AS build
+WORKDIR /repo
+# Prisma's query/schema engine needs a real OpenSSL runtime to detect
+# which binary variant to use - node:20-alpine doesn't ship one at all.
+# Without this, the engine process fails to start and its (non-JSON)
+# error output breaks Prisma's own CLI parser: "Could not parse schema
+# engine response: SyntaxError: Unexpected token 'E', 'Error load'...".
+# This is Prisma's own documented fix for Alpine images, not a guess.
+RUN apk add --no-cache openssl
+COPY package.json .npmrc ./
+COPY backend/package.json backend/package.json
+COPY prisma prisma
+RUN npm install --workspace=backend --include-workspace-root --include=dev --legacy-peer-deps
+COPY backend backend
+RUN npx prisma@5.22.0 generate --schema=prisma/schema.prisma
+RUN npm run build --workspace=backend
+# Fail the build loudly right here if the compiled entrypoint is missing,
+# rather than shipping a broken image that only fails at container start.
+# Lists what actually got produced (or the absence of dist/ entirely) so
+# a failure here is diagnosable from the build log alone, not another
+# guessing round.
+RUN if [ -f backend/dist/main.js ]; then \
+      echo "OK: backend/dist/main.js present ($(wc -c < backend/dist/main.js) bytes)"; \
+    else \
+      echo "BUILD FAILED: backend/dist/main.js was not produced by nest build."; \
+      echo "Contents of backend/dist (if any):"; \
+      ls -la backend/dist 2>&1 || echo "backend/dist does not exist at all."; \
+      exit 1; \
+    fi
+
+FROM node:20-alpine
+WORKDIR /repo
+ENV NODE_ENV=production
+# Same reason as the build stage - this is where `prisma migrate deploy`
+# actually invokes the schema engine, at container start.
+RUN apk add --no-cache openssl
+# npm workspaces hoists dependencies to the root node_modules whenever
+# possible - verified directly for this project: backend/node_modules is
+# never created at all, everything (including backend-only packages like
+# argon2) ends up under /repo/node_modules. Node's require() resolution
+# walks up parent directories from the requiring file, so
+# backend/dist/main.js still finds everything via this one copy - a
+# second COPY targeting backend/node_modules would fail outright since
+# that path structurally doesn't exist for this project's dependency
+# tree, which is exactly the bug this comment replaces.
+COPY --from=build /repo/node_modules node_modules
+COPY --from=build /repo/backend/dist backend/dist
+COPY --from=build /repo/prisma prisma
+EXPOSE 4000
+# Real root cause of the 500 errors traced from a Railway deploy log:
+# "No migration found in prisma/migrations" - meaning this repo has
+# never actually had a migrations folder generated and committed at
+# all, despite every earlier "run npx prisma migrate dev --name X"
+# instruction assuming that step would happen. `migrate deploy` against
+# zero migration files does nothing and starts the app anyway, so every
+# schema change made this session (PaddyRequest, FarmEquipment,
+# totalKgEstimated, Task.paddyRequestId, and more) was silently never
+# applied to the live database at all - exactly matching the 500s on
+# every endpoint touching one of those.
+#
+# `db push` is the correct fix for exactly this situation: it
+# introspects whatever the live database's current state actually is
+# (unknown, and unknowable from this sandbox - postgres.railway.internal
+# is Railway's private network, unreachable from here) and applies
+# whatever DDL is needed to bring it in line with schema.prisma, with
+# no dependency on migration history existing at all. --accept-data-loss
+# is required for this to run non-interactively in a container with no
+# TTY to confirm a prompt; --skip-generate is safe since `prisma
+# generate` already ran in the build stage above.
+#
+# Second step, sync-permissions.ts: schema sync alone doesn't apply
+# permission/role changes made this session (removing delivery.create
+# from Farm Supervisor, adding farm.equipment.manage to Farm Manager,
+# and others) - those live in seed data, not the schema, and needed a
+# separate manual "run the seed" step every time until now. This script
+# is a deliberately narrow extract of only the fully-idempotent part of
+# seed.ts (permissions and roles), safe to run on every single
+# container start without the duplicate-data risk the rest of seed.ts
+# carries from its plain .create() calls for demo users and messages.
+# Third step, sync-expense-categories.ts: same reasoning as
+# sync-permissions.ts above - new expense categories (Fertilizer,
+# Seeds, Agrochemicals) live in seed data too, and needed the same
+# kind of narrow, idempotent, every-deploy sync rather than a one-time
+# manual seed run to actually reach the live database.
+CMD ["sh", "-c", "npx prisma@5.22.0 db push --schema=prisma/schema.prisma --accept-data-loss --skip-generate && npx ts-node --transpile-only prisma/sync-permissions.ts && npx ts-node --transpile-only prisma/sync-expense-categories.ts && node backend/dist/main.js"]

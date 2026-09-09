@@ -181,6 +181,13 @@ export default function DashboardPage() {
   // what's recently changed - not rice inventory.
   const [adminUsers, setAdminUsers] = useState<AppUser[]>([]);
   const [adminAuditLog, setAdminAuditLog] = useState<AuditLogEntry[]>([]);
+  // Auditor's own dashboard - the last role that still fell into the
+  // generic company summary with nothing about its actual job. An
+  // Auditor's day is the audit trail itself, so it leads here: who did
+  // what, most recent first, with a real error state rather than a
+  // silent blank if the log fails to load.
+  const [auditorLog, setAuditorLog] = useState<AuditLogEntry[]>([]);
+  const [auditorLogError, setAuditorLogError] = useState<string | null>(null);
   // Surfacing what Admin can now actually do with their expanded
   // capability - reset requests genuinely awaiting action (create the
   // request UI now exists, so this stat is finally meaningful), backup
@@ -419,6 +426,12 @@ export default function DashboardPage() {
       reportsApi.getWarehouseOverview(accessToken).then(setWarehouseOverview).catch(() => {});
     }
 
+    if (roleCodes.includes('AUDITOR')) {
+      auditApi.list(accessToken).then((res) => setAuditorLog(res.items)).catch((err: unknown) =>
+        setAuditorLogError(err instanceof ApiError ? err.message : 'Failed to load the audit trail.'),
+      );
+    }
+
     if (roleCodes.includes('ADMIN')) {
       usersApi.list(accessToken).then((res) => setAdminUsers(res.items)).catch(() => {});
       auditApi.list(accessToken).then((res) => setAdminAuditLog(res.items)).catch(() => {});
@@ -629,6 +642,7 @@ export default function DashboardPage() {
   const isFinanceOfficer = me.roles.some((r) => r.code === 'FINANCE_OFFICER');
   const isAdmin = me.roles.some((r) => r.code === 'ADMIN');
   const isSalesOfficer = me.roles.some((r) => r.code === 'SALES_OFFICER');
+  const isAuditor = me.roles.some((r) => r.code === 'AUDITOR');
 
   return (
     <DashboardShell me={me}>
@@ -1510,6 +1524,41 @@ export default function DashboardPage() {
                   {adminProducts.filter((p) => p.isActive).length} products · {adminPackagingSizes.filter((s) => s.isActive).length} sizes active
                 </p>
               </Link>
+            </div>
+          )}
+
+          {isAuditor && (
+            <div className="mb-6 rounded-2xl border-2 border-paddy-900 bg-white p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="font-display text-lg text-paddy-900">Audit trail - live</h2>
+                  <p className="mt-1 text-sm text-ink-500">Every action across the company, most recent first. Read-only - you see everything, you change nothing.</p>
+                </div>
+                <Link href="/audit-log" className="shrink-0 rounded-full bg-paddy-900 px-4 py-2 text-xs font-medium text-rice-50">Open full log</Link>
+              </div>
+              {auditorLogError ? (
+                <p className="mt-4 text-sm text-red-600">{auditorLogError}</p>
+              ) : auditorLog.length === 0 ? (
+                <p className="mt-4 text-sm text-ink-500">Loading the audit trail…</p>
+              ) : (
+                <div className="mt-4 space-y-1.5">
+                  {auditorLog.slice(0, 12).map((entry) => (
+                    <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg bg-rice-50 px-3 py-2 text-sm">
+                      <span className="min-w-0 truncate text-ink-900">
+                        <span className="font-medium">{entry.user ? `${entry.user.firstName} ${entry.user.lastName}` : 'System'}</span>
+                        <span className="text-ink-500"> · {entry.action}</span>
+                        <span className="text-ink-500"> · {entry.entity}</span>
+                      </span>
+                      <span className="shrink-0 text-xs text-ink-500">{new Date(entry.createdAt).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-paddy-100 pt-4">
+                {[['/inventory','Inventory'],['/finance','Finance'],['/sales','Sales'],['/production','Production'],['/organization','Organization']].map(([href,label]) => (
+                  <Link key={href} href={href} className="rounded-full border border-paddy-100 px-3 py-1.5 text-xs font-medium text-paddy-900 hover:bg-paddy-50">{label}</Link>
+                ))}
+              </div>
             </div>
           )}
 

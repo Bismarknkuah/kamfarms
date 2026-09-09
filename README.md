@@ -3736,6 +3736,37 @@ final project-wide search - now also covering .prisma files, a real
 gap in this session's own verification process found and closed -
 confirming zero remaining em dashes and zero escape-character bugs.
 
+## Final-stage polish: login, a full role audit, and the last duplicated dashboard
+
+**Login page, upgraded on real usability rather than decoration**: a
+show/hide password toggle and a live Caps Lock warning - the two most
+common reasons a sign-in fails on a shared office computer, both now
+caught before the form is ever submitted - plus a spinner on the
+sign-in button, a capability showcase on the brand panel so the page
+says what the system actually does, and a plain trust line about
+sessions on shared devices.
+
+**Every one of the 13 roles audited programmatically against the
+nav**, computing exactly what each sees from the real permission seed
+and the real nav gates rather than reading either by eye. Confirmed:
+every role sees only what its permissions cover, all deliberate hides
+still hold (Sales Officer no Inventory, MD/CEO/Auditor no stock
+corrections, Farm Director no quick-dispatch), and no role gets two
+nav items with the same label.
+
+**The last genuinely duplicated dashboard, found and fixed**: the
+Auditor was the one role that still fell into the generic company
+summary with nothing about its actual job. It now leads with the live
+audit trail - who did what, most recent first, with a real error state
+instead of a silent blank - and quick links to every read-only area it
+covers. Every role now has a purpose-built dashboard section.
+
+Confirmed with a full backend test pass with zero regressions (51
+tests), a complete production build across all 41 routes with the
+Login and Dashboard pages both showing real bundle-size growth, the
+real layout's checksum verified identical before and after, and a
+project-wide scan confirming zero em dashes.
+
 ## A note on verification in this build environment
 
 This code was written and tested in a network-restricted sandbox that

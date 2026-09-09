@@ -68,6 +68,14 @@ export default function LoginPage() {
   const [demoOpen, setDemoOpen] = useState(false);
   const [demoLoadingEmail, setDemoLoadingEmail] = useState<string | null>(null);
 
+  // Two real, everyday usability affordances rather than decoration:
+  // a show/hide toggle (mistyped passwords are the most common reason
+  // a sign-in fails on a shared farm-office computer) and a live Caps
+  // Lock warning, which catches the second most common one before the
+  // form is even submitted.
+  const [showPassword, setShowPassword] = useState(false);
+  const [capsLockOn, setCapsLockOn] = useState(false);
+
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotStatus, setForgotStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
@@ -153,6 +161,22 @@ export default function LoginPage() {
             <p className="mt-4 text-sm leading-relaxed text-paddy-100">
               Six farms, three warehouses, one milling operation - every stage tracked, every handoff approved.
             </p>
+            <ul className="mt-6 space-y-2.5 text-sm text-paddy-100">
+              {[
+                ['Paddy intake to packaged rice', 'one continuous, approved ledger'],
+                ['Every role sees its own work', 'nothing more, nothing hidden'],
+                ['Bags first, kilos optional', 'the way the farms actually count'],
+                ['Full audit trail', 'every approval, every correction, on record'],
+              ].map(([title, sub]) => (
+                <li key={title} className="flex items-start gap-2.5">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-husk-300" />
+                  <span>
+                    <span className="font-medium text-rice-50">{title}</span>
+                    <span className="text-paddy-200"> - {sub}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
           <p className="text-xs text-paddy-300">Adenta, Accra · Sefwi Kanchabio, Western North Region</p>
         </div>
@@ -202,13 +226,28 @@ export default function LoginPage() {
                   Forgot password?
                 </button>
               </div>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                {...register('password')}
-                className="w-full rounded-lg border border-paddy-100 px-3 py-2.5 text-sm outline-none focus:border-paddy-500 focus:ring-2 focus:ring-paddy-500/20"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  {...register('password')}
+                  onKeyUp={(e) => setCapsLockOn(e.getModifierState('CapsLock'))}
+                  onBlur={() => setCapsLockOn(false)}
+                  className="w-full rounded-lg border border-paddy-100 px-3 py-2.5 pr-16 text-sm outline-none focus:border-paddy-500 focus:ring-2 focus:ring-paddy-500/20"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute inset-y-0 right-0 px-3 text-xs font-medium text-soil-500 hover:text-paddy-900"
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+              {capsLockOn && (
+                <p className="mt-1 text-xs font-medium text-amber-700" role="status">Caps Lock is on.</p>
+              )}
               {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>}
             </div>
 
@@ -223,10 +262,19 @@ export default function LoginPage() {
               disabled={submitting}
               className="w-full rounded-lg bg-paddy-900 px-4 py-2.5 text-sm font-medium text-rice-50 transition hover:bg-paddy-700 disabled:opacity-60"
             >
-              {submitting ? 'Signing in…' : 'Sign in'}
+              {submitting ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-rice-50/40 border-t-rice-50" />
+                  Signing in…
+                </span>
+              ) : 'Sign in'}
             </button>
           </form>
         </div>
+
+        <p className="mt-4 text-center text-xs text-ink-500">
+          Your session stays on this device only. Sign out when you leave a shared computer.
+        </p>
 
         {/* Quick demo access */}
         <div className="mt-6 rounded-2xl border border-husk-300 bg-husk-100/50 p-5">

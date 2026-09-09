@@ -1,4 +1,5 @@
 'use client';
+import { GradeChips, BagStepper, EstimatedWeightHint, RunningTotal, ConditionChips, VarianceBadge } from './DataEntryKit';
 
 // Shared, reusable action components - originally defined inline in
 // office/page.tsx, extracted here so dedicated single-purpose pages
@@ -215,31 +216,29 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
               {rows.map((row, index) => {
                 const otherSelected = rows.filter((_, i) => i !== index).map((r) => r.paddyGradeId);
                 return (
-                  <div key={index} className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
-                    <div>
-                      {index === 0 && <label className="mb-1 block text-xs font-medium text-ink-700">Bag size / grade</label>}
-                      <select value={row.paddyGradeId} onChange={(e) => updateRow(index, 'paddyGradeId', e.target.value)} className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm">
-                        <option value="">Select…</option>
-                        {grades.filter((g) => !otherSelected.includes(g.id) || g.id === row.paddyGradeId).map((g) => (
-                          <option key={g.id} value={g.id}>{g.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      {index === 0 && <label className="mb-1 block text-xs font-medium text-ink-700">Number of bags</label>}
-                      <input type="number" value={row.bagCount} onChange={(e) => updateRow(index, 'bagCount', e.target.value)} placeholder="Required" className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      {index === 0 && <label className="mb-1 block text-xs font-medium text-ink-700">Weight (KG)</label>}
-                      <input type="number" value={row.weightKg} onChange={(e) => updateRow(index, 'weightKg', e.target.value)} placeholder="Optional" className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
-                    </div>
-                    {rows.length > 1 && (
-                      <div className={index === 0 ? 'mt-5' : ''}>
-                        <button type="button" onClick={() => removeRow(index)} className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+                  <div key={index} className="rounded-xl border border-paddy-100 bg-white p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <label className="mb-2 block text-xs font-medium text-ink-700">Bag size / grade</label>
+                        <GradeChips grades={grades} value={row.paddyGradeId} onChange={(id) => updateRow(index, 'paddyGradeId', id)} disabledIds={otherSelected} />
+                      </div>
+                      {rows.length > 1 && (
+                        <button type="button" onClick={() => removeRow(index)} className="shrink-0 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50">
                           Remove
                         </button>
+                      )}
+                    </div>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-2 block text-xs font-medium text-ink-700">Number of bags</label>
+                        <BagStepper value={row.bagCount} onChange={(v) => updateRow(index, 'bagCount', v)} />
                       </div>
-                    )}
+                      <div>
+                        <label className="mb-2 block text-xs font-medium text-ink-700">Weight (KG) <span className="font-normal text-ink-500">- optional</span></label>
+                        <input type="number" inputMode="decimal" value={row.weightKg} onChange={(e) => updateRow(index, 'weightKg', e.target.value)} placeholder="Only if you weighed it" className="w-full rounded-xl border-2 border-paddy-100 px-3 py-3 text-sm" />
+                        <div className="mt-1.5"><EstimatedWeightHint bags={row.bagCount} weightKg={row.weightKg} /></div>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -247,6 +246,7 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
             <button type="button" onClick={addRow} className="mt-2 text-xs font-medium text-paddy-700 underline">
               + Add another size
             </button>
+              <RunningTotal rows={rows} label="This intake" />
             {!rows.some((r) => r.weightKg) && (
               <p className="mt-1 text-xs text-ink-500">No scale? Leave weight blank on any row - it will be estimated from bag count.</p>
             )}
@@ -581,31 +581,29 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
               {orderRows.map((row, index) => {
                 const otherSelected = orderRows.filter((_, i) => i !== index).map((r) => r.paddyGradeId);
                 return (
-                  <div key={index} className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
-                    <div>
-                      {index === 0 && <label className="mb-1 block text-xs font-medium text-ink-700">Bag size / grade</label>}
-                      <select value={row.paddyGradeId} onChange={(e) => updateOrderRow(index, 'paddyGradeId', e.target.value)} className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm">
-                        <option value="">Select…</option>
-                        {grades.filter((g) => !otherSelected.includes(g.id) || g.id === row.paddyGradeId).map((g) => (
-                          <option key={g.id} value={g.id}>{g.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      {index === 0 && <label className="mb-1 block text-xs font-medium text-ink-700">Number of bags</label>}
-                      <input type="number" value={row.bagCount} onChange={(e) => updateOrderRow(index, 'bagCount', e.target.value)} placeholder="Required" className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      {index === 0 && <label className="mb-1 block text-xs font-medium text-ink-700">Total weight (KG)</label>}
-                      <input type="number" value={row.totalKg} onChange={(e) => updateOrderRow(index, 'totalKg', e.target.value)} placeholder="Optional - estimated if left blank" className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
-                    </div>
-                    {orderRows.length > 1 && (
-                      <div className={index === 0 ? 'mt-5' : ''}>
-                        <button type="button" onClick={() => removeOrderRow(index)} className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+                  <div key={index} className="rounded-xl border border-paddy-100 bg-white p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <label className="mb-2 block text-xs font-medium text-ink-700">Bag size / grade</label>
+                        <GradeChips grades={grades} value={row.paddyGradeId} onChange={(id) => updateOrderRow(index, 'paddyGradeId', id)} disabledIds={otherSelected} />
+                      </div>
+                      {orderRows.length > 1 && (
+                        <button type="button" onClick={() => removeOrderRow(index)} className="shrink-0 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50">
                           Remove
                         </button>
+                      )}
+                    </div>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-2 block text-xs font-medium text-ink-700">Number of bags</label>
+                        <BagStepper value={row.bagCount} onChange={(v) => updateOrderRow(index, 'bagCount', v)} />
                       </div>
-                    )}
+                      <div>
+                        <label className="mb-2 block text-xs font-medium text-ink-700">Total weight (KG) <span className="font-normal text-ink-500">- optional</span></label>
+                        <input type="number" inputMode="decimal" value={row.totalKg} onChange={(e) => updateOrderRow(index, 'totalKg', e.target.value)} placeholder="Only if you weighed it" className="w-full rounded-xl border-2 border-paddy-100 px-3 py-3 text-sm" />
+                        <div className="mt-1.5"><EstimatedWeightHint bags={row.bagCount} weightKg={row.totalKg} /></div>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -613,10 +611,7 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
             <button type="button" onClick={addOrderRow} className="mt-2 text-xs font-medium text-paddy-700 underline">
               + Add another size
             </button>
-            {!orderRows.some((r) => r.totalKg) && (
-              <p className="mt-1 text-xs text-ink-500">No scale? Leave weight blank on any row - it will be estimated from bag count.</p>
-            )}
-            {totalOrderBags > 0 && <p className="mt-1 text-xs font-medium text-paddy-700">{totalOrderBags} bags total across {validOrderRows.length} size{validOrderRows.length === 1 ? '' : 's'}</p>}
+            <RunningTotal rows={orderRows.map((r) => ({ bagCount: r.bagCount, weightKg: r.totalKg }))} label="This dispatch" />
           </div>
           {showOrderReview ? (
             <div className="mt-4 rounded-xl border-2 border-paddy-900 bg-white p-4">

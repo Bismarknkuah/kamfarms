@@ -3767,6 +3767,48 @@ Login and Dashboard pages both showing real bundle-size growth, the
 real layout's checksum verified identical before and after, and a
 project-wide scan confirming zero em dashes.
 
+## Data entry rebuilt for the field, and the four pages that follow the rice through the mill
+
+**One shared data-entry kit, applied to all four intake and receipt
+forms** - paddy intake, dispatch, warehouse receipt, and milling
+receipt - so a Farm Manager, a Warehouse Manager, and an Operations
+Officer all meet the same controls. Built for how these forms are
+actually used: on a phone, outdoors, by someone counting bags. Grade
+selection is now tappable chips rather than a dropdown; bag count is
+a stepper with large +/- targets; kilos are never required and the
+estimate that will be recorded is shown live before saving; a sticky
+running total is always visible on multi-row forms; and receivers get
+condition-on-arrival as fixed chips (free text had produced "good",
+"Good", "ok" and "fine" for the same thing, useless for reporting)
+plus a live expected-vs-received variance badge with the bag count
+pre-filled from what was expected.
+
+**Inventory now opens with the view its own tagline promises**: a
+left-to-right pipeline strip showing where the rice is right now -
+on farms, in transit, in warehouses, at milling, packaged - as one
+connected flow, each stage tappable to its detail below, with stages a
+role cannot see simply absent rather than shown as misleading zeros.
+
+**Meter readings gained two real data-quality guards for a cumulative
+meter**: a reading lower than the last one on file is now called out
+loudly before saving (almost always a typo, and silently recording it
+would corrupt energy figures downstream), and consumption far outside
+the machine's own recent average is flagged - not blocked, so a real
+spike is still recordable, but never recorded by accident.
+
+**Yield prediction turned from four passive numbers into an active
+check**: a visible split bar of recovered/broken/hull/waste, a
+confidence marker from how many approved runs it rests on, and a live
+comparison against what the officer is actually typing - a run more
+than 15% off the expected yield is flagged before submission rather
+than discovered in a report a month later.
+
+Confirmed with a full backend test pass with zero regressions (51
+tests), a complete production build across all 41 routes with real
+bundle growth on every touched page, the real layout's checksum
+verified identical before and after, and a project-wide scan
+confirming zero em dashes.
+
 ## A note on verification in this build environment
 
 This code was written and tested in a network-restricted sandbox that

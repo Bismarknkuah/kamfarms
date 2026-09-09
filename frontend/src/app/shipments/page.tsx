@@ -5,6 +5,7 @@ import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import { shipmentsApi, Shipment, ApiError } from '@/lib/api-client';
 import { InventoryAdjustmentRequestAction } from '@/components/OfficeActions';
+import { BagStepper, ConditionChips, VarianceBadge, EstimatedWeightHint, STANDARD_PADDY_BAG_WEIGHT_KG } from '@/components/DataEntryKit';
 
 export default function ShipmentsPage() {
   const { me, accessToken, loading, error, hasPermission } = useCurrentUser();
@@ -30,12 +31,17 @@ export default function ShipmentsPage() {
   }, [accessToken]);
 
   const onReceive = async (id: string) => {
-    if (!accessToken || !receivedKg || !receivedBags) return;
+    if (!accessToken || !receivedBags) return;
     setReceiving(true);
     setPageError(null);
     try {
+      // Bags are the real count; kilos are estimated at the standard
+      // bag weight when the receiver has no scale, exactly as the farm
+      // side does - the backend needs a number either way.
+      const bags = parseInt(receivedBags, 10);
+      const kg = receivedKg ? parseFloat(receivedKg) : bags * STANDARD_PADDY_BAG_WEIGHT_KG;
       await shipmentsApi.receive(
-        accessToken, id, parseFloat(receivedKg), parseInt(receivedBags, 10),
+        accessToken, id, kg, bags,
         receivedCondition || undefined,
         receivedMoisturePercent ? parseFloat(receivedMoisturePercent) : undefined,
       );
@@ -115,18 +121,39 @@ export default function ShipmentsPage() {
                 </div>
                 {hasPermission('warehouse.receive') && (
                   receivingId === s.id ? (
-                    <div className="flex flex-col gap-2 rounded-lg bg-white p-2">
-                      <input type="number" value={receivedBags} onChange={(e) => setReceivedBags(e.target.value)} placeholder="Bags received" className="w-40 rounded-lg border border-paddy-100 px-2 py-1 text-xs" />
-                      <input type="number" value={receivedKg} onChange={(e) => setReceivedKg(e.target.value)} placeholder="KG received" className="w-40 rounded-lg border border-paddy-100 px-2 py-1 text-xs" />
-                      <input value={receivedCondition} onChange={(e) => setReceivedCondition(e.target.value)} placeholder="Condition (e.g. Good, Wet)" className="w-40 rounded-lg border border-paddy-100 px-2 py-1 text-xs" />
-                      <input type="number" value={receivedMoisturePercent} onChange={(e) => setReceivedMoisturePercent(e.target.value)} placeholder="Moisture % (optional)" className="w-40 rounded-lg border border-paddy-100 px-2 py-1 text-xs" />
-                      <button type="button" onClick={() => onReceive(s.id)} disabled={receiving} className="rounded-full bg-paddy-900 px-3 py-1 text-xs font-medium text-rice-50 disabled:opacity-50">
-                        {receiving ? 'Saving…' : 'Confirm receipt'}
-                      </button>
+                    <div className="w-full max-w-md rounded-2xl border-2 border-paddy-900 bg-white p-4 sm:ml-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-soil-500">Count what actually arrived</p>
+                      <p className="mt-0.5 text-xs text-ink-500">Pre-filled with what was expected - just correct it if the count is different.</p>
+                      <div className="mt-3">
+                        <label className="mb-2 block text-xs font-medium text-ink-700">Bags received</label>
+                        <BagStepper value={receivedBags} onChange={setReceivedBags} />
+                        <div className="mt-2"><VarianceBadge expected={s.expectedBags} received={parseInt(receivedBags || '0', 10) || 0} /></div>
+                      </div>
+                      <div className="mt-4">
+                        <label className="mb-2 block text-xs font-medium text-ink-700">Condition on arrival</label>
+                        <ConditionChips value={receivedCondition} onChange={setReceivedCondition} />
+                      </div>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-ink-700">Weight (KG) <span className="font-normal text-ink-500">- optional</span></label>
+                          <input type="number" inputMode="decimal" value={receivedKg} onChange={(e) => setReceivedKg(e.target.value)} placeholder="Only if weighed" className="w-full rounded-xl border-2 border-paddy-100 px-3 py-2.5 text-sm" />
+                          <div className="mt-1"><EstimatedWeightHint bags={receivedBags} weightKg={receivedKg} /></div>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-ink-700">Moisture % <span className="font-normal text-ink-500">- optional</span></label>
+                          <input type="number" inputMode="decimal" value={receivedMoisturePercent} onChange={(e) => setReceivedMoisturePercent(e.target.value)} placeholder="e.g. 14" className="w-full rounded-xl border-2 border-paddy-100 px-3 py-2.5 text-sm" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex gap-2">
+                        <button type="button" onClick={() => onReceive(s.id)} disabled={receiving || !receivedBags} className="flex-1 rounded-full bg-paddy-900 px-4 py-2.5 text-sm font-medium text-rice-50 disabled:opacity-50">
+                          {receiving ? 'Saving…' : 'Confirm receipt'}
+                        </button>
+                        <button type="button" onClick={() => setReceivingId(null)} className="rounded-full border border-paddy-100 px-4 py-2.5 text-sm text-ink-700">Cancel</button>
+                      </div>
                     </div>
                   ) : (
-                    <button type="button" onClick={() => setReceivingId(s.id)} className="whitespace-nowrap rounded-full bg-paddy-900 px-4 py-1.5 text-xs font-medium text-rice-50">
-                      Receive
+                    <button type="button" onClick={() => { setReceivingId(s.id); setReceivedBags(String(s.expectedBags)); setReceivedKg(''); setReceivedCondition('Good'); setReceivedMoisturePercent(''); }} className="whitespace-nowrap rounded-full bg-paddy-900 px-4 py-2 text-sm font-medium text-rice-50">
+                      Receive this shipment
                     </button>
                   )
                 )}

@@ -58,6 +58,46 @@ function InventorySection({ title, rows, emptyLabel, filterText }: { title: stri
   );
 }
 
+// The one view this page exists for: where the rice actually is, right
+// now, across the whole pipeline - read left to right as the process
+// itself flows. Replaces reading five separate boxes and doing the
+// mental join yourself. Stages a role cannot see (per permission) are
+// simply absent rather than shown as zeros, so the flow never lies.
+function PipelineFlow({ stages }: { stages: { key: string; label: string; bags: number | null; kg: number; tone: string; hint: string }[] }) {
+  const visible = stages;
+  const maxBags = Math.max(1, ...visible.map((st) => st.bags ?? 0));
+  return (
+    <div className="mt-6 rounded-2xl border border-paddy-100 bg-white p-5">
+      <div className="flex items-baseline justify-between">
+        <h2 className="font-display text-lg text-paddy-900">Where the rice is right now</h2>
+        <p className="text-xs text-ink-500">Left to right, the way it moves</p>
+      </div>
+      <div className="mt-4 flex snap-x gap-2 overflow-x-auto pb-2">
+        {visible.map((st, i) => (
+          <div key={st.key} className="flex snap-start items-stretch">
+            <a href={`#stage-${st.key}`} className={`flex min-w-[10.5rem] flex-col justify-between rounded-2xl border-2 p-4 transition hover:-translate-y-0.5 hover:shadow-md ${st.tone}`}>
+              <p className="text-xs font-semibold uppercase tracking-wide">{st.label}</p>
+              <div className="mt-3">
+                {st.bags !== null ? (
+                  <p className="font-display text-2xl leading-none">{st.bags.toLocaleString()}<span className="ml-1 text-sm font-normal">bags</span></p>
+                ) : (
+                  <p className="font-display text-2xl leading-none">{st.kg.toLocaleString()}<span className="ml-1 text-sm font-normal">KG</span></p>
+                )}
+                {st.bags !== null && st.kg > 0 && <p className="mt-1 text-xs opacity-70">{st.kg.toLocaleString()} KG</p>}
+              </div>
+              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-black/10">
+                <div className="h-full rounded-full bg-current opacity-60" style={{ width: `${Math.max(4, Math.round(((st.bags ?? 0) / maxBags) * 100))}%` }} />
+              </div>
+              <p className="mt-2 text-[11px] leading-snug opacity-70">{st.hint}</p>
+            </a>
+            {i < visible.length - 1 && <div className="flex items-center px-1 text-xl text-paddy-300" aria-hidden>→</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function InventoryPage() {
   const { me, accessToken, loading, error, hasPermission } = useCurrentUser();
   const [data, setData] = useState<InventoryOverview | null>(null);
@@ -180,7 +220,17 @@ export default function InventoryPage() {
 
       {summary && (
         <>
-          <div className="mt-6 rounded-2xl border border-paddy-100 bg-white p-5">
+          <PipelineFlow
+            stages={[
+              { key: 'farms', label: 'On farms', bags: summary.paddy.farmBags, kg: summary.paddy.farmKg, tone: 'border-paddy-100 bg-rice-50 text-paddy-900', hint: 'Approved intake, not yet dispatched' },
+              { key: 'transit', label: 'In transit', bags: summary.paddy.inTransitBags, kg: summary.paddy.inTransitKg, tone: 'border-husk-300 bg-husk-100/40 text-soil-700', hint: 'Dispatched, not yet received' },
+              ...(hasPermission('warehouse.inventory.view') ? [{ key: 'warehouses', label: 'In warehouses', bags: data ? data.warehouses.reduce((acc, r) => acc + r.bagCount, 0) : null, kg: summary.paddy.warehouseKg, tone: 'border-paddy-100 bg-paddy-50 text-paddy-900', hint: 'Received and available to mill' }] : []),
+              ...(hasPermission('milling.view') ? [{ key: 'milling', label: 'At milling', bags: null, kg: summary.paddy.atMillingKg, tone: 'border-soil-300 bg-soil-100/40 text-soil-700', hint: 'Being processed into rice' }] : []),
+              ...(hasPermission('milling.view') || hasPermission('sales.view') || hasPermission('finance.view') ? [{ key: 'packaged', label: 'Packaged rice', bags: summary.finishedRice.reduce((acc, r) => acc + r.availableBags, 0), kg: summary.finishedRice.reduce((acc, r) => acc + r.availableKg, 0), tone: 'border-paddy-900 bg-paddy-900 text-rice-50', hint: 'Ready to sell' }] : []),
+            ]}
+          />
+
+          <div id="stage-farms" className="mt-6 rounded-2xl border border-paddy-100 bg-white p-5">
             <h2 className="font-display text-lg text-paddy-900">🌾 Paddy</h2>
             <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div className="rounded-lg bg-rice-50 p-3">

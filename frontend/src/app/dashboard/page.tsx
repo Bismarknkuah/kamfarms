@@ -74,8 +74,7 @@ function StatCard({ label, value, unit, tone = 'default' }: { label: string; val
   return (
     <div className={`rounded-2xl p-5 ${STAT_TONE_STYLES[tone]}`}>
       <p className="stat-label text-xs font-medium uppercase tracking-wide">{label}</p>
-      <p className="mt-2 font-display text-2xl">
-        {value}
+      <p className="mt-2 font-display text-2xl">{value}
         {unit && <span className="stat-unit ml-1 text-sm font-sans">{unit}</span>}
       </p>
     </div>
@@ -729,7 +728,7 @@ export default function DashboardPage() {
 
           {farmOverview && (
             <div className="mt-4 rounded-2xl border border-paddy-100 bg-white p-5">
-              <h2 className="font-display text-lg text-paddy-900">🌾 Paddy rice</h2>
+              <h2 className="font-display text-lg text-paddy-900">Paddy rice</h2>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 {([
                   { key: 'received' as const, label: 'Received', data: farmOverview.paddy.received },
@@ -843,8 +842,7 @@ export default function DashboardPage() {
 
           {selectedEquipmentStatus && (
             <div className="mt-3 rounded-2xl border border-paddy-100 bg-white p-4">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-500">
-                {selectedEquipmentStatus === 'WORKING' ? 'Working' : selectedEquipmentStatus === 'NOT_WORKING' ? 'Not working' : 'Needs replacement'}
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-500">{selectedEquipmentStatus === 'WORKING' ? 'Working' : selectedEquipmentStatus === 'NOT_WORKING' ? 'Not working' : 'Needs replacement'}
               </p>
               <div className="space-y-1.5">
                 {supervisorEquipment.filter((e) => e.status === selectedEquipmentStatus).map((e) => (
@@ -868,8 +866,7 @@ export default function DashboardPage() {
       {(isWarehouseManager || isWarehouseSupervisor) && (
         <div className="mb-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-soil-500">
-              {isWarehouseSupervisor ? 'Warehouse overview - every warehouse, centralized' : 'Your warehouse’s overview'}
+            <p className="text-xs font-medium uppercase tracking-wide text-soil-500">{isWarehouseSupervisor ? 'Warehouse overview - every warehouse, centralized' : 'Your warehouse’s overview'}
             </p>
             {warehouseOverview && (
               <div className="flex gap-2">
@@ -913,7 +910,7 @@ export default function DashboardPage() {
           {warehouseOverview && (
             <div className="mt-4 space-y-4">
               <div className="rounded-2xl border border-paddy-100 bg-white p-5">
-                <h2 className="font-display text-lg text-paddy-900">🌾 Paddy rice</h2>
+                <h2 className="font-display text-lg text-paddy-900">Paddy rice</h2>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
                   {([
                     { key: 'received' as const, label: 'Received', data: warehouseOverview.paddy.received },
@@ -953,11 +950,10 @@ export default function DashboardPage() {
               <div className="rounded-2xl border border-paddy-100 bg-white p-5">
                 <button type="button" onClick={() => setWarehouseSection(warehouseSection === 'milling' ? null : 'milling')} className="flex w-full items-center justify-between text-left">
                   <div>
-                    <h2 className="font-display text-lg text-paddy-900">⚙️ At milling</h2>
+                    <h2 className="font-display text-lg text-paddy-900">At milling</h2>
                     <p className="text-xs text-ink-500">Paddy sent to the milling center, not yet processed.</p>
                   </div>
-                  <p className="font-display text-2xl text-paddy-900">
-                    {warehouseOverview.atMilling.reduce((s, g) => s + g.bags, 0).toLocaleString()} <span className="text-sm font-sans font-normal">bags</span>
+                  <p className="font-display text-2xl text-paddy-900">{warehouseOverview.atMilling.reduce((s, g) => s + g.bags, 0).toLocaleString()} <span className="text-sm font-sans font-normal">bags</span>
                   </p>
                 </button>
                 {warehouseSection === 'milling' && (
@@ -973,11 +969,10 @@ export default function DashboardPage() {
               <div className="rounded-2xl border border-paddy-100 bg-white p-5">
                 <button type="button" onClick={() => setWarehouseSection(warehouseSection === 'packaged' ? null : 'packaged')} className="flex w-full items-center justify-between text-left">
                   <div>
-                    <h2 className="font-display text-lg text-paddy-900">📦 Packaged rice</h2>
+                    <h2 className="font-display text-lg text-paddy-900">Packaged rice</h2>
                     <p className="text-xs text-ink-500">Finished product, by pack size.</p>
                   </div>
-                  <p className="font-display text-2xl text-paddy-900">
-                    {fmtKg(warehouseOverview.packagedRice.reduce((s, g) => s + g.kg, 0))}
+                  <p className="font-display text-2xl text-paddy-900">{fmtKg(warehouseOverview.packagedRice.reduce((s, g) => s + g.kg, 0))}
                   </p>
                 </button>
                 {warehouseSection === 'packaged' && (
@@ -1033,8 +1028,7 @@ export default function DashboardPage() {
 
           {selectedWhEquipmentStatus && (
             <div className="mt-3 rounded-2xl border border-paddy-100 bg-white p-4">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-500">
-                {selectedWhEquipmentStatus === 'WORKING' ? 'Working' : selectedWhEquipmentStatus === 'NOT_WORKING' ? 'Not working' : 'Needs replacement'}
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-500">{selectedWhEquipmentStatus === 'WORKING' ? 'Working' : selectedWhEquipmentStatus === 'NOT_WORKING' ? 'Not working' : 'Needs replacement'}
               </p>
               <div className="space-y-1.5">
                 {supervisorWhEquipment.filter((e) => e.status === selectedWhEquipmentStatus).map((e) => (
@@ -1101,7 +1095,7 @@ export default function DashboardPage() {
           {productionOverview && (
             <div className="mt-4 space-y-4">
               <div className="rounded-2xl border border-paddy-100 bg-white p-5">
-                <h2 className="font-display text-lg text-paddy-900">🌾 Paddy processed</h2>
+                <h2 className="font-display text-lg text-paddy-900">Paddy processed</h2>
                 <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {productionOverview.processed.map((g) => (
                     <StatCard key={g.gradeLabel} label={g.gradeLabel} value={`${g.bags.toLocaleString()} bags`} unit={`(${fmtKg(g.kg)} KG)`} tone="paddy" />
@@ -1113,15 +1107,14 @@ export default function DashboardPage() {
               </div>
 
               <div className="rounded-2xl border border-paddy-100 bg-white p-5">
-                <h2 className="font-display text-lg text-paddy-900">⚙️ What it turned into</h2>
+                <h2 className="font-display text-lg text-paddy-900">What it turned into</h2>
                 <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <StatCard label="Recovered rice" value={fmtKg(productionOverview.recoveredRiceKg)} tone="paddy" />
                   <StatCard label="Broken rice" value={fmtKg(productionOverview.brokenRiceKg)} />
                   <StatCard label="Rice hull" value={fmtKg(productionOverview.riceHullKg)} />
                   <StatCard label="Recovery rate" value={`${productionOverview.recoveryPercent.toFixed(1)}%`} tone="husk" />
                 </div>
-                <p className="mt-3 border-t border-paddy-100 pt-3 text-xs text-ink-500">
-                  {fmtKg(productionOverview.energyConsumedKwh)} kWh of energy used to produce this - the real baseline
+                <p className="mt-3 border-t border-paddy-100 pt-3 text-xs text-ink-500">{fmtKg(productionOverview.energyConsumedKwh)} kWh of energy used to produce this - the real baseline
                   this month&rsquo;s activity is building for future expectations.
                 </p>
               </div>
@@ -1155,8 +1148,7 @@ export default function DashboardPage() {
 
           {selectedMachineStatusGroup && (
             <div className="mt-3 rounded-2xl border border-paddy-100 bg-white p-4">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-500">
-                {selectedMachineStatusGroup === 'running' ? 'Running or idle' : 'Needs attention'}
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-500">{selectedMachineStatusGroup === 'running' ? 'Running or idle' : 'Needs attention'}
               </p>
               <div className="space-y-1.5">
                 {opsManagerMachines
@@ -1320,7 +1312,7 @@ export default function DashboardPage() {
               className="mt-4 flex items-center justify-between rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-4 transition hover:border-paddy-500"
             >
               <div>
-                <p className="font-display text-base text-paddy-900">📞 {mdCallRequests.length} call request{mdCallRequests.length === 1 ? '' : 's'} waiting on you</p>
+                <p className="font-display text-base text-paddy-900">{mdCallRequests.length} call request{mdCallRequests.length === 1 ? '' : 's'} waiting on you</p>
                 <p className="text-xs text-ink-500">Approve one to call them back - opens in Messages.</p>
               </div>
               <span className="text-paddy-700">→</span>
@@ -1337,7 +1329,7 @@ export default function DashboardPage() {
                     <div>
                       <p className="font-medium text-ink-900">{r.requestNumber} · {r.resetType.replace(/_/g, ' ')}</p>
                       <p className="text-xs text-ink-500">Requested by {r.requestedBy.firstName} {r.requestedBy.lastName} - {r.reason}</p>
-                      {r.financeApprovedBy && <p className="text-xs text-paddy-700">✓ Finance Director already approved</p>}
+                      {r.financeApprovedBy && <p className="text-xs text-paddy-700">Finance Director already approved</p>}
                     </div>
                     <button
                       type="button"
@@ -1427,9 +1419,8 @@ export default function DashboardPage() {
 
             <div className="mt-4 flex items-center justify-between rounded-2xl border border-paddy-100 bg-white p-4">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-soil-500">🔧 Machinery &amp; equipment</p>
-                <p className="mt-1 text-sm text-ink-700">
-                  {myFarmEquipment.length === 0
+                <p className="text-xs font-medium uppercase tracking-wide text-soil-500">Machinery &amp; equipment</p>
+                <p className="mt-1 text-sm text-ink-700">{myFarmEquipment.length === 0
                     ? 'Nothing recorded yet'
                     : `${myFarmEquipment.filter((e) => e.status === 'WORKING').length} working · ${myFarmEquipment.filter((e) => e.status === 'NOT_WORKING').length} not working · ${myFarmEquipment.filter((e) => e.status === 'NEEDS_REPLACEMENT').length} needs replacement`}
                 </p>
@@ -1506,22 +1497,19 @@ export default function DashboardPage() {
             <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Link href="/admin" className="rounded-2xl border border-paddy-100 bg-white p-5 transition hover:border-paddy-500">
                 <p className="text-xs font-medium uppercase tracking-wide text-ink-500">System reset requests</p>
-                <p className="mt-2 font-display text-lg text-paddy-900">
-                  {adminResetRequests.filter((r) => r.status === 'APPROVED').length > 0
+                <p className="mt-2 font-display text-lg text-paddy-900">{adminResetRequests.filter((r) => r.status === 'APPROVED').length > 0
                     ? `${adminResetRequests.filter((r) => r.status === 'APPROVED').length} ready to execute`
                     : `${adminResetRequests.filter((r) => !['REJECTED', 'CANCELLED', 'EXECUTED'].includes(r.status)).length} in progress`}
                 </p>
               </Link>
               <Link href="/admin" className="rounded-2xl border border-paddy-100 bg-white p-5 transition hover:border-paddy-500">
                 <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Last successful backup</p>
-                <p className="mt-2 font-display text-lg text-paddy-900">
-                  {adminBackupStatus?.lastSuccess?.completedAt ? new Date(adminBackupStatus.lastSuccess.completedAt).toLocaleDateString() : 'None recorded'}
+                <p className="mt-2 font-display text-lg text-paddy-900">{adminBackupStatus?.lastSuccess?.completedAt ? new Date(adminBackupStatus.lastSuccess.completedAt).toLocaleDateString() : 'None recorded'}
                 </p>
               </Link>
               <Link href="/master-data" className="rounded-2xl border border-paddy-100 bg-white p-5 transition hover:border-paddy-500">
                 <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Master data</p>
-                <p className="mt-2 font-display text-lg text-paddy-900">
-                  {adminProducts.filter((p) => p.isActive).length} products · {adminPackagingSizes.filter((s) => s.isActive).length} sizes active
+                <p className="mt-2 font-display text-lg text-paddy-900">{adminProducts.filter((p) => p.isActive).length} products · {adminPackagingSizes.filter((s) => s.isActive).length} sizes active
                 </p>
               </Link>
             </div>

@@ -94,8 +94,7 @@ export default function ShipmentsPage() {
   return (
     <DashboardShell me={me}>
       <h1 className="font-display text-2xl font-medium text-paddy-900">Shipments</h1>
-      <p className="mt-1 text-sm text-ink-500">
-        {shipments ? `${inTransit.length} in transit, ${received.length} received` : 'Loading…'} - a shipment is
+      <p className="mt-1 text-sm text-ink-500">{shipments ? `${inTransit.length} in transit, ${received.length} received` : 'Loading…'} - a shipment is
         created automatically once a delivery report is approved.
       </p>
 
@@ -113,8 +112,7 @@ export default function ShipmentsPage() {
                   <p className="text-sm text-ink-500">Expected: {s.expectedBags} bags / {s.expectedKg.toLocaleString()} KG · {s.paddyGrade.label}</p>
                   <p className="text-xs text-ink-500">Departed {new Date(s.departedAt).toLocaleString()}</p>
                   {(s.deliveryReport?.vehicle || s.deliveryReport?.driver) && (
-                    <p className="mt-1 text-xs text-ink-500">
-                      {s.deliveryReport.vehicle && <>Vehicle: {s.deliveryReport.vehicle.plateNumber}{s.deliveryReport.vehicle.vehicleType ? ` (${s.deliveryReport.vehicle.vehicleType})` : ''} </>}
+                    <p className="mt-1 text-xs text-ink-500">{s.deliveryReport.vehicle && <>Vehicle: {s.deliveryReport.vehicle.plateNumber}{s.deliveryReport.vehicle.vehicleType ? ` (${s.deliveryReport.vehicle.vehicleType})` : ''} </>}
                       {s.deliveryReport.driver && <>· Driver: {s.deliveryReport.driver.name}{s.deliveryReport.driver.phone ? ` (${s.deliveryReport.driver.phone})` : ''}</>}
                     </p>
                   )}
@@ -169,8 +167,7 @@ export default function ShipmentsPage() {
                   <div className="mt-2 space-y-1.5">
                     {expandedShipment?.events?.map((ev) => (
                       <div key={ev.id} className="rounded-lg bg-rice-50 px-3 py-1.5 text-sm">
-                        <p className="text-xs font-medium text-paddy-900">
-                          {ev.eventType === 'LOCATION_UPDATE' ? '📍 Location update' : ev.eventType.replace('_', ' ')}
+                        <p className="text-xs font-medium text-paddy-900">{ev.eventType === 'LOCATION_UPDATE' ? 'Location update' : ev.eventType.replace('_', ' ')}
                           <span className="ml-2 font-normal text-ink-500">{new Date(ev.createdAt).toLocaleString()}</span>
                         </p>
                         {ev.notes && <p className="text-ink-700">{ev.notes}</p>}

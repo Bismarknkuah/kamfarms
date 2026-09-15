@@ -3809,6 +3809,45 @@ bundle growth on every touched page, the real layout's checksum
 verified identical before and after, and a project-wide scan
 confirming zero em dashes.
 
+## The public face, brought up to the WoodTrade Ghana standard
+
+**Typography and palette aligned with the WoodTrade Ghana design
+language** - Cormorant Garamond for display, DM Sans for body - while
+keeping KAM-ROMS's own paddy-green, husk-gold and unpolished-rice
+cream, with warm walnut surfaces added for the photographic sections.
+The two systems now read as work from the same hand without one
+borrowing the other's identity.
+
+**Homepage rebuilt as a corporate, photographic site**: a full-bleed
+hero on the real Pectra Rice product photograph with copy that fades
+up line by line, a navbar that sits transparent over the photograph
+and turns solid cream on scroll, a quiet by-the-numbers strip, the
+six-stage chain as an editorial numbered section on deep green, role
+cards that lift on hover, a split image-and-story principles section,
+and a full-bleed closing call to action. Every word of the existing
+copy was kept; only its presentation changed.
+
+**Login aligned to the same treatment** - the brand panel headline
+now fades up at hero scale with an italic serif eyebrow, and the form
+carries the same editorial hierarchy.
+
+**Forms and the production log lifted to the same corporate standard**:
+every emoji stripped from headings and success messages across the
+office actions, production, dashboard, shipments and inventory pages
+(48 removed - minimal emoji is an explicit principle of the reference
+design), section headings raised to the editorial serif scale with an
+italic eyebrow, and production record cards given the same hover lift
+as the public site.
+
+**Note for the sandbox build ritual**: the real layout's checksum is
+now 9cfdeca4e7325fde8deec8e019a92bcd, since the font imports genuinely
+changed. The swap-build-restore discipline is unchanged.
+
+Confirmed with a full backend test pass with zero regressions (51
+tests), a complete production build across all 41 routes, the real
+layout restored and verified at its new checksum, and a project-wide
+scan confirming zero em dashes and zero emoji in the touched pages.
+
 ## A note on verification in this build environment
 
 This code was written and tested in a network-restricted sandbox that

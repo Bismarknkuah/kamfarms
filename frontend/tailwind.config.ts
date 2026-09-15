@@ -27,6 +27,11 @@ const config: Config = {
           100: '#F4EEE0',
         },
         soil: {
+          // Warm walnut surfaces added for the corporate redesign - the
+          // photographic, mahogany-and-cream language, grounded in the
+          // paddy palette that was already here rather than replacing it.
+          100: '#F1E6D8',
+          300: '#C9A98A',
           500: '#6B4A2F',
           700: '#4A3220',
         },
@@ -36,9 +41,15 @@ const config: Config = {
           500: '#68655A',
         },
       },
+      keyframes: {
+        'fade-up': { '0%': { opacity: '0', transform: 'translateY(18px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+      },
+      animation: {
+        'fade-up': 'fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) both',
+      },
       fontFamily: {
-        display: ['var(--font-fraunces)', 'ui-serif', 'Georgia', 'serif'],
-        sans: ['var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['var(--font-cormorant)', 'ui-serif', 'Georgia', 'serif'],
+        sans: ['var(--font-dm-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
     },
   },

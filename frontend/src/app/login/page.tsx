@@ -155,7 +155,7 @@ export default function LoginPage() {
           </Link>
           <div className="max-w-sm">
             <p className="font-display text-sm italic text-husk-300">KAM Trading and Farms Limited</p>
-            <h2 className="mt-3 font-display text-3xl font-medium leading-tight text-rice-50">
+            <h2 className="reveal mt-3 font-display text-4xl font-medium leading-tight text-rice-50 md:text-5xl" style={{ ['--reveal-delay' as string]: '120ms' }}>
               From paddy field to Pectra Rice, one ledger the whole way.
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-paddy-100">
@@ -191,7 +191,8 @@ export default function LoginPage() {
 
         <div className="rounded-2xl border border-paddy-100 bg-white p-8 shadow-sm">
           <div className="mb-7 text-center">
-            <h1 className="font-display text-2xl font-medium text-paddy-900">Welcome back</h1>
+            <p className="font-display text-base italic text-soil-500">KAM-ROMS</p>
+            <h1 className="mt-1 font-display text-3xl font-medium text-paddy-900">Welcome back</h1>
             <p className="mt-2 text-sm text-ink-500">Sign in to KAM Rice Operations Management.</p>
           </div>
 

@@ -231,7 +231,7 @@ export default function InventoryPage() {
           />
 
           <div id="stage-farms" className="mt-6 rounded-2xl border border-paddy-100 bg-white p-5">
-            <h2 className="font-display text-lg text-paddy-900">🌾 Paddy</h2>
+            <h2 className="font-display text-lg text-paddy-900">Paddy</h2>
             <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div className="rounded-lg bg-rice-50 p-3">
                 <p className="text-xs font-medium uppercase tracking-wide text-ink-500">On farms</p>
@@ -246,8 +246,7 @@ export default function InventoryPage() {
               {hasPermission('warehouse.inventory.view') && (
                 <div className="rounded-lg bg-rice-50 p-3">
                   <p className="text-xs font-medium uppercase tracking-wide text-ink-500">In warehouses</p>
-                  <p className="mt-1 font-display text-lg text-paddy-900">
-                    {data ? `${data.warehouses.reduce((s, r) => s + r.bagCount, 0).toLocaleString()} bags` : fmtKg(summary.paddy.warehouseKg)}
+                  <p className="mt-1 font-display text-lg text-paddy-900">{data ? `${data.warehouses.reduce((s, r) => s + r.bagCount, 0).toLocaleString()} bags` : fmtKg(summary.paddy.warehouseKg)}
                   </p>
                   {data && <p className="text-xs text-ink-500">{fmtKg(summary.paddy.warehouseKg)}</p>}
                 </div>
@@ -304,7 +303,7 @@ export default function InventoryPage() {
           {hasPermission('warehouse.inventory.view') && (
             <div className="mt-6 rounded-2xl border border-paddy-100 bg-white p-5">
               <div className="flex items-baseline justify-between">
-                <h2 className="font-display text-lg text-paddy-900">📦 Pectra Rice - company stock</h2>
+                <h2 className="font-display text-lg text-paddy-900">Pectra Rice - company stock</h2>
                 <p className="text-xs text-ink-500">Available = physical stock minus active reservations.</p>
               </div>
               <div className="mt-3 overflow-x-auto">
@@ -358,12 +357,12 @@ export default function InventoryPage() {
             />
           </div>
           <div className="grid gap-6 lg:grid-cols-3">
-            <InventorySection title="🌾 On farms" rows={data.farms} emptyLabel="No paddy on hand at any farm right now." filterText={locationFilter} />
+            <InventorySection title="On farms" rows={data.farms} emptyLabel="No paddy on hand at any farm right now." filterText={locationFilter} />
             {hasPermission('warehouse.inventory.view') && (
-              <InventorySection title="🏭 In warehouses" rows={data.warehouses} emptyLabel="No stock in any warehouse right now." filterText={locationFilter} />
+              <InventorySection title="In warehouses" rows={data.warehouses} emptyLabel="No stock in any warehouse right now." filterText={locationFilter} />
             )}
             {hasPermission('milling.view') && (
-              <InventorySection title="⚙️ At milling" rows={data.millingCenters} emptyLabel="No stock at any milling center right now." filterText={locationFilter} />
+              <InventorySection title="At milling" rows={data.millingCenters} emptyLabel="No stock at any milling center right now." filterText={locationFilter} />
             )}
           </div>
         </div>

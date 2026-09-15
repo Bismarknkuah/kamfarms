@@ -28,3 +28,11 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* Editorial reveal - used on the public pages. Staggered by
+   --reveal-delay so a hero can fade up line by line. Respects
+   prefers-reduced-motion via the global rule above. */
+.reveal {
+  animation: fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--reveal-delay, 0ms);
+}

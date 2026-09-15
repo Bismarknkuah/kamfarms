@@ -120,7 +120,7 @@ export default function ProductionPage() {
       });
       setReceiptRows([{ paddyGradeId: '', bagCount: '' }]);
       setReceiptNotes('');
-      setReceiptSuccess('Paddy receipt confirmed ✓');
+      setReceiptSuccess('Paddy receipt confirmed');
       setTimeout(() => setReceiptSuccess(null), 3000);
       loadReceipts(accessToken);
     } catch (err) {
@@ -156,7 +156,7 @@ export default function ProductionPage() {
       });
       setPrMachineId(''); setPrPaddyProcessedKg(''); setPrPaddyProcessedBags(''); setPrRecoveredRiceKg(''); setPrBrokenRiceKg('');
       setPrRiceHullKg(''); setPrWasteLossKg(''); setPrMeterOpening(''); setPrMeterClosing(''); setPrSourceReferences(''); setPrRemarks('');
-      setCreateSuccess('Production run logged ✓ - sent for approval.');
+      setCreateSuccess('Production run logged - sent for approval.');
       setTimeout(() => setCreateSuccess(null), 4000);
       loadRecords(accessToken);
     } catch (err) {
@@ -274,7 +274,8 @@ export default function ProductionPage() {
     <DashboardShell me={me}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-medium text-paddy-900">Production</h1>
+          <p className="font-display text-base italic text-soil-500">The mill</p>
+          <h1 className="mt-1 font-display text-3xl font-medium text-paddy-900">Production</h1>
           <p className="mt-1 text-sm text-ink-500">{records ? `${records.length} production records` : 'Loading…'}</p>
         </div>
         {hasPermission('meter.create') && (
@@ -283,7 +284,7 @@ export default function ProductionPage() {
             onClick={() => setShowMeterPanel((v) => !v)}
             className="flex items-center gap-2 rounded-full bg-husk-500 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-husk-700"
           >
-            ⚡ Log meter reading
+            Log meter reading
           </button>
         )}
         {hasPermission('production.create') && (
@@ -292,7 +293,7 @@ export default function ProductionPage() {
             onClick={() => setShowReceiptPanel((v) => !v)}
             className="flex items-center gap-2 rounded-full bg-husk-700 px-5 py-2.5 text-sm font-medium text-rice-50 shadow-sm transition hover:bg-husk-900"
           >
-            📥 Confirm paddy received
+            Confirm paddy received
           </button>
         )}
         {hasPermission('milling.view') && (
@@ -301,7 +302,7 @@ export default function ProductionPage() {
             onClick={() => setShowCreatePanel((v) => !v)}
             className="flex items-center gap-2 rounded-full bg-paddy-900 px-5 py-2.5 text-sm font-medium text-rice-50 shadow-sm transition hover:bg-paddy-700"
           >
-            🌾 Log production run
+            Log production run
           </button>
         )}
       </div>
@@ -310,7 +311,7 @@ export default function ProductionPage() {
 
       {showReceiptPanel && (
         <div className="mt-4 rounded-2xl border-2 border-husk-700 bg-rice-50 p-6">
-          <h2 className="font-display text-lg text-paddy-900">Confirm paddy received at milling</h2>
+          <h2 className="font-display text-2xl font-medium text-paddy-900">Confirm paddy received at milling</h2>
           <p className="mt-1 text-sm text-ink-500">What actually arrived today - add one row per size, so both Size 4 and Size 5 can be confirmed together.</p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -368,9 +369,8 @@ export default function ProductionPage() {
 
       {showCreatePanel && (
         <div className="mt-4 rounded-2xl border-2 border-paddy-900 bg-rice-50 p-6">
-          <h2 className="font-display text-lg text-paddy-900">Log a production run</h2>
-          <p className="mt-1 text-sm text-ink-500">
-            Paddy in, rice and by-products out - recovery, broken %, hull %, and mass balance are all calculated
+          <h2 className="font-display text-2xl font-medium text-paddy-900">Log a production run</h2>
+          <p className="mt-1 text-sm text-ink-500">Paddy in, rice and by-products out - recovery, broken %, hull %, and mass balance are all calculated
             automatically once this is submitted for approval.
           </p>
 
@@ -459,8 +459,7 @@ export default function ProductionPage() {
               return (
                 <div className="mt-3 rounded-xl border border-husk-300 bg-husk-100/30 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-medium uppercase tracking-wide text-soil-500">
-                      Expected yield - from {prediction.sampleSize} past approved run{prediction.sampleSize === 1 ? '' : 's'} of this grade
+                    <p className="text-xs font-medium uppercase tracking-wide text-soil-500">Expected yield - from {prediction.sampleSize} past approved run{prediction.sampleSize === 1 ? '' : 's'} of this grade
                     </p>
                     <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${confTone}`}>{confidence} confidence</span>
                   </div>
@@ -473,15 +472,13 @@ export default function ProductionPage() {
                         <p className="flex items-center gap-1.5 text-xs text-ink-500"><span className={`inline-block h-2 w-2 rounded-sm ${r.tone}`} />{r.label} · {pct(r.kg)}%</p>
                         <p className="font-display text-paddy-900">{fmtKg(r.kg ?? 0)}</p>
                         {r.cmp && (
-                          <p className={`text-[11px] ${r.cmp.off ? 'font-semibold text-amber-800' : 'text-ink-500'}`}>
-                            You typed {r.cmp.diff > 0 ? '+' : ''}{r.cmp.diff.toFixed(0)}% vs expected{r.cmp.off ? ' - worth a second look' : ''}
+                          <p className={`text-[11px] ${r.cmp.off ? 'font-semibold text-amber-800' : 'text-ink-500'}`}>You typed {r.cmp.diff > 0 ? '+' : ''}{r.cmp.diff.toFixed(0)}% vs expected{r.cmp.off ? ' - worth a second look' : ''}
                           </p>
                         )}
                       </div>
                     ))}
                   </div>
-                  <p className="mt-3 text-xs text-ink-500">
-                    Power expected: {prediction.expectedEnergyKwh !== null && prediction.expectedEnergyKwh !== undefined ? `${prediction.expectedEnergyKwh.toFixed(1)} kWh` : 'no meter history yet'}
+                  <p className="mt-3 text-xs text-ink-500">Power expected: {prediction.expectedEnergyKwh !== null && prediction.expectedEnergyKwh !== undefined ? `${prediction.expectedEnergyKwh.toFixed(1)} kWh` : 'no meter history yet'}
                     {' · '}Based on {prediction.basedOnRecoveryPercent?.toFixed(1) ?? '?'}% recovery historically.
                   </p>
                 </div>
@@ -505,9 +502,8 @@ export default function ProductionPage() {
 
       {showMeterPanel && hasPermission('meter.create') && (
         <div className="mt-4 rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
-          <h2 className="font-display text-lg text-paddy-900">Log a meter reading</h2>
-          <p className="mt-1 text-sm text-ink-500">
-            Read the meter&rsquo;s current cumulative value directly off the machine and enter it below - that&rsquo;s
+          <h2 className="font-display text-2xl font-medium text-paddy-900">Log a meter reading</h2>
+          <p className="mt-1 text-sm text-ink-500">Read the meter&rsquo;s current cumulative value directly off the machine and enter it below - that&rsquo;s
             the only number needed. The system already knows the last reading on file and works out consumption
             for you.
           </p>
@@ -541,8 +537,7 @@ export default function ProductionPage() {
             <div className="mt-4 rounded-xl bg-white p-4">
               <div className="flex items-baseline justify-between">
                 <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Last reading on file</p>
-                <p className="font-display text-lg text-paddy-900">
-                  {lastReading ? `${lastReading.closingReading.toLocaleString()} ${lastReading.unit}` : meterMachineDetail ? 'No previous reading - this will be the first' : 'Loading…'}
+                <p className="font-display text-lg text-paddy-900">{lastReading ? `${lastReading.closingReading.toLocaleString()} ${lastReading.unit}` : meterMachineDetail ? 'No previous reading - this will be the first' : 'Loading…'}
                 </p>
               </div>
               {lastReading && <p className="text-right text-xs text-ink-500">{new Date(lastReading.date).toLocaleDateString()}</p>}
@@ -565,12 +560,10 @@ export default function ProductionPage() {
               )}
               {previewConsumption !== null && !previewIsFirstReading && !readingBelowLast && (
                 <div className="mt-2 rounded-lg bg-rice-50 px-3 py-2">
-                  <p className="text-sm text-paddy-700">
-                    → This will record <strong>{previewConsumption.toLocaleString()} kWh</strong> consumed since the last reading.
+                  <p className="text-sm text-paddy-700">→ This will record <strong>{previewConsumption.toLocaleString()} kWh</strong> consumed since the last reading.
                   </p>
                   {recentAverage !== null && (
-                    <p className={`mt-1 text-xs ${consumptionLooksUnusual ? 'font-medium text-amber-800' : 'text-ink-500'}`}>
-                      {consumptionLooksUnusual
+                    <p className={`mt-1 text-xs ${consumptionLooksUnusual ? 'font-medium text-amber-800' : 'text-ink-500'}`}>{consumptionLooksUnusual
                         ? `Unusual - this machine has averaged about ${Math.round(recentAverage).toLocaleString()} kWh per reading recently. Worth a second look before saving.`
                         : `In line with this machine's recent average of about ${Math.round(recentAverage).toLocaleString()} kWh per reading.`}
                     </p>
@@ -578,13 +571,12 @@ export default function ProductionPage() {
                 </div>
               )}
               {previewIsFirstReading && (
-                <p className="mt-2 text-sm text-ink-500">
-                  This is the first reading for this machine - consumption will start from zero.
+                <p className="mt-2 text-sm text-ink-500">This is the first reading for this machine - consumption will start from zero.
                 </p>
               )}
 
               {readingError && <p className="mt-2 text-sm text-red-600">{readingError}</p>}
-              {readingSuccess && <p className="mt-2 text-sm font-medium text-paddy-700">{readingSuccess} ✓</p>}
+              {readingSuccess && <p className="mt-2 text-sm font-medium text-paddy-700">{readingSuccess}</p>}
 
               <button
                 type="button"
@@ -601,7 +593,7 @@ export default function ProductionPage() {
 
       {receipts.length > 0 && (
         <div className="mt-6 rounded-2xl border border-paddy-100 bg-white p-5">
-          <h2 className="font-display text-lg text-paddy-900">Recent paddy receipts at milling</h2>
+          <h2 className="font-display text-2xl font-medium text-paddy-900">Recent paddy receipts at milling</h2>
           <div className="mt-3 space-y-2">
             {receipts.slice(0, 10).map((r) => (
               <div key={r.receiptNumber} className="rounded-lg bg-rice-50 px-3 py-2 text-sm">
@@ -609,8 +601,7 @@ export default function ProductionPage() {
                   <span className="font-mono text-xs text-ink-500">{r.receiptNumber}</span>
                   <span className="text-xs text-ink-500">{new Date(r.date).toLocaleDateString()} · {r.millingCenter.name}</span>
                 </div>
-                <p className="mt-1 text-ink-900">
-                  {r.lines.map((l) => `${l.bagCount} bags of ${l.paddyGrade.label}`).join(', ')}
+                <p className="mt-1 text-ink-900">{r.lines.map((l) => `${l.bagCount} bags of ${l.paddyGrade.label}`).join(', ')}
                 </p>
               </div>
             ))}
@@ -660,7 +651,7 @@ export default function ProductionPage() {
 
         <div className="rounded-2xl border border-paddy-100 bg-white p-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-display text-lg text-paddy-900">Machines</h2>
+            <h2 className="font-display text-2xl font-medium text-paddy-900">Machines</h2>
             {hasPermission('machine.manage') && (
               <button type="button" onClick={() => setShowAddMachine((v) => !v)} className="text-xs font-medium text-paddy-700 underline">
                 {showAddMachine ? 'Cancel' : '+ Add machine'}

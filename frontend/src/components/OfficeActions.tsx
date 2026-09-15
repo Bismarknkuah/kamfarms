@@ -143,7 +143,7 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
       }
       setRows([{ paddyGradeId: '', bagCount: '', weightKg: '' }]);
       setMoisturePercent(''); setQualityGrade(''); setNotes('');
-      setSuccess(validRows.length > 1 ? `${validRows.length} grade entries logged ✓` : 'Logged ✓');
+      setSuccess(validRows.length > 1 ? `${validRows.length} grade entries logged` : 'Logged');
       setShowReview(false);
       setTimeout(() => setSuccess(null), 3000);
       load();
@@ -183,7 +183,8 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
 
   return (
     <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
-      <h2 className="font-display text-lg text-paddy-900">🌾 Log paddy intake</h2>
+      <p className="font-display text-base italic text-soil-500">Farm</p>
+      <h2 className="mt-0.5 font-display text-2xl font-medium text-paddy-900">Log paddy intake</h2>
       <p className="mt-1 text-sm text-ink-500">Your primary task - logged here goes straight to your Farm Supervisor for approval.</p>
 
       {!showReview ? (
@@ -281,15 +282,13 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
       ) : (
         <div className="mt-4 rounded-xl border-2 border-paddy-900 bg-white p-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-soil-500">Review before submitting</p>
-          <p className="mt-3 text-sm text-ink-900">
-            Farm: <span className="font-medium">{farms.find((f) => f.id === farmId)?.name ?? ' - '}</span>
+          <p className="mt-3 text-sm text-ink-900">Farm: <span className="font-medium">{farms.find((f) => f.id === farmId)?.name ?? ' - '}</span>
             <span className="mx-2 text-ink-300">·</span>
             Date: <span className="font-medium">{new Date(entryDate).toLocaleDateString()}</span>
           </p>
           <div className="mt-3 space-y-1.5 border-t border-paddy-100 pt-3">
             {validRows.map((row, i) => (
-              <p key={i} className="text-sm text-ink-700">
-                <span className="font-medium text-ink-900">{grades.find((g) => g.id === row.paddyGradeId)?.label ?? ' - '}</span>: {row.bagCount} bags
+              <p key={i} className="text-sm text-ink-700"><span className="font-medium text-ink-900">{grades.find((g) => g.id === row.paddyGradeId)?.label ?? ' - '}</span>: {row.bagCount} bags
                 {row.weightKg ? ` · ${row.weightKg} KG (measured)` : ' · weight to be estimated from bag count'}
               </p>
             ))}
@@ -465,7 +464,7 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
         });
       }
       setOrderRows([{ paddyGradeId: '', bagCount: '', totalKg: '' }]);
-      setSuccess(validOrderRows.length > 1 ? `${validOrderRows.length} orders created ✓` : 'Dispatch order created ✓');
+      setSuccess(validOrderRows.length > 1 ? `${validOrderRows.length} orders created` : 'Dispatch order created');
       setShowOrderReview(false);
       setTimeout(() => setSuccess(null), 3000);
       load();
@@ -500,7 +499,7 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
       setActualBagCount(''); setActualKg(''); setDriverName(''); setDriverPhone('');
       setVehiclePlateNumber(''); setVehicleType(''); setLabourCost(''); setNumberOfLabourers('');
       setTransportationFee(''); setOtherCosts(''); setOtherCostsDescription(''); setDeliveryOrderId('');
-      setSuccess('Dispatch report submitted ✓');
+      setSuccess('Dispatch report submitted');
       setShowReportReview(false);
       setTimeout(() => setSuccess(null), 3000);
       load();
@@ -540,7 +539,8 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
 
   return (
     <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
-      <h2 className="font-display text-lg text-paddy-900">🚛 Dispatch</h2>
+      <p className="font-display text-base italic text-soil-500">Farm to warehouse</p>
+      <h2 className="mt-0.5 font-display text-2xl font-medium text-paddy-900">Dispatch</h2>
       <div className="mt-3 flex gap-2">
         <button type="button" onClick={() => setMode('order')} className={`rounded-full px-4 py-1.5 text-xs font-medium ${mode === 'order' ? 'bg-paddy-900 text-rice-50' : 'bg-white text-ink-700'}`}>
           1. Create order
@@ -552,8 +552,7 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
 
       {mode === 'order' ? (
         <div className="mt-4">
-          <p className="text-sm text-ink-500">
-            {autoSelectedFarm ? 'Request a delivery of paddy from your farm to a warehouse.' : 'Order any farm to dispatch paddy to a warehouse - pick which farm below.'}
+          <p className="text-sm text-ink-500">{autoSelectedFarm ? 'Request a delivery of paddy from your farm to a warehouse.' : 'Order any farm to dispatch paddy to a warehouse - pick which farm below.'}
           </p>
           <div className="mt-3 rounded-xl bg-white/60 p-4">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -620,8 +619,7 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
               <p className="text-sm text-ink-900">To: <span className="font-medium">{warehouses.find((w) => w.id === warehouseId)?.name ?? ' - '}</span></p>
               <div className="mt-2 space-y-1">
                 {validOrderRows.map((row, i) => (
-                  <p key={i} className="text-sm text-ink-700">
-                    <span className="font-medium text-ink-900">{grades.find((g) => g.id === row.paddyGradeId)?.label ?? ' - '}</span>: {row.bagCount} bags
+                  <p key={i} className="text-sm text-ink-700"><span className="font-medium text-ink-900">{grades.find((g) => g.id === row.paddyGradeId)?.label ?? ' - '}</span>: {row.bagCount} bags
                     {row.totalKg ? ` (${row.totalKg} KG)` : ' (weight to be estimated from bag count)'}
                   </p>
                 ))}
@@ -717,19 +715,16 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
           {showReportReview ? (
             <div className="mt-4 rounded-xl border-2 border-paddy-900 bg-white p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-soil-500">Review before submitting</p>
-              <p className="mt-2 text-sm text-ink-900">
-                Order: <span className="font-medium">{openOrders.find((o) => o.id === deliveryOrderId)?.orderNumber ?? ' - '}</span>
+              <p className="mt-2 text-sm text-ink-900">Order: <span className="font-medium">{openOrders.find((o) => o.id === deliveryOrderId)?.orderNumber ?? ' - '}</span>
               </p>
               <p className="text-sm text-ink-700">{actualBagCount} bags · {actualKg} KG loaded</p>
               {(driverName || vehiclePlateNumber) && (
-                <p className="text-sm text-ink-700">
-                  {driverName && <>Driver: {driverName}{driverPhone ? ` (${driverPhone})` : ''} </>}
+                <p className="text-sm text-ink-700">{driverName && <>Driver: {driverName}{driverPhone ? ` (${driverPhone})` : ''} </>}
                   {vehiclePlateNumber && <>· Vehicle: {vehiclePlateNumber}{vehicleType ? ` (${vehicleType})` : ''}</>}
                 </p>
               )}
               {(labourCost || transportationFee || otherCosts) && (
-                <p className="text-sm text-ink-700">
-                  Costs: {labourCost && `GHS ${labourCost} labour (${numberOfLabourers || '?'} people)`}
+                <p className="text-sm text-ink-700">Costs: {labourCost && `GHS ${labourCost} labour (${numberOfLabourers || '?'} people)`}
                   {transportationFee && ` · GHS ${transportationFee} transport`}
                   {otherCosts && ` · GHS ${otherCosts} other${otherCostsDescription ? ` (${otherCostsDescription})` : ''}`}
                 </p>
@@ -917,7 +912,7 @@ export function PaddyRequestApprovalQueue({ accessToken }: { accessToken: string
 
   return (
     <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
-      <h2 className="font-display text-lg text-paddy-900">📥 Paddy requests from warehouses</h2>
+      <h2 className="font-display text-2xl font-medium text-paddy-900">Paddy requests from warehouses</h2>
       <p className="mt-1 text-sm text-ink-500">Decide which farm(s) can meet each request, then assign a dispatch task - the farm's manager reviews it and creates the actual order.</p>
       {formError && <p className="mt-2 text-sm text-red-600">{formError}</p>}
       <div className="mt-3 space-y-3">
@@ -1061,7 +1056,7 @@ export function InventoryAdjustmentRequestAction({ accessToken, meId }: { access
         reason: reason.trim(),
       });
       setAdjustmentKg(''); setAdjustmentBags(''); setReason('');
-      setSuccess('Correction requested ✓ - awaiting your supervisor’s approval.');
+      setSuccess('Correction requested - awaiting your supervisor’s approval.');
       setTimeout(() => setSuccess(null), 4000);
       load();
     } catch (err) {
@@ -1075,9 +1070,8 @@ export function InventoryAdjustmentRequestAction({ accessToken, meId }: { access
 
   return (
     <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
-      <h2 className="font-display text-lg text-paddy-900">📝 Request a stock correction</h2>
-      <p className="mt-1 text-sm text-ink-500">
-        Physical count doesn&rsquo;t match the system? Request a correction - it only takes effect once your supervisor approves it, never immediately.
+      <h2 className="font-display text-2xl font-medium text-paddy-900">Request a stock correction</h2>
+      <p className="mt-1 text-sm text-ink-500">Physical count doesn&rsquo;t match the system? Request a correction - it only takes effect once your supervisor approves it, never immediately.
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {isFarm ? (
@@ -1196,7 +1190,7 @@ export function InventoryAdjustmentQueue({ accessToken }: { accessToken: string 
 
   return (
     <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
-      <h2 className="font-display text-lg text-paddy-900">📝 Inventory correction requests</h2>
+      <h2 className="font-display text-2xl font-medium text-paddy-900">Inventory correction requests</h2>
       <p className="mt-1 text-sm text-ink-500">{items.length} pending - a physical-count variance someone flagged, not yet applied to the ledger.</p>
       {formError && <p className="mt-2 text-sm text-red-600">{formError}</p>}
       <div className="mt-4 space-y-3">
@@ -1207,8 +1201,7 @@ export function InventoryAdjustmentQueue({ accessToken }: { accessToken: string 
                 <p className="font-mono text-xs text-ink-500">{a.adjustmentNumber}</p>
                 <p className="font-medium text-ink-900">{a.paddyGrade?.label ?? `${a.product?.name ?? ''} (${a.packagingSize?.label ?? ''})`}</p>
                 <p className="text-sm text-ink-500">{a.reason}</p>
-                <p className="mt-1 text-xs text-ink-500">
-                  System shows {a.systemQuantityKg.toLocaleString()} KG / {a.systemBagCount} bags - requesting {a.adjustmentKg > 0 ? '+' : ''}{a.adjustmentKg.toLocaleString()} KG / {a.adjustmentBags > 0 ? '+' : ''}{a.adjustmentBags} bags
+                <p className="mt-1 text-xs text-ink-500">System shows {a.systemQuantityKg.toLocaleString()} KG / {a.systemBagCount} bags - requesting {a.adjustmentKg > 0 ? '+' : ''}{a.adjustmentKg.toLocaleString()} KG / {a.adjustmentBags > 0 ? '+' : ''}{a.adjustmentBags} bags
                 </p>
               </div>
               {editingId !== a.id && (
@@ -1286,7 +1279,7 @@ export function ShipmentQuickAction({ accessToken }: { accessToken: string }) {
 
   return (
     <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
-      <h2 className="font-display text-lg text-paddy-900">🚚 Receive a shipment</h2>
+      <h2 className="font-display text-2xl font-medium text-paddy-900">Receive a shipment</h2>
       <p className="mt-1 text-sm text-ink-500">{inTransit.length} shipment{inTransit.length === 1 ? '' : 's'} currently in transit to you.</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <select value={selectedId} onChange={(e) => { setSelectedId(e.target.value); const s = inTransit.find((x) => x.id === e.target.value); if (s) { setReceivedKg(String(s.expectedKg)); setReceivedBags(String(s.expectedBags)); } }} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">
@@ -1298,7 +1291,7 @@ export function ShipmentQuickAction({ accessToken }: { accessToken: string }) {
       </div>
       {selected && <p className="mt-2 text-xs text-ink-500">Expected: {selected.expectedKg.toLocaleString()} KG / {selected.expectedBags} bags</p>}
       {formError && <p className="mt-2 text-sm text-red-600">{formError}</p>}
-      {success && <p className="mt-2 text-sm font-medium text-paddy-700">Shipment received ✓</p>}
+      {success && <p className="mt-2 text-sm font-medium text-paddy-700">Shipment received</p>}
       <button type="button" onClick={onSubmit} disabled={submitting || !selectedId || !receivedKg || !receivedBags} className="mt-4 rounded-full bg-paddy-900 px-6 py-2.5 text-sm font-medium text-rice-50 disabled:opacity-50">
         {submitting ? 'Receiving…' : 'Confirm receipt'}
       </button>

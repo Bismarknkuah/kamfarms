@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { SiteNav } from '@/components/SiteNav';
 
 const CHAIN = [
   {
@@ -64,78 +65,60 @@ const ROLES = [
 export default function HomePage() {
   return (
     <main className="bg-rice-50">
-      <header className="border-b border-paddy-100">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-          <div className="font-display text-lg font-medium text-paddy-900">
-            KAM<span className="text-husk-500">-ROMS</span>
-          </div>
-          <Link
-            href="/login"
-            className="rounded-full border border-paddy-700 px-5 py-2 text-sm font-medium text-paddy-900 transition hover:bg-paddy-900 hover:text-rice-50"
-          >
-            Sign in
-          </Link>
-        </div>
-      </header>
+      <SiteNav />
 
-      <section className="mx-auto grid max-w-6xl items-center gap-10 px-6 pb-20 pt-16 md:grid-cols-[1.1fr_0.9fr] md:pt-24">
-        <div>
-          <p className="font-display text-sm italic text-soil-500">KAM Trading and Farms Limited</p>
-          <h1 className="mt-3 font-display text-4xl font-medium leading-[1.1] text-paddy-900 md:text-6xl">
+      {/* Full-bleed photographic hero - the real product, not stock
+          imagery. Copy fades up line by line. */}
+      <section className="relative flex min-h-[92vh] items-end overflow-hidden bg-paddy-900">
+        <Image src="/pectra-rice.jpg" alt="Pectra Rice - Superfine Perfumed Rice" fill priority className="object-cover object-center opacity-90" />
+        <div className="absolute inset-0 bg-gradient-to-t from-paddy-900 via-paddy-900/70 to-paddy-900/20" />
+        <div className="absolute inset-0 bg-gradient-to-r from-paddy-900/60 to-transparent" />
+        <div className="relative mx-auto w-full max-w-6xl px-6 pb-24 pt-40">
+          <p className="reveal font-display text-lg italic text-husk-300" style={{ ['--reveal-delay' as string]: '0ms' }}>KAM Trading and Farms Limited</p>
+          <h1 className="reveal mt-4 max-w-3xl font-display text-5xl font-medium leading-[1.05] text-rice-50 md:text-7xl" style={{ ['--reveal-delay' as string]: '120ms' }}>
             Every bag of Pectra Rice, traced from the field it grew in.
           </h1>
-          <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-700">
-            KAM-ROMS is the system that runs the company end to end: six farms, three warehouses,
-            a milling operation at Sefwi Kanchabio, and every sale out of Adenta - all on one ledger
-            that can't drift out of sync with what actually happened.
+          <p className="reveal mt-7 max-w-2xl text-lg leading-relaxed text-paddy-100" style={{ ['--reveal-delay' as string]: '240ms' }}>
+            KAM-ROMS runs the company end to end: six farms, three warehouses, a milling operation at
+            Sefwi Kanchabio, and every sale out of Adenta - all on one ledger that can&rsquo;t drift out of
+            sync with what actually happened.
           </p>
-          <div className="mt-9 flex flex-wrap items-center gap-4">
-            <Link
-              href="/login"
-              className="rounded-full bg-paddy-900 px-7 py-3 text-sm font-medium text-rice-50 transition hover:bg-paddy-700"
-            >
+          <div className="reveal mt-10 flex flex-wrap items-center gap-4" style={{ ['--reveal-delay' as string]: '360ms' }}>
+            <Link href="/login" className="rounded-full bg-husk-500 px-8 py-3.5 text-sm font-semibold text-paddy-900 transition hover:bg-husk-300">
               Sign in to KAM-ROMS
             </Link>
-            <a href="#chain" className="text-sm font-medium text-soil-500 underline underline-offset-4">
+            <a href="#chain" className="text-sm font-medium text-rice-50 underline underline-offset-4 hover:text-husk-300">
               See how a bag gets made
             </a>
           </div>
         </div>
+      </section>
 
-        {/* Illustrated panel - the real Pectra Rice product photo, same
-            gradient-overlay treatment as the login page's panel. */}
-        <div className="relative hidden aspect-[4/5] overflow-hidden rounded-3xl bg-paddy-900 md:block">
-          <Image
-            src="/pectra-rice.jpg"
-            alt="Pectra Rice - Superfine Perfumed Rice, 25KG and 5KG bags"
-            fill
-            className="object-cover object-top"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-paddy-900 via-paddy-900/60 to-transparent" />
-          <div className="relative flex h-full flex-col justify-end p-8">
-            <p className="font-display text-2xl italic text-rice-50">Six farms. Three warehouses. One ledger.</p>
-            <p className="mt-2 text-sm text-paddy-100">Adenta, Accra &middot; Sefwi Kanchabio, Western North Region</p>
-          </div>
+      {/* By the numbers - a quiet strip, not a shouting one */}
+      <section className="border-b border-paddy-100 bg-rice-50">
+        <div className="mx-auto grid max-w-6xl grid-cols-3 divide-x divide-paddy-100 px-6">
+          {[['6', 'farms', 'logging paddy intake by grade and bag count'], ['3', 'warehouses', 'each with its own milling center, Sefwi Kanchabio'], ['1', 'product line', 'Pectra Rice, Superfine Perfumed Rice, from Adenta']].map(([n, l, sub]) => (
+            <div key={l} className="px-6 py-10 text-center first:pl-0 last:pr-0">
+              <p className="font-display text-5xl text-paddy-900">{n}</p>
+              <p className="mt-1 font-display text-lg italic text-soil-500">{l}</p>
+              <p className="mt-1 text-xs text-ink-500">{sub}</p>
+            </div>
+          ))}
         </div>
       </section>
 
-      <section id="chain" className="border-y border-paddy-100 bg-paddy-900 py-20">
+      {/* The chain - editorial numbered steps on deep green */}
+      <section id="chain" className="bg-paddy-900 py-24">
         <div className="mx-auto max-w-6xl px-6">
-          <h2 className="font-display text-2xl font-medium text-rice-50 md:text-3xl">
-            Six stages. One system. No stage skipped.
+          <p className="font-display text-lg italic text-husk-300">The chain</p>
+          <h2 className="mt-2 max-w-2xl font-display text-4xl font-medium leading-tight text-rice-50 md:text-5xl">
+            Six handoffs, each approved before it counts.
           </h2>
-          <p className="mt-3 max-w-lg text-paddy-100">
-            Each step below is a module in KAM-ROMS, and each handoff between steps is an approval
-            - nothing moves from one stage to the next without someone signing off on it.
-          </p>
-
-          <div className="mt-14 grid gap-x-8 gap-y-12 md:grid-cols-3">
+          <div className="mt-14 grid gap-px overflow-hidden rounded-3xl bg-paddy-700/40 sm:grid-cols-2 lg:grid-cols-3">
             {CHAIN.map((item) => (
-              <div key={item.step} className="border-t border-paddy-500 pt-5">
-                <div className="flex items-baseline gap-3">
-                  <span className="font-display text-sm text-husk-300">{item.step}</span>
-                  <h3 className="font-display text-xl text-rice-50">{item.title}</h3>
-                </div>
+              <div key={item.step} className="group bg-paddy-900 p-8 transition hover:bg-paddy-700/60">
+                <span className="font-display text-3xl italic text-husk-300">{item.step}</span>
+                <h3 className="mt-3 font-display text-2xl text-rice-50">{item.title}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-paddy-100">{item.body}</p>
               </div>
             ))}
@@ -143,75 +126,61 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-20">
-        <h2 className="font-display text-2xl font-medium text-paddy-900 md:text-3xl">
-          Built around who actually does the work
+      {/* Roles - hover-lift cards */}
+      <section id="roles" className="mx-auto max-w-6xl px-6 py-24">
+        <p className="font-display text-lg italic text-soil-500">Who uses it</p>
+        <h2 className="mt-2 max-w-2xl font-display text-4xl font-medium leading-tight text-paddy-900 md:text-5xl">
+          Thirteen roles. Each sees exactly its own work.
         </h2>
-        <p className="mt-3 max-w-lg text-ink-700">
-          Everyone sees exactly what their job needs - nothing more, nothing hidden behind a
-          setting they'll never find.
-        </p>
-
-        <div className="mt-12 divide-y divide-paddy-100 border-t border-paddy-100">
+        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {ROLES.map((role) => (
-            <div key={role.name} className="grid gap-2 py-6 md:grid-cols-[220px_1fr] md:items-baseline md:gap-8">
-              <h3 className="font-display text-lg text-paddy-900">{role.name}</h3>
-              <p className="text-ink-700">{role.does}</p>
+            <div key={role.name} className="rounded-2xl border border-paddy-100 bg-white p-7 transition duration-300 hover:-translate-y-1 hover:border-husk-300 hover:shadow-xl">
+              <h3 className="font-display text-2xl text-paddy-900">{role.name}</h3>
+              <p className="mt-3 text-sm leading-relaxed text-ink-700">{role.does}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="bg-husk-100/60 py-20">
-        <div className="mx-auto grid max-w-6xl gap-10 px-6 md:grid-cols-[1fr_1.2fr] md:items-center">
-          <h2 className="font-display text-2xl font-medium text-paddy-900 md:text-3xl">
-            Stock numbers you can trust, because nothing edits history.
-          </h2>
-          <div className="space-y-4 text-ink-700">
-            <p>
-              Most systems store &ldquo;current stock&rdquo; as a single number someone can quietly change.
-              KAM-ROMS never does. Every movement - paddy approved, a truck departing, a shortfall on
-              arrival, rice coming out of the mill - is its own permanent record. The stock figure you
-              see is always the sum of everything that actually happened, not a number waiting to be
-              corrected.
-            </p>
-            <p>
-              Get something wrong? It's fixed with a new, explained correction - never a silent edit to
-              the past.
-            </p>
+      {/* Principles - split image / story */}
+      <section id="principles" className="bg-soil-100">
+        <div className="mx-auto grid max-w-6xl md:grid-cols-2">
+          <div className="relative min-h-[26rem]">
+            <Image src="/pectra-rice.jpg" alt="Pectra Rice bags" fill className="object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-soil-700/70 to-transparent" />
+            <p className="absolute bottom-8 left-8 right-8 font-display text-3xl italic text-rice-50">Nothing edits history.</p>
+          </div>
+          <div className="flex flex-col justify-center px-6 py-16 md:px-14">
+            <p className="font-display text-lg italic text-soil-500">Principles</p>
+            <h2 className="mt-2 font-display text-4xl font-medium leading-tight text-paddy-900">
+              Stock numbers you can trust, because nothing edits history.
+            </h2>
+            <div className="mt-6 space-y-4 text-ink-700">
+              <p>
+                Most systems store &ldquo;current stock&rdquo; as a single number someone can quietly change.
+                KAM-ROMS never does. Every movement - paddy approved, a truck departing, a shortfall on
+                arrival, rice coming out of the mill - is its own permanent record. The stock figure you
+                see is always the sum of everything that actually happened.
+              </p>
+              <p>Get something wrong? It&rsquo;s fixed with a new, explained correction - never a silent edit to the past.</p>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-20">
-        <div className="grid gap-10 md:grid-cols-3">
-          <div>
-            <p className="font-display text-3xl text-paddy-900">6</p>
-            <p className="mt-1 text-sm text-ink-500">farms feeding the mill, with room for a seventh whenever it's ready</p>
-          </div>
-          <div>
-            <p className="font-display text-3xl text-paddy-900">3</p>
-            <p className="mt-1 text-sm text-ink-500">warehouses, each with its own milling center at Sefwi Kanchabio, Western North Region</p>
-          </div>
-          <div>
-            <p className="font-display text-3xl text-paddy-900">1</p>
-            <p className="mt-1 text-sm text-ink-500">product line - Pectra Rice, Superfine Perfumed Rice - sold out of Adenta, Accra</p>
-          </div>
-        </div>
-      </section>
-
-      <footer className="border-t border-paddy-100 bg-paddy-900 py-16">
-        <div className="mx-auto max-w-6xl px-6 text-center">
-          <h2 className="font-display text-2xl font-medium text-rice-50 md:text-3xl">Ready to get to work?</h2>
-          <Link
-            href="/login"
-            className="mt-6 inline-block rounded-full bg-husk-500 px-8 py-3 text-sm font-medium text-paddy-900 transition hover:bg-husk-300"
-          >
+      {/* Closing CTA - full bleed */}
+      <section className="relative overflow-hidden bg-paddy-900 py-28">
+        <Image src="/pectra-rice.jpg" alt="" fill aria-hidden className="object-cover opacity-20" />
+        <div className="absolute inset-0 bg-gradient-to-b from-paddy-900/80 to-paddy-900" />
+        <div className="relative mx-auto max-w-3xl px-6 text-center">
+          <h2 className="font-display text-4xl font-medium text-rice-50 md:text-5xl">Ready to get to work?</h2>
+          <p className="mt-4 text-paddy-100">Sign in with your role. You&rsquo;ll see only what&rsquo;s yours to do today.</p>
+          <Link href="/login" className="mt-8 inline-block rounded-full bg-husk-500 px-8 py-3.5 text-sm font-semibold text-paddy-900 transition hover:bg-husk-300">
             Sign in to KAM-ROMS
           </Link>
-          <p className="mt-8 text-xs text-paddy-300">KAM Trading and Farms Limited &middot; Adenta, Accra</p>
+          <p className="mt-10 text-xs text-paddy-300">KAM Trading and Farms Limited &middot; Adenta, Accra</p>
         </div>
-      </footer>
+      </section>
     </main>
   );
 }

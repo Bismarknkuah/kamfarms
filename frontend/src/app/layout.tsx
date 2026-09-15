@@ -28,6 +28,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'KAM-ROMS',
   },
+  // Chrome now warns that apple-mobile-web-app-capable alone is
+  // deprecated; the standard tag is emitted alongside it.
+  other: { 'mobile-web-app-capable': 'yes' },
   icons: {
     // Explicit and comprehensive on purpose, not left to Next.js's
     // file-convention auto-detection (app/icon.svg) alone - SVG-only

@@ -3840,13 +3840,28 @@ italic eyebrow, and production record cards given the same hover lift
 as the public site.
 
 **Note for the sandbox build ritual**: the real layout's checksum is
-now 9cfdeca4e7325fde8deec8e019a92bcd, since the font imports genuinely
+now fb1f8d11a5e839ce6ee825daa94647ae, since the font imports and the
+mobile-web-app meta tag genuinely
 changed. The swap-build-restore discipline is unchanged.
 
 Confirmed with a full backend test pass with zero regressions (51
 tests), a complete production build across all 41 routes, the real
 layout restored and verified at its new checksum, and a project-wide
 scan confirming zero em dashes and zero emoji in the touched pages.
+
+## Preview deployments no longer fail CORS at the login screen
+
+Vercel mints a unique hostname for every push
+(kamfarms-<hash>-<team>.vercel.app), and each one was rejected by the
+backend's exact-match origin list with a CORS error at login. The
+origin check now accepts WEB_ORIGIN exact matches as before, plus any
+origin matching a deliberately narrow pattern - starts with the
+project name, ends in .vercel.app - proven to accept every real URL
+and reject lookalikes such as evil-kamfarms.vercel.app. No Railway
+variable changes are needed; WEB_ORIGIN_PATTERN can override the regex
+if the project is ever renamed. The deprecated
+apple-mobile-web-app-capable console warning is also resolved by
+emitting the standard mobile-web-app-capable tag alongside it.
 
 ## A note on verification in this build environment
 

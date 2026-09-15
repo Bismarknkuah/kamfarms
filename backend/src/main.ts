@@ -23,8 +23,24 @@ async function bootstrap() {
   // effectively unbounded.
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
+  // Origins are checked two ways. Exact matches come from WEB_ORIGIN as
+  // before (comma-separated). On top of that, any Vercel *preview*
+  // deployment of this project is accepted - Vercel mints a unique
+  // hostname for every single push (kamfarms-<hash>-<team>.vercel.app),
+  // so listing them by hand is impossible and each one was being
+  // rejected with a CORS error at the login screen. The pattern is
+  // deliberately narrow: only hostnames that start with the project
+  // name and end in .vercel.app, never a wildcard. WEB_ORIGIN_PATTERN
+  // can override the regex if the project is ever renamed.
+  const exactOrigins = process.env.WEB_ORIGIN?.split(',').map((o) => o.trim()).filter(Boolean) ?? ['http://localhost:3000'];
+  const previewPattern = new RegExp(process.env.WEB_ORIGIN_PATTERN ?? '^https://kamfarms[a-z0-9-]*\\.vercel\\.app$');
   app.enableCors({
-    origin: process.env.WEB_ORIGIN?.split(',') ?? ['http://localhost:3000'],
+    origin: (origin, callback) => {
+      // Same-origin / server-to-server requests carry no Origin header.
+      if (!origin) return callback(null, true);
+      if (exactOrigins.includes(origin) || previewPattern.test(origin)) return callback(null, true);
+      return callback(new Error(`Origin ${origin} is not allowed by CORS`), false);
+    },
     credentials: true,
   });
 

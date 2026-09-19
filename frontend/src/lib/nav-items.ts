@@ -296,3 +296,30 @@ export const FINANCIAL_VISIBILITY_ROLES = new Set(['SALES_OFFICER', 'FINANCE_OFF
 export function hasFinancialVisibility(me: MeResponse): boolean {
   return me.roles.some((r) => FINANCIAL_VISIBILITY_ROLES.has(r.code));
 }
+
+/** The "multi task bar" - a small, persistent set of quick-action
+ * shortcuts shown on every page for each role, so the one or two
+ * things a person does most often don't require hunting through the
+ * full sidebar every time. Deliberately references NAV_ITEMS by href
+ * only, never duplicating a label/icon/permission here - the actual
+ * rendering re-derives everything from NAV_ITEMS and re-checks
+ * permission before showing anything, so a mistake in this map can
+ * never surface a link the person doesn't actually have access to.
+ * Kept to 3-4 items per role: the point is quick access to the
+ * genuinely common actions, not a second copy of the sidebar.
+ */
+export const QUICK_ACTIONS_BY_ROLE: Record<string, string[]> = {
+  FARM_MANAGER: ['/log-paddy-intake', '/dispatch-quick', '/stock-correction', '/tasks'],
+  FARM_DIRECTOR: ['/warehouse-requests', '/farms', '/reports', '/tasks'],
+  WAREHOUSE_MANAGER: ['/shipments', '/deliveries', '/packaging', '/inventory'],
+  WAREHOUSE_SUPERVISOR: ['/warehouses', '/shipments', '/inventory', '/tasks'],
+  OPERATIONS_OFFICER: ['/production', '/quality', '/inventory', '/tasks'],
+  OPERATIONS_MANAGER: ['/production', '/quality', '/reports', '/tasks'],
+  SALES_OFFICER: ['/sales', '/messages', '/tasks'],
+  FINANCE_OFFICER: ['/finance', '/expenses', '/sales'],
+  FINANCE_DIRECTOR: ['/finance', '/sales', '/expenses', '/reports'],
+  MD: ['/analytics', '/audit-log', '/sales', '/finance'],
+  CEO: ['/analytics', '/audit-log', '/sales', '/finance'],
+  AUDITOR: ['/audit-log', '/analytics', '/reports'],
+  ADMIN: ['/users', '/roles', '/master-data', '/admin'],
+};

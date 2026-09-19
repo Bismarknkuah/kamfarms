@@ -43,9 +43,11 @@ const config: Config = {
       },
       keyframes: {
         'fade-up': { '0%': { opacity: '0', transform: 'translateY(18px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+        'slow-zoom': { '0%': { transform: 'scale(1)' }, '100%': { transform: 'scale(1.08)' } },
       },
       animation: {
         'fade-up': 'fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) both',
+        'slow-zoom': 'slow-zoom 20s ease-out forwards',
       },
       fontFamily: {
         display: ['var(--font-cormorant)', 'ui-serif', 'Georgia', 'serif'],

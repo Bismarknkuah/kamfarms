@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import { hasFinancialVisibility } from '@/lib/nav-items';
+import { YieldPredictionCard } from '@/components/DataEntryKit';
 import {
   reportsApi,
   ExecutiveSummary,
@@ -39,6 +40,10 @@ import {
   farmsApi,
   farmEquipmentApi,
   warehouseEquipmentApi,
+  paddyGradesApi,
+  PaddyGrade,
+  YieldPrediction,
+  analyticsApi,
   machinesApi,
   Machine,
   Farm,
@@ -152,6 +157,18 @@ export default function DashboardPage() {
   // discoverable by visiting Messages, since MD/CEO are specifically
   // who these requests are addressed to.
   const [mdCallRequests, setMdCallRequests] = useState<CallRequest[]>([]);
+  // A real, concrete gap this closes: MD/CEO already held every
+  // permission needed to see the company's live activity and its
+  // yield/energy predictions (audit.view, milling.view), but nothing
+  // on their own dashboard ever surfaced either - both existed only as
+  // separate pages someone would have to already know to visit.
+  const [mdActivityLog, setMdActivityLog] = useState<AuditLogEntry[]>([]);
+  const [mdActivityLogError, setMdActivityLogError] = useState<string | null>(null);
+  const [mdGrades, setMdGrades] = useState<PaddyGrade[]>([]);
+  const [mdPredictGradeId, setMdPredictGradeId] = useState('');
+  const [mdPredictBags, setMdPredictBags] = useState('1000');
+  const [mdPrediction, setMdPrediction] = useState<YieldPrediction | null>(null);
+  const [mdPredicting, setMdPredicting] = useState(false);
   // Finance Director's own approval-queue panel - a real, confirmed
   // gap found during a full role audit: their nav access was already
   // complete, but their Overview page showed nothing tailored to their
@@ -479,6 +496,20 @@ export default function DashboardPage() {
       salesOrdersApi.list(accessToken).then(setMdSalesOrders).catch(() => {});
       systemResetApi.list(accessToken).then((reqs) => setMdResetRequests(reqs.filter((r) => !r.mdApprovedBy && r.status !== 'REJECTED' && r.status !== 'CANCELLED'))).catch(() => {});
       callsApi.listMyCallRequests(accessToken).then((reqs) => setMdCallRequests(reqs.filter((r) => r.status === 'PENDING'))).catch(() => {});
+      auditApi.list(accessToken).then((res) => setMdActivityLog(res.items)).catch((err: unknown) =>
+        setMdActivityLogError(err instanceof ApiError ? err.message : 'Failed to load the activity log.'),
+      );
+      paddyGradesApi.list(accessToken).then((list) => {
+        setMdGrades(list);
+        if (list.length > 0) {
+          setMdPredictGradeId((prev) => prev || list[0].id);
+          // First prediction fires as soon as a grade is known - the
+          // panel opens with a real answer already showing, not an
+          // empty form waiting to be filled in.
+          setMdPredicting(true);
+          productionApi.predict(accessToken, list[0].id, 1000).then(setMdPrediction).finally(() => setMdPredicting(false));
+        }
+      }).catch(() => {});
     }
 
     if (roleCodes.includes('OPERATIONS_OFFICER')) {
@@ -635,6 +666,16 @@ export default function DashboardPage() {
   const isWarehouseManager = me.roles.some((r) => r.code === 'WAREHOUSE_MANAGER');
   const isWarehouseSupervisor = me.roles.some((r) => r.code === 'WAREHOUSE_SUPERVISOR');
   const isMdOrCeo = me.roles.some((r) => r.code === 'MD' || r.code === 'CEO');
+  // A plain function, not a hook, deliberately - this runs from the
+  // grade-select and bag-input's own onChange, well after the
+  // component's hooks have already all been called in a fixed order.
+  const runMdPrediction = (gradeId: string, bags: string) => {
+    if (!accessToken || !gradeId) return;
+    const n = parseInt(bags, 10);
+    if (!Number.isFinite(n) || n <= 0) return;
+    setMdPredicting(true);
+    productionApi.predict(accessToken, gradeId, n).then(setMdPrediction).finally(() => setMdPredicting(false));
+  };
   const isOperationsOfficer = me.roles.some((r) => r.code === 'OPERATIONS_OFFICER');
   const isOperationsManager = me.roles.some((r) => r.code === 'OPERATIONS_MANAGER');
   const isFinanceDirector = me.roles.some((r) => r.code === 'FINANCE_DIRECTOR');
@@ -1381,6 +1422,77 @@ export default function DashboardPage() {
               label="Warehouse expenses this month"
               value={`GHS ${mdExpenses.filter((e) => e.warehouse && isThisMonth(e.date)).reduce((s, e) => s + e.amount, 0).toLocaleString()}`}
             />
+          </div>
+
+          <Link
+            href="/analytics"
+            className="mt-4 flex items-center justify-between rounded-2xl border-2 border-paddy-900 bg-paddy-900 p-5 text-rice-50 transition hover:bg-paddy-700"
+          >
+            <div>
+              <p className="font-display text-lg">Six-month analytics</p>
+              <p className="mt-0.5 text-sm text-paddy-100">Sales vs. expenses, product performance, and farm-by-farm intake, trended over time - not just where things stand today.</p>
+            </div>
+            <span className="shrink-0 text-2xl">→</span>
+          </Link>
+
+          <div className="mt-4 rounded-2xl border border-paddy-100 bg-white p-5">
+            <h2 className="font-display text-lg text-paddy-900">What&rsquo;s expected from the mill</h2>
+            <p className="text-xs text-ink-500">The same yield and energy prediction the milling floor uses - pick a grade and a bag count to see what a run should produce, before it happens.</p>
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-ink-700">Grade</label>
+                <select
+                  value={mdPredictGradeId}
+                  onChange={(e) => { setMdPredictGradeId(e.target.value); runMdPrediction(e.target.value, mdPredictBags); }}
+                  className="rounded-lg border border-paddy-100 px-3 py-2 text-sm"
+                >
+                  {mdGrades.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-ink-700">Bags</label>
+                <input
+                  type="number"
+                  value={mdPredictBags}
+                  onChange={(e) => { setMdPredictBags(e.target.value); runMdPrediction(mdPredictGradeId, e.target.value); }}
+                  className="w-28 rounded-lg border border-paddy-100 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="mt-4">
+              {mdPredicting && <p className="text-sm text-ink-500">Checking this grade&rsquo;s history…</p>}
+              {mdPrediction && !mdPredicting && (
+                <YieldPredictionCard prediction={mdPrediction} fmtKg={(n) => `${n.toLocaleString(undefined, { maximumFractionDigits: 0 })} KG`} />
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-paddy-100 bg-white p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-display text-lg text-paddy-900">Activity across the company</h2>
+                <p className="text-xs text-ink-500">Every action, most recent first - the same live trail the Auditor sees.</p>
+              </div>
+              <Link href="/audit-log" className="shrink-0 rounded-full border border-paddy-100 px-4 py-2 text-xs font-medium text-paddy-900 hover:bg-paddy-50">Full log</Link>
+            </div>
+            {mdActivityLogError ? (
+              <p className="mt-4 text-sm text-red-600">{mdActivityLogError}</p>
+            ) : mdActivityLog.length === 0 ? (
+              <p className="mt-4 text-sm text-ink-500">Loading recent activity…</p>
+            ) : (
+              <div className="mt-4 space-y-1.5">
+                {mdActivityLog.slice(0, 10).map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg bg-rice-50 px-3 py-2 text-sm">
+                    <span className="min-w-0 truncate text-ink-900">
+                      <span className="font-medium">{entry.user ? `${entry.user.firstName} ${entry.user.lastName}` : 'System'}</span>
+                      <span className="text-ink-500"> · {entry.action}</span>
+                      <span className="text-ink-500"> · {entry.entity}</span>
+                    </span>
+                    <span className="shrink-0 text-xs text-ink-500">{new Date(entry.createdAt).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

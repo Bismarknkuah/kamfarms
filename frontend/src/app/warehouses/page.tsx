@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -201,7 +202,7 @@ export default function WarehousesPage() {
                   <div>
                     <p className="font-mono text-xs text-ink-500">{wh.code}</p>
                     <h3 className="mt-1 font-display text-lg text-paddy-900">
-                      {wh.name}
+                      <Link href={`/warehouses/${wh.id}`} className="hover:underline">{wh.name}</Link>
                       {!wh.isActive && <span className="ml-2 rounded-full bg-ink-500/10 px-2 py-0.5 text-xs font-medium text-ink-500">Inactive</span>}
                     </h3>
                     <p className="mt-1 text-sm text-ink-500">{wh.location ?? 'No location set'}</p>

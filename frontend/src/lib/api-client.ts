@@ -140,7 +140,21 @@ export const warehousesApi = {
     request<Warehouse>(`/warehouses/${warehouseId}/managers`, { method: 'POST', body: JSON.stringify({ userId }) }, accessToken),
   removeManager: (accessToken: string, warehouseId: string, userId: string) =>
     request<null>(`/warehouses/${warehouseId}/managers/${userId}`, { method: 'DELETE' }, accessToken),
+  // Built and working on the backend since an earlier phase
+  // (warehouse.inventory.view) with no frontend consumer at all - the
+  // exact same class of gap already found and closed for the farm
+  // equivalent. Real-time paddy-by-grade and packaged-rice-by-product
+  // balances for one specific warehouse.
+  getInventory: (accessToken: string, warehouseId: string) =>
+    request<WarehouseInventory>(`/warehouses/${warehouseId}/inventory`, { method: 'GET' }, accessToken),
 };
+
+export interface WarehouseInventory {
+  warehouseId: string;
+  paddyByGrade: { gradeCode: string; gradeLabel: string; bagCount: number; totalKg: number }[];
+  paddyTotalKg: number;
+  packagedByProduct: { productName: string; packageLabel: string; bagCount: number; totalKg: number }[];
+}
 
 export interface ExecutiveSummary {
   totalPaddyAvailableKg: number;

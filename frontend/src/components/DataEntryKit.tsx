@@ -148,3 +148,61 @@ export function ConditionChips({ value, onChange }: { value: string; onChange: (
     </div>
   );
 }
+
+// Shared with the MD/CEO executive dashboard and the Operations
+// Officer's own production-logging screen - one real prediction, one
+// rendering, instead of a duplicated copy that could quietly drift out
+// of sync with the original. `typed` is optional: pass it while
+// actively logging a run to flag a figure that's off from what's
+// expected; omit it entirely for a read-only executive view.
+export function YieldPredictionCard({
+  prediction, typed, fmtKg,
+}: {
+  prediction: { hasHistory: boolean; sampleSize: number; expectedRecoveredKg?: number; expectedBrokenKg?: number; expectedHullKg?: number; expectedWasteKg?: number; expectedEnergyKwh?: number | null; basedOnRecoveryPercent?: number };
+  typed?: { recovered?: string; broken?: string; hull?: string };
+  fmtKg: (n: number) => string;
+}) {
+  if (!prediction.hasHistory) {
+    return <p className="text-sm text-ink-500">No approved history yet for this grade - once a few runs are approved, expected yield will show here automatically.</p>;
+  }
+  const total = (prediction.expectedRecoveredKg ?? 0) + (prediction.expectedBrokenKg ?? 0) + (prediction.expectedHullKg ?? 0) + (prediction.expectedWasteKg ?? 0);
+  const pct = (v?: number) => (total > 0 ? Math.round(((v ?? 0) / total) * 100) : 0);
+  const confidence = prediction.sampleSize >= 10 ? 'High' : prediction.sampleSize >= 4 ? 'Medium' : 'Low';
+  const confTone = confidence === 'High' ? 'bg-green-50 text-green-800 border-green-200' : confidence === 'Medium' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-red-50 text-red-800 border-red-200';
+  const compare = (t?: string, expected?: number) => {
+    const n = parseFloat(t ?? ''); if (!t || !expected || Number.isNaN(n)) return null;
+    const diff = ((n - expected) / expected) * 100; return { diff, off: Math.abs(diff) > 15 };
+  };
+  const rows = [
+    { label: 'Recovered rice', kg: prediction.expectedRecoveredKg, tone: 'bg-paddy-900', cmp: compare(typed?.recovered, prediction.expectedRecoveredKg) },
+    { label: 'Broken rice', kg: prediction.expectedBrokenKg, tone: 'bg-husk-500', cmp: compare(typed?.broken, prediction.expectedBrokenKg) },
+    { label: 'Rice hull', kg: prediction.expectedHullKg, tone: 'bg-soil-500', cmp: compare(typed?.hull, prediction.expectedHullKg) },
+    { label: 'Waste / loss', kg: prediction.expectedWasteKg, tone: 'bg-ink-300', cmp: null as { diff: number; off: boolean } | null },
+  ];
+  return (
+    <div className="rounded-xl border border-husk-300 bg-husk-100/30 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-soil-500">Expected yield - from {prediction.sampleSize} past approved run{prediction.sampleSize === 1 ? '' : 's'} of this grade</p>
+        <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${confTone}`}>{confidence} confidence</span>
+      </div>
+      <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-white">
+        {rows.map((r) => <div key={r.label} className={r.tone} style={{ width: `${pct(r.kg)}%` }} title={`${r.label} ${pct(r.kg)}%`} />)}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {rows.map((r) => (
+          <div key={r.label}>
+            <p className="flex items-center gap-1.5 text-xs text-ink-500"><span className={`inline-block h-2 w-2 rounded-sm ${r.tone}`} />{r.label} - {pct(r.kg)}%</p>
+            <p className="font-display text-paddy-900">{fmtKg(r.kg ?? 0)}</p>
+            {r.cmp && (
+              <p className={`text-[11px] ${r.cmp.off ? 'font-semibold text-amber-800' : 'text-ink-500'}`}>You typed {r.cmp.diff > 0 ? '+' : ''}{r.cmp.diff.toFixed(0)}% vs expected{r.cmp.off ? ' - worth a second look' : ''}</p>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-ink-500">
+        Power expected: {prediction.expectedEnergyKwh !== null && prediction.expectedEnergyKwh !== undefined ? `${prediction.expectedEnergyKwh.toFixed(1)} kWh` : 'no meter history yet'}
+        {' - '}Based on {prediction.basedOnRecoveryPercent?.toFixed(1) ?? '?'}% recovery historically.
+      </p>
+    </div>
+  );
+}

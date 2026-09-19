@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
-import { GradeChips, BagStepper, RunningTotal } from '@/components/DataEntryKit';
+import { GradeChips, BagStepper, RunningTotal, YieldPredictionCard } from '@/components/DataEntryKit';
 import { productionApi, machinesApi, warehousesApi, paddyGradesApi, paddyMillingReceiptsApi, ProductionRecord, Machine, MachineDetail, Warehouse, PaddyGrade, YieldPrediction, PaddyMillingReceipt, ApiError } from '@/lib/api-client';
 
 const MACHINE_STATUS_STYLES: Record<string, string> = {
@@ -432,60 +432,13 @@ export default function ProductionPage() {
 
           {predicting && <p className="mt-3 text-sm text-ink-500">Checking this grade&rsquo;s history…</p>}
           {prediction && !predicting && (
-            prediction.hasHistory ? (() => {
-              // Turn the prediction from four passive numbers into an active
-              // check: a visible split so the officer sees the proportions,
-              // a confidence marker from how many runs it rests on, and a
-              // live comparison against what they're actually typing - so a
-              // run well off the expected yield is flagged before it's
-              // submitted, not discovered in a report a month later.
-              const total = (prediction.expectedRecoveredKg ?? 0) + (prediction.expectedBrokenKg ?? 0) + (prediction.expectedHullKg ?? 0) + (prediction.expectedWasteKg ?? 0);
-              const pct = (v?: number) => (total > 0 ? Math.round(((v ?? 0) / total) * 100) : 0);
-              const confidence = prediction.sampleSize >= 10 ? 'High' : prediction.sampleSize >= 4 ? 'Medium' : 'Low';
-              const confTone = confidence === 'High' ? 'bg-green-50 text-green-800 border-green-200' : confidence === 'Medium' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-red-50 text-red-800 border-red-200';
-              const compare = (typed: string, expected?: number) => {
-                const t = parseFloat(typed); if (!typed || !expected || Number.isNaN(t)) return null;
-                const diff = ((t - expected) / expected) * 100; return { diff, off: Math.abs(diff) > 15 };
-              };
-              const rec = compare(prRecoveredRiceKg, prediction.expectedRecoveredKg);
-              const brk = compare(prBrokenRiceKg, prediction.expectedBrokenKg);
-              const hull = compare(prRiceHullKg, prediction.expectedHullKg);
-              const rows = [
-                { label: 'Recovered rice', kg: prediction.expectedRecoveredKg, tone: 'bg-paddy-900', cmp: rec },
-                { label: 'Broken rice', kg: prediction.expectedBrokenKg, tone: 'bg-husk-500', cmp: brk },
-                { label: 'Rice hull', kg: prediction.expectedHullKg, tone: 'bg-soil-500', cmp: hull },
-                { label: 'Waste / loss', kg: prediction.expectedWasteKg, tone: 'bg-ink-300', cmp: null },
-              ];
-              return (
-                <div className="mt-3 rounded-xl border border-husk-300 bg-husk-100/30 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-medium uppercase tracking-wide text-soil-500">Expected yield - from {prediction.sampleSize} past approved run{prediction.sampleSize === 1 ? '' : 's'} of this grade
-                    </p>
-                    <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${confTone}`}>{confidence} confidence</span>
-                  </div>
-                  <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-white">
-                    {rows.map((r) => <div key={r.label} className={`${r.tone}`} style={{ width: `${pct(r.kg)}%` }} title={`${r.label} ${pct(r.kg)}%`} />)}
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {rows.map((r) => (
-                      <div key={r.label}>
-                        <p className="flex items-center gap-1.5 text-xs text-ink-500"><span className={`inline-block h-2 w-2 rounded-sm ${r.tone}`} />{r.label} · {pct(r.kg)}%</p>
-                        <p className="font-display text-paddy-900">{fmtKg(r.kg ?? 0)}</p>
-                        {r.cmp && (
-                          <p className={`text-[11px] ${r.cmp.off ? 'font-semibold text-amber-800' : 'text-ink-500'}`}>You typed {r.cmp.diff > 0 ? '+' : ''}{r.cmp.diff.toFixed(0)}% vs expected{r.cmp.off ? ' - worth a second look' : ''}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <p className="mt-3 text-xs text-ink-500">Power expected: {prediction.expectedEnergyKwh !== null && prediction.expectedEnergyKwh !== undefined ? `${prediction.expectedEnergyKwh.toFixed(1)} kWh` : 'no meter history yet'}
-                    {' · '}Based on {prediction.basedOnRecoveryPercent?.toFixed(1) ?? '?'}% recovery historically.
-                  </p>
-                </div>
-              );
-            })() : (
-              <p className="mt-3 text-sm text-ink-500">No approved history yet for this grade - once a few runs are approved, expected yield will show here automatically.</p>
-            )
+            <div className="mt-3">
+              <YieldPredictionCard
+                prediction={prediction}
+                typed={{ recovered: prRecoveredRiceKg, broken: prBrokenRiceKg, hull: prRiceHullKg }}
+                fmtKg={fmtKg}
+              />
+            </div>
           )}
           {createError && <p className="mt-2 text-sm text-red-600">{createError}</p>}
           {createSuccess && <p className="mt-2 text-sm font-medium text-paddy-700">{createSuccess}</p>}

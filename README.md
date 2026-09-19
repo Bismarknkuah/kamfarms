@@ -3863,6 +3863,42 @@ if the project is ever renamed. The deprecated
 apple-mobile-web-app-capable console warning is also resolved by
 emitting the standard mobile-web-app-capable tag alongside it.
 
+## MD/CEO's own dashboard finally surfaces what they already had permission to see
+
+**A precise finding before any code was written**: both roles already
+held every permission needed for full company-wide visibility -
+finance.view, audit.view, milling.view, warehouse.inventory.view - and
+pages like /analytics and /audit-log were already fully built and
+reachable. The actual gap was never permissions; it was that none of
+it was ever surfaced on their own dashboard, so reaching it required
+already knowing a separate page existed.
+
+**Three real additions to the MD/CEO dashboard, closing that gap
+directly**: an unmissable link straight into the existing six-month
+analytics page; a live company-wide activity feed, the same real-time
+audit trail the Auditor role already had, with a link to the full log;
+and a read-only yield-and-energy predictions panel - pick a grade and
+a bag count, see the same milling-floor prediction the Operations
+Officer uses, extracted into one shared component (`YieldPredictionCard`)
+so both consumers stay in sync rather than risk drifting apart.
+
+**A second, separate gap found and closed: warehouses had no
+per-location detail page at all**, while farms already did. The
+backend endpoint (`GET /warehouses/:id/inventory`) was fully built and
+correctly permissioned - the exact same class of gap found repeatedly
+this project - with zero frontend consumer. A new warehouse detail
+page now shows real paddy-by-grade and packaged-rice-by-product
+balances for that specific warehouse, plus its milling centers, mirroring
+the farm detail page's pattern. Sales records and company finances
+needed no new work - both roles already reach /sales and /finance
+directly.
+
+Confirmed with a full backend test pass with zero regressions (51
+tests), a complete production build across all 42 routes (the new
+/warehouses/[id] route confirmed present) with real bundle growth on
+the dashboard, the real layout's checksum verified identical before
+and after, and a project-wide scan confirming zero em dashes.
+
 ## A note on verification in this build environment
 
 This code was written and tested in a network-restricted sandbox that

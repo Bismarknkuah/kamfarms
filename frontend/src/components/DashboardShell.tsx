@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -44,6 +44,7 @@ import { clearRefreshToken, readRefreshToken } from '@/lib/session';
 import { InstallPrompt } from './InstallPrompt';
 import { NAV_ITEMS, hasNavPermission, QUICK_ACTIONS_BY_ROLE } from '@/lib/nav-items';
 import { CallOverlay } from './CallOverlay';
+import { TopBar } from './TopBar';
 
 // Every icon name used anywhere in nav-items.ts or ACCOUNT_ITEMS below
 // must have a real entry here - statically imported once at module
@@ -107,6 +108,12 @@ export function DashboardShell({ me, children }: { me: MeResponse; children: Rea
   // once-ever-dismissed flag that would make the reminder easy to
   // forget about permanently.
   const [reminderDismissed, setReminderDismissed] = useState(false);
+
+  // Read directly rather than adding a new prop to every one of the
+  // 30+ call sites across the app - same sessionStorage key auth
+  // already uses elsewhere (see onLogout's removeItem below).
+  const [accessToken, setAccessToken] = useState('');
+  useEffect(() => { setAccessToken(sessionStorage.getItem('kam_roms_access_token') ?? ''); }, []);
 
   const myRoleCodes = me.roles.map((r) => r.code);
   const visibleItems = NAV_ITEMS.filter(
@@ -259,6 +266,8 @@ export function DashboardShell({ me, children }: { me: MeResponse; children: Rea
             </button>
           </div>
         )}
+
+        {accessToken && <TopBar me={me} accessToken={accessToken} />}
 
         {quickActions.length > 0 && (
           <div className="border-b border-paddy-100 bg-white px-4 py-2 sm:px-6">

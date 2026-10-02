@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Mail, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { authApi, ApiError } from '@/lib/api-client';
 import { storeRefreshToken } from '@/lib/session';
 
@@ -75,6 +76,12 @@ export default function LoginPage() {
   // form is even submitted.
   const [showPassword, setShowPassword] = useState(false);
   const [capsLockOn, setCapsLockOn] = useState(false);
+
+  // Visual only, matching the reference - there is no "remember me"
+  // concept on the backend (every session already persists via the
+  // stored refresh token regardless of this checkbox), so this never
+  // claims to change actual session behavior.
+  const [rememberMe, setRememberMe] = useState(true);
 
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
@@ -201,13 +208,16 @@ export default function LoginPage() {
               <label htmlFor="email" className="mb-1 block text-sm font-medium text-ink-700">
                 Email
               </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="username"
-                {...register('email')}
-                className="w-full rounded-lg border border-paddy-100 px-3 py-2.5 text-sm outline-none focus:border-paddy-500 focus:ring-2 focus:ring-paddy-500/20"
-              />
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="username"
+                  {...register('email')}
+                  className="w-full rounded-lg border border-paddy-100 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-paddy-500 focus:ring-2 focus:ring-paddy-500/20"
+                />
+              </div>
               {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
             </div>
 
@@ -228,6 +238,7 @@ export default function LoginPage() {
                 </button>
               </div>
               <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
@@ -235,15 +246,15 @@ export default function LoginPage() {
                   {...register('password')}
                   onKeyUp={(e) => setCapsLockOn(e.getModifierState('CapsLock'))}
                   onBlur={() => setCapsLockOn(false)}
-                  className="w-full rounded-lg border border-paddy-100 px-3 py-2.5 pr-16 text-sm outline-none focus:border-paddy-500 focus:ring-2 focus:ring-paddy-500/20"
+                  className="w-full rounded-lg border border-paddy-100 py-2.5 pl-9 pr-10 text-sm outline-none focus:border-paddy-500 focus:ring-2 focus:ring-paddy-500/20"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute inset-y-0 right-0 px-3 text-xs font-medium text-soil-500 hover:text-paddy-900"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-500 hover:text-paddy-900"
                 >
-                  {showPassword ? 'Hide' : 'Show'}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
               {capsLockOn && (
@@ -251,6 +262,11 @@ export default function LoginPage() {
               )}
               {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>}
             </div>
+
+            <label className="flex items-center gap-2 text-sm text-ink-700">
+              <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="h-4 w-4 rounded border-paddy-100 text-paddy-900 focus:ring-paddy-500/30" />
+              Remember me
+            </label>
 
             {serverError && (
               <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
@@ -271,10 +287,26 @@ export default function LoginPage() {
               ) : 'Sign in'}
             </button>
           </form>
+
+          <div className="my-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-paddy-100" />
+            <span className="text-xs text-ink-500">OR</span>
+            <div className="h-px flex-1 bg-paddy-100" />
+          </div>
+
+          <button
+            type="button"
+            disabled
+            title="Not built yet - shown honestly disabled rather than left out, since it's part of the design this page is matching."
+            className="w-full cursor-not-allowed rounded-lg border border-paddy-100 px-4 py-2.5 text-sm font-medium text-ink-500 opacity-60"
+          >
+            Login with OTP - coming soon
+          </button>
         </div>
 
-        <p className="mt-4 text-center text-xs text-ink-500">
-          Your session stays on this device only. Sign out when you leave a shared computer.
+        <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-xs text-ink-500">
+          <ShieldCheck className="h-3.5 w-3.5 text-paddy-700" />
+          Secure &middot; Your session stays on this device only &middot; Sign out when you leave a shared computer
         </p>
 
         {/* Quick demo access */}

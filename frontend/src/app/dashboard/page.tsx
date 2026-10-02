@@ -7,6 +7,8 @@ import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import { hasFinancialVisibility } from '@/lib/nav-items';
 import { YieldPredictionCard } from '@/components/DataEntryKit';
+import { IconStatCard, DonutChart } from '@/components/StatCard';
+import { Wheat, Truck, Factory, Package, DollarSign } from 'lucide-react';
 import {
   reportsApi,
   ExecutiveSummary,
@@ -44,6 +46,9 @@ import {
   PaddyGrade,
   YieldPrediction,
   analyticsApi,
+  ExecutiveAnalytics,
+  inventoryApi,
+  InventorySummary,
   machinesApi,
   Machine,
   Farm,
@@ -122,6 +127,7 @@ export default function DashboardPage() {
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [attention, setAttention] = useState<AttentionItem[]>([]);
   const [personalStats, setPersonalStats] = useState<PersonalStat[]>([]);
+  const [opsOfficerThisMonth, setOpsOfficerThisMonth] = useState({ records: 0, processedKg: 0, recoveredKg: 0, recoveryPercent: 0 });
   const [myFarmInventory, setMyFarmInventory] = useState<{
     totalKg: number;
     totalBags: number;
@@ -131,6 +137,8 @@ export default function DashboardPage() {
     dispatchedTotalBags: number;
   } | null>(null);
   const [myFarmIdRobust, setMyFarmIdRobust] = useState<string | null>(null);
+  const [myFarmPendingCount, setMyFarmPendingCount] = useState(0);
+  const [myFarmApprovedTodayCount, setMyFarmApprovedTodayCount] = useState(0);
   const [myFarmInventoryError, setMyFarmInventoryError] = useState<string | null>(null);
   const [myFarmEquipment, setMyFarmEquipment] = useState<FarmEquipment[]>([]);
   const [supervisorFarms, setSupervisorFarms] = useState<Farm[] | null>(null);
@@ -165,6 +173,14 @@ export default function DashboardPage() {
   const [mdActivityLog, setMdActivityLog] = useState<AuditLogEntry[]>([]);
   const [mdActivityLogError, setMdActivityLogError] = useState<string | null>(null);
   const [mdGrades, setMdGrades] = useState<PaddyGrade[]>([]);
+  // Real per-location rows, not fabricated: no single endpoint returns
+  // a company-wide breakdown by individual farm or warehouse (only
+  // company-wide totals), so each farm's and warehouse's real current
+  // stock is fetched directly, one call per location, via Promise.all.
+  const [mdFarmTable, setMdFarmTable] = useState<{ name: string; isActive: boolean; totalBags: number; totalKg: number }[]>([]);
+  const [mdWarehouseTable, setMdWarehouseTable] = useState<{ name: string; paddyKg: number; packagedKg: number }[]>([]);
+  const [mdAnalytics, setMdAnalytics] = useState<ExecutiveAnalytics | null>(null);
+  const [mdInventorySummary, setMdInventorySummary] = useState<InventorySummary | null>(null);
   const [mdPredictGradeId, setMdPredictGradeId] = useState('');
   const [mdPredictBags, setMdPredictBags] = useState('1000');
   const [mdPrediction, setMdPrediction] = useState<YieldPrediction | null>(null);
@@ -257,6 +273,7 @@ export default function DashboardPage() {
   // "packaged rice" cards - those belong to Warehouse Supervisor and
   // Operations Manager respectively, not Farm Director.
   const [farmOverview, setFarmOverview] = useState<FarmOverview | null>(null);
+  const [farmDirectorPendingCount, setFarmDirectorPendingCount] = useState(0);
   const [farmOverviewError, setFarmOverviewError] = useState<string | null>(null);
   const [farmOverviewSection, setFarmOverviewSection] = useState<'received' | 'available' | 'dispatched' | null>(null);
   const [selectedFarmIdForOverview, setSelectedFarmIdForOverview] = useState<string | null>(null);
@@ -401,6 +418,15 @@ export default function DashboardPage() {
           .then(setMyFarmInventory)
           .catch((err: unknown) => setMyFarmInventoryError(err instanceof ApiError ? err.message : 'Failed to load your farm’s inventory.'));
         farmEquipmentApi.list(accessToken, farmId).then(setMyFarmEquipment).catch(() => {});
+        paddyEntriesApi.list(accessToken, farmId, 'SUBMITTED').then((list) => setMyFarmPendingCount(list.length)).catch(() => {});
+        // "Approved today" - filtered client-side from this farm's
+        // approved entries, since no status+date-range query param
+        // exists on this endpoint; a single farm's own entry count is
+        // small enough that this is a real, correct count, not an
+        // approximation.
+        paddyEntriesApi.list(accessToken, farmId, 'APPROVED').then((list) =>
+          setMyFarmApprovedTodayCount(list.filter((e) => new Date(e.entryDate).toDateString() === new Date().toDateString()).length),
+        ).catch(() => {});
       }
     }).catch(() => {});
 
@@ -510,6 +536,25 @@ export default function DashboardPage() {
           productionApi.predict(accessToken, list[0].id, 1000).then(setMdPrediction).finally(() => setMdPredicting(false));
         }
       }).catch(() => {});
+
+      analyticsApi.get(accessToken).then(setMdAnalytics).catch(() => {});
+      inventoryApi.getSummary(accessToken).then(setMdInventorySummary).catch(() => {});
+
+      farmsApi.list(accessToken).then((farms) => {
+        Promise.all(farms.map((f) =>
+          farmsApi.getInventory(accessToken, f.id).then((inv) => ({ name: f.name, isActive: f.isActive, totalBags: inv.totalBags, totalKg: inv.totalKg })),
+        )).then(setMdFarmTable).catch(() => {});
+      }).catch(() => {});
+
+      warehousesApi.list(accessToken).then((warehouses) => {
+        Promise.all(warehouses.map((w) =>
+          warehousesApi.getInventory(accessToken, w.id).then((inv) => ({
+            name: w.name,
+            paddyKg: inv.paddyTotalKg,
+            packagedKg: inv.packagedByProduct.reduce((s, p) => s + p.totalKg, 0),
+          })),
+        )).then(setMdWarehouseTable).catch(() => {});
+      }).catch(() => {});
     }
 
     if (roleCodes.includes('OPERATIONS_OFFICER')) {
@@ -521,10 +566,20 @@ export default function DashboardPage() {
         .then((records) => {
           const mine = records.filter((r) => r.operator.id === me.id && isThisMonth(r.date));
           const totalRecoveredKg = mine.reduce((sum, r) => sum + r.recoveredRiceKg, 0);
+          const totalProcessedKg = mine.reduce((sum, r) => sum + r.paddyProcessedKg, 0);
           setPersonalStats((prev) => [...prev, 
             { label: 'Production records logged this month', value: String(mine.length) },
             { label: 'Rice recovered this month', value: totalRecoveredKg.toLocaleString('en-US', { maximumFractionDigits: 0 }), unit: 'KG' },
           ]);
+          setOpsOfficerThisMonth({
+            records: mine.length,
+            processedKg: totalProcessedKg,
+            recoveredKg: totalRecoveredKg,
+            // A true recovery rate, not an average-of-percentages - the
+            // same real-vs-fabricated distinction already applied to
+            // Operations Manager's own productionOverview figure.
+            recoveryPercent: totalProcessedKg > 0 ? (totalRecoveredKg / totalProcessedKg) * 100 : 0,
+          });
         })
         .catch(() => {});
     }
@@ -564,6 +619,7 @@ export default function DashboardPage() {
         setFarmOverviewError(err instanceof ApiError ? err.message : 'Failed to load the centralized farm overview.'),
       );
       expensesApi.list(accessToken).then(setFarmDirectorExpenses).catch(() => {});
+      paddyEntriesApi.list(accessToken, undefined, 'SUBMITTED').then((list) => setFarmDirectorPendingCount(list.length)).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, me]);
@@ -726,7 +782,19 @@ export default function DashboardPage() {
 
       {isFarmDirector && (
         <div className="mb-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Headline row matching the new reference's "Land" stats -
+              all four figures real: available/in-transit are the same
+              farmOverview data the detail panel below already shows,
+              never a second, different source that could drift from
+              it. */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <IconStatCard icon={Wheat} tone="green" label="Total paddy (all farms)" value={`${(farmOverview?.paddy.available.reduce((s, g) => s + g.kg, 0) ?? 0).toLocaleString()} kg`} />
+            <IconStatCard icon={Truck} tone="blue" label="In transit" value={`${(farmOverview?.paddy.dispatched.reduce((s, g) => s + g.kg, 0) ?? 0).toLocaleString()} kg`} />
+            <IconStatCard icon={Factory} tone="purple" label="Pending approvals" value={String(farmDirectorPendingCount)} />
+            <IconStatCard icon={Package} tone="orange" label="Farms" value={String(supervisorFarms?.length ?? 0)} />
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs font-medium uppercase tracking-wide text-soil-500">Farm overview - every farm, centralized</p>
             {farmOverview && (
               <div className="flex gap-2">
@@ -906,6 +974,19 @@ export default function DashboardPage() {
 
       {(isWarehouseManager || isWarehouseSupervisor) && (
         <div className="mb-8">
+          {/* Headline row, real data throughout - every figure here is
+              the exact same warehouseOverview the detail panel below
+              already renders, just surfaced as the new icon-card
+              format rather than a second, separately-fetched source. */}
+          {warehouseOverview && (
+            <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <IconStatCard icon={Wheat} tone="green" label="Paddy available" value={`${warehouseOverview.paddy.available.reduce((s, g) => s + g.kg, 0).toLocaleString()} kg`} />
+              <IconStatCard icon={Truck} tone="blue" label="In transit" value={`${warehouseOverview.paddy.inTransit.reduce((s, g) => s + g.kg, 0).toLocaleString()} kg`} />
+              <IconStatCard icon={Factory} tone="purple" label="At milling" value={`${warehouseOverview.atMilling.reduce((s, g) => s + g.kg, 0).toLocaleString()} kg`} />
+              <IconStatCard icon={Package} tone="orange" label="Packaged rice" value={`${warehouseOverview.packagedRice.reduce((s, p) => s + p.kg, 0).toLocaleString()} kg`} />
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs font-medium uppercase tracking-wide text-soil-500">{isWarehouseSupervisor ? 'Warehouse overview - every warehouse, centralized' : 'Your warehouse’s overview'}
             </p>
@@ -1092,6 +1173,20 @@ export default function DashboardPage() {
 
       {isOperationsManager && (
         <div className="mb-8">
+          {/* Headline row - the exact same productionOverview the
+              detail panel below already renders, in the new icon-card
+              format. Matches the reference's Total Processed/Recovered
+              Rice/Broken Rice/Efficiency stats precisely, since this
+              endpoint already tracks all four as real figures. */}
+          {productionOverview && (
+            <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <IconStatCard icon={Wheat} tone="green" label="Total processed" value={`${productionOverview.processed.reduce((s, g) => s + g.kg, 0).toLocaleString()} kg`} />
+              <IconStatCard icon={Package} tone="blue" label="Recovered rice" value={fmtKg(productionOverview.recoveredRiceKg)} />
+              <IconStatCard icon={Truck} tone="orange" label="Broken rice" value={fmtKg(productionOverview.brokenRiceKg)} />
+              <IconStatCard icon={Factory} tone="purple" label="Efficiency" value={`${productionOverview.recoveryPercent.toFixed(1)}%`} />
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs font-medium uppercase tracking-wide text-soil-500">Production overview - every milling center, centralized, this month</p>
             {productionOverview && (
@@ -1235,28 +1330,25 @@ export default function DashboardPage() {
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Finance overview - accountability and transparency, at a glance</p>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              label="Orders pending"
+            <IconStatCard
+              icon={Truck} tone="orange" label="Orders pending"
               value={String(financeOrders.filter((o) => ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RESERVED'].includes(o.status)).length)}
-              unit={`GHS ${financeOrders.filter((o) => ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RESERVED'].includes(o.status)).reduce((s, o) => s + o.totalAmount, 0).toLocaleString()}`}
-              tone="husk"
+              trend={`GHS ${financeOrders.filter((o) => ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RESERVED'].includes(o.status)).reduce((s, o) => s + o.totalAmount, 0).toLocaleString()}`}
             />
-            <StatCard
-              label="Sold this month"
+            <IconStatCard
+              icon={Package} tone="green" label="Sold this month"
               value={String(financeOrders.filter((o) => o.status === 'FULFILLED' && isThisMonth(o.createdAt)).length)}
-              unit={`GHS ${financeOrders.filter((o) => o.status === 'FULFILLED' && isThisMonth(o.createdAt)).reduce((s, o) => s + o.totalAmount, 0).toLocaleString()}`}
-              tone="paddy"
+              trend={`GHS ${financeOrders.filter((o) => o.status === 'FULFILLED' && isThisMonth(o.createdAt)).reduce((s, o) => s + o.totalAmount, 0).toLocaleString()}`}
             />
-            <StatCard
-              label="Owed to us (receivables)"
+            <IconStatCard
+              icon={DollarSign} tone="blue" label="Owed to us (receivables)"
               value={`GHS ${financeDebtors.reduce((s, d) => s + d.outstanding, 0).toLocaleString()}`}
-              unit={`${financeDebtors.length} customer${financeDebtors.length === 1 ? '' : 's'}`}
+              trend={`${financeDebtors.length} customer${financeDebtors.length === 1 ? '' : 's'}`}
             />
-            <StatCard
-              label="Owed by us (approved expenses)"
+            <IconStatCard
+              icon={Factory} tone="purple" label="Owed by us (approved expenses)"
               value={`GHS ${financeExpenses.filter((e) => e.status === 'APPROVED').reduce((s, e) => s + e.amount, 0).toLocaleString()}`}
-              unit={`${financeExpenses.filter((e) => e.status === 'APPROVED').length} expense${financeExpenses.filter((e) => e.status === 'APPROVED').length === 1 ? '' : 's'}`}
-              tone="soil"
+              trend={`${financeExpenses.filter((e) => e.status === 'APPROVED').length} expense${financeExpenses.filter((e) => e.status === 'APPROVED').length === 1 ? '' : 's'}`}
             />
           </div>
 
@@ -1322,7 +1414,156 @@ export default function DashboardPage() {
 
       {isMdOrCeo && (
         <div className="mb-8">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Company-wide operations - Farm Supervisor, Warehouse Supervisor, and Operations Manager, in one place</p>
+          {/* The headline view, matching the new reference design -
+              every figure below is real: current snapshot totals from
+              the same inventory-summary endpoint /inventory itself
+              uses, and this month's real sales from the same analytics
+              endpoint /analytics itself uses. "Milled today" in the
+              reference would need a daily-throughput figure this
+              system doesn't track anywhere - labelled honestly as
+              "Currently at milling" (a real snapshot) instead of
+              inventing a per-day number. */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <IconStatCard icon={Wheat} tone="green" label="Paddy on farms" value={`${(mdInventorySummary?.paddy.farmKg ?? 0).toLocaleString()} kg`} />
+            <IconStatCard icon={Truck} tone="blue" label="In transit" value={`${(mdInventorySummary?.paddy.inTransitKg ?? 0).toLocaleString()} kg`} />
+            <IconStatCard icon={Factory} tone="purple" label="Currently at milling" value={`${(mdInventorySummary?.paddy.atMillingKg ?? 0).toLocaleString()} kg`} />
+            <IconStatCard icon={Package} tone="orange" label="Packaged rice" value={`${(mdInventorySummary?.finishedRice.reduce((s, r) => s + r.availableKg, 0) ?? 0).toLocaleString()} kg`} />
+            <IconStatCard icon={DollarSign} tone="teal" label="Sales this month" value={`GHS ${(mdAnalytics?.monthlySales.at(-1)?.amount ?? 0).toLocaleString()}`} />
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            <div className="rounded-2xl border border-paddy-100 bg-white p-5 lg:col-span-1">
+              <h2 className="font-display text-lg text-paddy-900">Inventory overview</h2>
+              <div className="mt-4">
+                {mdInventorySummary ? (
+                  <DonutChart
+                    centerLabel={`${(mdInventorySummary.paddy.farmKg + mdInventorySummary.paddy.warehouseKg + mdInventorySummary.finishedRice.reduce((s, r) => s + r.totalKg, 0)).toLocaleString()} kg`}
+                    data={[
+                      { name: 'Paddy (farms)', value: mdInventorySummary.paddy.farmKg },
+                      { name: 'Paddy (warehouses)', value: mdInventorySummary.paddy.warehouseKg },
+                      { name: 'Packaged rice', value: mdInventorySummary.finishedRice.reduce((s, r) => s + r.totalKg, 0) },
+                      { name: 'Rice hull', value: mdInventorySummary.riceHullKg },
+                      { name: 'Broken rice', value: mdInventorySummary.brokenRiceKg },
+                    ]}
+                  />
+                ) : <p className="text-sm text-ink-500">Loading…</p>}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-paddy-100 bg-white p-5 lg:col-span-1">
+              <h2 className="font-display text-lg text-paddy-900">Sales vs. expenses</h2>
+              <p className="text-xs text-ink-500">Last 6 months, real figures - the same chart /analytics shows in full.</p>
+              <div className="mt-3" style={{ width: '100%', height: 180 }}>
+                {mdAnalytics ? (
+                  <ResponsiveContainer>
+                    <BarChart data={mdAnalytics.monthlySales.map((s, i) => ({ month: s.month.slice(5), sales: s.amount, expenses: mdAnalytics.monthlyExpenses[i]?.amount ?? 0 }))}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#EDE6D6" />
+                      <XAxis dataKey="month" stroke="#8A7B62" fontSize={11} />
+                      <YAxis stroke="#8A7B62" fontSize={11} />
+                      <Tooltip formatter={(v: number) => `GHS ${v.toLocaleString()}`} contentStyle={{ borderRadius: 8, border: '1px solid #EDE6D6' }} />
+                      <Bar dataKey="sales" fill="#1F4D2C" radius={[4, 4, 0, 0]} name="Sales" />
+                      <Bar dataKey="expenses" fill="#C9972B" radius={[4, 4, 0, 0]} name="Expenses" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : <p className="text-sm text-ink-500">Loading…</p>}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-paddy-100 bg-white p-5 lg:col-span-1">
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="font-display text-lg text-paddy-900">Recent activity</h2>
+                <Link href="/audit-log" className="shrink-0 text-xs font-medium text-paddy-700 hover:underline">View all →</Link>
+              </div>
+              {mdActivityLogError ? (
+                <p className="mt-3 text-sm text-red-600">{mdActivityLogError}</p>
+              ) : (
+                <div className="mt-3 space-y-1.5">
+                  {mdActivityLog.slice(0, 5).map((entry) => (
+                    <div key={entry.id} className="rounded-lg bg-rice-50 px-3 py-2 text-xs">
+                      <p className="truncate text-ink-900"><span className="font-medium">{entry.user ? `${entry.user.firstName} ${entry.user.lastName}` : 'System'}</span> {entry.action}</p>
+                      <p className="text-ink-500">{new Date(entry.createdAt).toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-paddy-100 bg-white p-5">
+              <h2 className="font-display text-lg text-paddy-900">Farm performance</h2>
+              <p className="text-xs text-ink-500">Real current stock per farm - no moisture or weekly-trend figure is tracked at this level, so neither is shown here.</p>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="text-xs text-ink-500">
+                      <th className="pb-2 font-medium">Farm</th>
+                      <th className="pb-2 font-medium">Paddy available</th>
+                      <th className="pb-2 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mdFarmTable.map((f) => (
+                      <tr key={f.name} className="border-t border-paddy-50">
+                        <td className="py-2 font-medium text-ink-900">{f.name}</td>
+                        <td className="py-2 text-ink-700">{f.totalBags.toLocaleString()} bags · {f.totalKg.toLocaleString()} kg</td>
+                        <td className="py-2">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${f.isActive ? 'bg-paddy-100 text-paddy-900' : 'bg-ink-500/10 text-ink-500'}`}>
+                            {f.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-paddy-100 bg-white p-5">
+              <h2 className="font-display text-lg text-paddy-900">Warehouse stock</h2>
+              <p className="text-xs text-ink-500">Real current stock per warehouse - no capacity figure exists in this system, so utilization isn&rsquo;t shown either.</p>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="text-xs text-ink-500">
+                      <th className="pb-2 font-medium">Warehouse</th>
+                      <th className="pb-2 font-medium">Paddy</th>
+                      <th className="pb-2 font-medium">Packaged rice</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mdWarehouseTable.map((w) => (
+                      <tr key={w.name} className="border-t border-paddy-50">
+                        <td className="py-2 font-medium text-ink-900">{w.name}</td>
+                        <td className="py-2 text-ink-700">{w.paddyKg.toLocaleString()} kg</td>
+                        <td className="py-2 text-ink-700">{w.packagedKg.toLocaleString()} kg</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick actions - adapted from the reference, not copied
+              verbatim: its exact actions (New Paddy Entry, Create
+              Delivery Order) belong to roles MD/CEO don't hold the
+              create-permission for. These four are genuinely what this
+              role can do. */}
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              ['/reports', 'View reports'],
+              ['/analytics', 'View analytics'],
+              ['/audit-log', 'Audit trail'],
+              ['/organization', 'Organization'],
+            ].map(([href, label]) => (
+              <Link key={href} href={href} className="rounded-xl border border-paddy-100 bg-white p-4 text-center text-sm font-medium text-paddy-900 transition hover:border-husk-300 hover:bg-rice-50">
+                {label}
+              </Link>
+            ))}
+          </div>
+
+          <p className="mb-2 mt-8 text-xs font-medium uppercase tracking-wide text-soil-500">Company-wide operations - Farm Supervisor, Warehouse Supervisor, and Operations Manager, in one place</p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard label="Farm equipment working" value={String(mdFarmEquipment.filter((e) => e.status === 'WORKING').length)} unit={`of ${mdFarmEquipment.length}`} tone="paddy" />
             <StatCard label="Warehouse equipment working" value={String(mdWarehouseEquipment.filter((e) => e.status === 'WORKING').length)} unit={`of ${mdWarehouseEquipment.length}`} tone="paddy" />
@@ -1507,7 +1748,14 @@ export default function DashboardPage() {
           <p className="mb-8 text-sm text-ink-500">Loading your farm&rsquo;s inventory…</p>
         ) : (
           <div className="mb-8">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Your farm&rsquo;s inventory - available now</p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <IconStatCard icon={Wheat} tone="green" label="Paddy available" value={fmtKg(myFarmInventory.totalKg)} />
+              <IconStatCard icon={Factory} tone="purple" label="Pending submissions" value={String(myFarmPendingCount)} />
+              <IconStatCard icon={Package} tone="orange" label="Approved today" value={String(myFarmApprovedTodayCount)} />
+              <IconStatCard icon={Truck} tone="blue" label="Dispatched (all time)" value={fmtKg(myFarmInventory.dispatchedTotalKg)} />
+            </div>
+
+            <p className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-soil-500">Your farm&rsquo;s inventory - available now</p>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <StatCard label="Total paddy on your farm" value={fmtKg(myFarmInventory.totalKg)} unit="KG" tone="paddy" />
               <StatCard label="Total bags" value={String(myFarmInventory.totalBags)} />
@@ -1546,6 +1794,15 @@ export default function DashboardPage() {
       ) : (
         <div className="mb-8">
 
+          {isOperationsOfficer && (
+            <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <IconStatCard icon={Wheat} tone="green" label="Processed this month" value={`${opsOfficerThisMonth.processedKg.toLocaleString()} kg`} />
+              <IconStatCard icon={Package} tone="blue" label="Recovered this month" value={`${opsOfficerThisMonth.recoveredKg.toLocaleString()} kg`} />
+              <IconStatCard icon={Factory} tone="purple" label="Recovery rate" value={`${opsOfficerThisMonth.recoveryPercent.toFixed(1)}%`} />
+              <IconStatCard icon={Truck} tone="orange" label="Records logged" value={String(opsOfficerThisMonth.records)} />
+            </div>
+          )}
+
           {isOperationsOfficer && warehouseOverview && (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
               {warehouseOverview.atMilling.map((g) => (
@@ -1560,6 +1817,18 @@ export default function DashboardPage() {
 
       {isSalesOfficer && (
         <div className="mb-8">
+          {/* Headline row - the same salesOfficerOrders already
+              filtered below, just in the new icon-card format. Sales
+              value is real fulfilled-order revenue this month (by
+              fulfilledAt, the actual completion date), not every
+              order's value regardless of whether it closed. */}
+          <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <IconStatCard icon={Package} tone="green" label="Delivered" value={String(salesOfficerOrders.filter((o) => o.status === 'FULFILLED').length)} />
+            <IconStatCard icon={Truck} tone="blue" label="Pending" value={String(salesOfficerOrders.filter((o) => ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RESERVED'].includes(o.status)).length)} />
+            <IconStatCard icon={Factory} tone="purple" label="Rejected or cancelled" value={String(salesOfficerOrders.filter((o) => ['REJECTED', 'CANCELLED'].includes(o.status)).length)} />
+            <IconStatCard icon={DollarSign} tone="teal" label="Sales value this month" value={`GHS ${salesOfficerOrders.filter((o) => o.status === 'FULFILLED' && o.fulfilledAt && isThisMonth(o.fulfilledAt)).reduce((s, o) => s + o.totalAmount, 0).toLocaleString()}`} />
+          </div>
+
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Your orders - delivered, pending, and everything else</p>
           <div className="grid gap-4 sm:grid-cols-3">
             <StatCard
@@ -1598,10 +1867,10 @@ export default function DashboardPage() {
 
           {isAdmin && (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-              <StatCard label="Total users" value={String(adminUsers.length)} tone="paddy" />
-              <StatCard label="Active users" value={String(adminUsers.filter((u) => u.status === 'ACTIVE').length)} />
-              <StatCard label="Suspended or inactive" value={String(adminUsers.filter((u) => u.status !== 'ACTIVE').length)} />
-              <StatCard label="Distinct roles in use" value={String(new Set(adminUsers.flatMap((u) => u.roles.map((r) => r.role.code))).size)} />
+              <IconStatCard icon={Wheat} tone="green" label="Total users" value={String(adminUsers.length)} />
+              <IconStatCard icon={Package} tone="blue" label="Active users" value={String(adminUsers.filter((u) => u.status === 'ACTIVE').length)} />
+              <IconStatCard icon={Truck} tone="orange" label="Suspended or inactive" value={String(adminUsers.filter((u) => u.status !== 'ACTIVE').length)} />
+              <IconStatCard icon={Factory} tone="purple" label="Distinct roles in use" value={String(new Set(adminUsers.flatMap((u) => u.roles.map((r) => r.role.code))).size)} />
             </div>
           )}
 

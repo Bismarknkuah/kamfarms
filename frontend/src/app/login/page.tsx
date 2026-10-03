@@ -57,7 +57,6 @@ const DEMO_GROUPS: { label: string; accounts: { email: string; name: string }[] 
       { email: 'sales.1@kam.local', name: 'Sales Officer 1' },
       { email: 'sales.2@kam.local', name: 'Sales Officer 2' },
       { email: 'financedirector@kam.local', name: 'Finance Director' },
-      { email: 'finance.1@kam.local', name: 'Finance Officer' },
     ],
   },
 ];

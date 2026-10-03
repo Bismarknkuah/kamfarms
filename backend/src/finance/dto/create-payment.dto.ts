@@ -1,9 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
+import { IsDateString, IsEnum, IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
+import { IsUuidLike } from '../../common/validators/is-uuid-like';
 import { PaymentMethod } from '@prisma/client';
 
 export class CreatePaymentDto {
-  @ApiProperty() @IsUUID() customerId: string;
+  @ApiProperty() @IsUuidLike() customerId: string;
   @ApiProperty() @IsNumber() @IsPositive() amount: number;
   @ApiProperty({ enum: PaymentMethod }) @IsEnum(PaymentMethod) method: PaymentMethod;
   @ApiProperty({ required: false }) @IsOptional() @IsString() transactionReference?: string;

@@ -176,7 +176,7 @@ export default function RolesPage() {
 
       {pageError && <p className="mt-4 text-sm text-red-600">{pageError}</p>}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[280px_1fr]">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
         <div className="space-y-1">
           {hasPermission('roles.manage') && (
             <div className="mb-3">

@@ -383,7 +383,7 @@ export default function MessagesPage() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-0 overflow-hidden rounded-2xl border border-paddy-100 bg-white md:grid-cols-[280px_1fr]" style={{ minHeight: 480 }}>
+      <div className="mt-6 grid grid-cols-1 gap-0 overflow-hidden rounded-2xl border border-paddy-100 bg-white md:grid-cols-[280px_1fr]" style={{ minHeight: 480 }}>
         <div className="max-h-64 divide-y divide-paddy-100 overflow-y-auto border-b border-paddy-100 md:max-h-none md:border-b-0 md:border-r">
           {conversations?.map((c) => {
             const other = c.members.find((m) => m.user.id !== me.id)?.user;

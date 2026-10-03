@@ -1,10 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsDateString, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsUuidLike } from '../../common/validators/is-uuid-like';
 
 export class CreateMachineDto {
   @ApiProperty({ example: 'MC-M1' }) @IsString() machineCode: string;
   @ApiProperty() @IsString() machineName: string;
-  @ApiProperty() @IsUUID() millingCenterId: string;
+  @ApiProperty() @IsUuidLike() millingCenterId: string;
   @ApiProperty({ required: false }) @IsOptional() @IsString() type?: string;
   @ApiProperty({ required: false }) @IsOptional() @IsString() manufacturer?: string;
   @ApiProperty({ required: false }) @IsOptional() @IsString() model?: string;

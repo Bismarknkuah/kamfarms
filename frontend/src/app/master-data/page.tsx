@@ -166,7 +166,7 @@ export default function MasterDataPage() {
 
       {pageError && <p className="mt-4 text-sm text-red-600">{pageError}</p>}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {showProducts && (
         <div className="rounded-2xl border border-paddy-100 bg-white p-5">
           <h2 className="font-display text-lg text-paddy-900">Products</h2>

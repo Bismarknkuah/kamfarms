@@ -1,12 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsNumber, IsOptional, IsUUID, Min } from 'class-validator';
+import { IsDateString, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsUuidLike } from '../../common/validators/is-uuid-like';
 
 export class CreateProductPriceDto {
-  @ApiProperty() @IsUUID() productId: string;
-  @ApiProperty() @IsUUID() packagingSizeId: string;
+  @ApiProperty() @IsUuidLike() productId: string;
+  @ApiProperty() @IsUuidLike() packagingSizeId: string;
   @ApiProperty({ required: false, description: 'Omit for the general list price.' })
   @IsOptional()
-  @IsUUID()
+  @IsUuidLike()
   customerId?: string;
   @ApiProperty() @IsNumber() @Min(0) pricePerBag: number;
   @ApiProperty() @IsDateString() effectiveFrom: string;

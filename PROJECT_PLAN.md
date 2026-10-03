@@ -437,10 +437,10 @@ delivered together, not frontend-only or backend-only.
     is a request parameter, never hard-coded (spec rule: "Never
     hard-code Ghana taxes").
   - **Payments** - Sales Officer records (`PENDING_VERIFICATION`),
-    Finance Officer verifies. Allocations only count toward an invoice's
+    The Finance Director verifies. Allocations only count toward an invoice's
     balance once the payment is VERIFIED - a still-pending or rejected
     payment has zero financial effect, proven directly by a unit test. A
-    Finance Officer cannot verify a payment they themselves recorded
+    Nobody can verify a payment they themselves recorded
     (spec: cash payments need proper authorization - this is that
     authorization, enforced the same way self-approval is blocked
     everywhere else in the system).

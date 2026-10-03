@@ -116,7 +116,7 @@ export default function OrganizationPage() {
           </div>
           {saved && <p className="mt-2 text-sm font-medium text-paddy-700">Saved ✓</p>}
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             {field('Company name', 'name')}
             {field('P.O. Box', 'poBox')}
             {field('Address', 'address')}
@@ -147,7 +147,7 @@ export default function OrganizationPage() {
         </div>
         {savedNotif && <p className="mt-2 text-sm font-medium text-paddy-700">Saved ✓</p>}
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-ink-700">Sender display name</label>
             <input

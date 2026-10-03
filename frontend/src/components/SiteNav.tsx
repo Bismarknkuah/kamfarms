@@ -2,53 +2,90 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { User, Wheat } from 'lucide-react';
 
 const LINKS = [
-  { href: '#chain', label: 'The chain' },
-  { href: '#roles', label: 'Who uses it' },
-  { href: '#principles', label: 'Principles' },
+  { id: 'home', label: 'Home' },
+  { id: 'about', label: 'About' },
+  { id: 'features', label: 'Features' },
+  { id: 'products', label: 'Our Products' },
+  { id: 'contact', label: 'Contact' },
 ];
 
-// Transparent over the full-bleed hero, solid cream once the reader
-// scrolls into the content - a cover page that becomes a header. Below
-// the md breakpoint the three links collapse into a real slide-down
-// menu rather than simply disappearing, which is what the previous
-// version did.
+// Transparent over the hero, solid white once the reader scrolls into the
+// content. The link for whichever section is currently on screen is marked,
+// so the bar doubles as a "you are here" indicator. Below the md breakpoint
+// the links collapse into a slide-down menu rather than disappearing.
 export function SiteNav() {
   const [solid, setSolid] = useState(false);
   const [open, setOpen] = useState(false);
+  const [active, setActive] = useState('home');
 
   useEffect(() => {
-    const onScroll = () => setSolid(window.scrollY > 24);
+    const sections = LINKS.map((l) => document.getElementById(l.id)).filter((el): el is HTMLElement => el !== null);
+    const onScroll = () => {
+      setSolid(window.scrollY > 24);
+      // The current section is the last one whose top has passed a probe
+      // line a third of the way down the screen.
+      const probe = window.innerHeight * 0.35;
+      let current = LINKS[0].id;
+      for (const s of sections) {
+        if (s.getBoundingClientRect().top <= probe) current = s.id;
+      }
+      setActive(current);
+    };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Closing on navigation (not just outside-click) matters here since
-  // every link is an in-page anchor - without this the menu would
-  // still be open, covering the section the visitor just jumped to.
-  const closeAndGo = () => setOpen(false);
+  const light = solid || open;
 
   return (
-    <header className={`fixed inset-x-0 top-0 z-40 transition-all duration-500 ${solid || open ? 'border-b border-paddy-100 bg-rice-50/95 py-3 shadow-sm backdrop-blur' : 'bg-transparent py-6'}`}>
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6">
-        <Link href="/" className={`font-display text-2xl font-semibold tracking-tight ${solid || open ? 'text-paddy-900' : 'text-rice-50'}`}>
-          KAM<span className="text-husk-300">-ROMS</span>
-        </Link>
-        <nav className={`hidden items-center gap-8 text-sm md:flex ${solid ? 'text-ink-700' : 'text-rice-50/90'}`}>
-          {LINKS.map((l) => <a key={l.href} href={l.href} className="hover:text-husk-500">{l.label}</a>)}
+    <header className={`fixed inset-x-0 top-0 z-40 transition-all duration-500 ${light ? 'border-b border-paddy-100 bg-white/95 py-3 shadow-sm backdrop-blur' : 'bg-transparent py-5'}`}>
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6">
+        <a href="#home" className={`flex items-center gap-2.5 ${light ? 'text-paddy-900' : 'text-white'}`} aria-label="KAM Trading and Farms, home">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-husk-500 text-paddy-900"><Wheat className="h-5 w-5" /></span>
+          <span className="leading-none">
+            <span className="block text-xl font-bold tracking-tight">KAM</span>
+            <span className="mt-0.5 block text-[9px] font-semibold tracking-[0.18em] opacity-80">TRADING &amp; FARMS LTD.</span>
+          </span>
+        </a>
+
+        <nav className="hidden items-center gap-1 md:flex" aria-label="Sections">
+          {LINKS.map((l) => {
+            const on = active === l.id;
+            return (
+              <a
+                key={l.id}
+                href={`#${l.id}`}
+                aria-current={on ? 'true' : undefined}
+                className={`relative rounded-full px-3.5 py-2 text-sm font-medium transition ${
+                  light ? (on ? 'text-paddy-900' : 'text-ink-700 hover:text-paddy-900') : on ? 'text-white' : 'text-white/75 hover:text-white'
+                }`}
+              >
+                {l.label}
+                <span className={`absolute inset-x-3.5 -bottom-0.5 h-0.5 rounded-full transition ${on ? (light ? 'bg-paddy-900' : 'bg-husk-300') : 'bg-transparent'}`} />
+              </a>
+            );
+          })}
         </nav>
-        <div className="flex items-center gap-3">
-          <Link href="/login" className={`hidden rounded-full px-5 py-2 text-sm font-medium transition sm:inline-block ${solid || open ? 'bg-paddy-900 text-rice-50 hover:bg-paddy-700' : 'border border-rice-50/60 text-rice-50 hover:bg-rice-50 hover:text-paddy-900'}`}>
-            Sign in
+
+        <div className="flex items-center gap-2">
+          <Link
+            href="/login"
+            className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition ${
+              light ? 'bg-paddy-900 text-white hover:bg-paddy-700' : 'bg-husk-500 text-paddy-900 hover:bg-husk-300'
+            }`}
+          >
+            <User className="h-4 w-4" /> Login
           </Link>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-label={open ? 'Close menu' : 'Open menu'}
-            className={`grid h-9 w-9 place-items-center rounded-full transition md:hidden ${solid || open ? 'text-paddy-900' : 'text-rice-50'}`}
+            className={`grid h-10 w-10 place-items-center rounded-full transition md:hidden ${light ? 'text-paddy-900' : 'text-white'}`}
           >
             <span className="relative block h-4 w-5">
               <span className={`absolute left-0 top-0 h-0.5 w-5 bg-current transition ${open ? 'translate-y-2 rotate-45' : ''}`} />
@@ -58,10 +95,14 @@ export function SiteNav() {
           </button>
         </div>
       </div>
-      <div className={`overflow-hidden transition-[max-height] duration-300 md:hidden ${open ? 'max-h-64' : 'max-h-0'}`}>
-        <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-6 pb-4 pt-2 text-sm text-ink-700">
-          {LINKS.map((l) => <a key={l.href} href={l.href} onClick={closeAndGo} className="rounded-lg px-2 py-2.5 hover:bg-paddy-50">{l.label}</a>)}
-          <Link href="/login" onClick={closeAndGo} className="mt-2 rounded-full bg-paddy-900 px-4 py-2.5 text-center font-medium text-rice-50">Sign in</Link>
+
+      <div className={`overflow-hidden transition-[max-height] duration-300 md:hidden ${open ? 'max-h-80' : 'invisible max-h-0'}`}>
+        <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-6 pb-4 pt-2 text-sm" aria-label="Sections">
+          {LINKS.map((l) => (
+            <a key={l.id} href={`#${l.id}`} onClick={() => setOpen(false)} className={`rounded-lg px-3 py-2.5 font-medium ${active === l.id ? 'bg-paddy-50 text-paddy-900' : 'text-ink-700 hover:bg-paddy-50'}`}>
+              {l.label}
+            </a>
+          ))}
         </nav>
       </div>
     </header>

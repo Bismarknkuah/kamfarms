@@ -266,7 +266,7 @@ function SalesOrderTraceView({ me, accessToken }: { me: MeResponse; accessToken:
 
       {pageError && <p className="mt-4 text-sm text-red-600">{pageError}</p>}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.2fr]">
         <div className="space-y-2">
           {orders?.map((o) => (
             <button

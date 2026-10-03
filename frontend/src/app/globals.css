@@ -36,3 +36,10 @@ body {
   animation: fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: var(--reveal-delay, 0ms);
 }
+
+/* In-page anchors on the public site: land clear of the fixed header, and
+   glide rather than jump (unless the visitor has asked for less motion). */
+html { scroll-padding-top: 5rem; }
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}

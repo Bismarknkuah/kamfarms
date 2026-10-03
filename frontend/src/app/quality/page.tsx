@@ -105,7 +105,7 @@ export default function QualityPage() {
       {showForm && canInspect && (
         <div className="mt-4 rounded-2xl border border-husk-300 bg-husk-100/30 p-5">
           <h3 className="font-display text-lg text-paddy-900">Record a quality inspection</h3>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-ink-700">Batch number</label>
               <input value={batchNumber} onChange={(e) => setBatchNumber(e.target.value)} placeholder="e.g. PB-0001" className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />

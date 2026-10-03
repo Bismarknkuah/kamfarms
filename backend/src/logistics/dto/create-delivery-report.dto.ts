@@ -1,8 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Min } from 'class-validator';
+import { IsDateString, IsNumber, IsOptional, IsPositive, IsString, Min } from 'class-validator';
+import { IsUuidLike } from '../../common/validators/is-uuid-like';
 
 export class CreateDeliveryReportDto {
-  @ApiProperty() @IsUUID() deliveryOrderId: string;
+  @ApiProperty() @IsUuidLike() deliveryOrderId: string;
   @ApiProperty() @IsNumber() @Min(1) actualBagCount: number;
   @ApiProperty() @IsNumber() @IsPositive() actualKg: number;
 

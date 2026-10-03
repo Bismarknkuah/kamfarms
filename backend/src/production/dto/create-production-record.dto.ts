@@ -1,13 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Min } from 'class-validator';
+import { IsArray, IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsPositive, IsString, Min } from 'class-validator';
+import { IsUuidLike } from '../../common/validators/is-uuid-like';
 import { Shift } from '@prisma/client';
 
 export class CreateProductionRecordDto {
-  @ApiProperty() @IsUUID() millingCenterId: string;
-  @ApiProperty({ required: false }) @IsOptional() @IsUUID() machineId?: string;
+  @ApiProperty() @IsUuidLike() millingCenterId: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsUuidLike() machineId?: string;
   @ApiProperty() @IsDateString() date: string;
   @ApiProperty({ required: false, enum: Shift }) @IsOptional() @IsEnum(Shift) shift?: Shift;
-  @ApiProperty() @IsUUID() paddyGradeId: string;
+  @ApiProperty() @IsUuidLike() paddyGradeId: string;
 
   @ApiProperty() @IsNumber() @IsPositive() paddyProcessedKg: number;
   @ApiProperty({ required: false, description: 'Bags, not just KG - the real unit actually used day to day.' }) @IsOptional() @IsNumber() @IsPositive() paddyProcessedBags?: number;

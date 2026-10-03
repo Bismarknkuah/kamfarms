@@ -4,29 +4,20 @@ import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import { hasFinancialVisibility } from '@/lib/nav-items';
+import { ChainProgress } from '@/components/sales/ChainProgress';
+import { FinanceDecision, ReleaseForDelivery } from '@/components/sales/Decisions';
+import { MarkDelivered } from '@/components/SalesDesks';
+import { needsMyAction, salesStatusLabel, salesStatusTone, waitingOn } from '@/lib/sales-flow';
 import {
   salesOrdersApi,
   customersApi,
   masterDataApi,
-  messagingApi,
-  usersApi,
   SalesOrder,
   Customer,
   Product,
   PackagingSize,
   ApiError,
 } from '@/lib/api-client';
-
-const STATUS_STYLES: Record<string, string> = {
-  DRAFT: 'bg-ink-500/10 text-ink-700',
-  SUBMITTED: 'bg-husk-300 text-soil-700',
-  APPROVED: 'bg-paddy-100 text-paddy-700',
-  PARTIALLY_APPROVED: 'bg-husk-300 text-soil-700',
-  REJECTED: 'bg-red-100 text-red-700',
-  RESERVED: 'bg-paddy-100 text-paddy-700',
-  FULFILLED: 'bg-paddy-700 text-rice-50',
-  CANCELLED: 'bg-ink-500/10 text-ink-500',
-};
 
 function fmtGHS(amount: number) {
   return `GHS ${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
@@ -47,16 +38,10 @@ export default function SalesPage() {
   const [newCustomerId, setNewCustomerId] = useState('');
   const [newItems, setNewItems] = useState([{ productId: '', packagingSizeId: '', bagCount: 1 }]);
   const [creating, setCreating] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
-  const [rejectingId, setRejectingId] = useState<string | null>(null);
-  // Forwarding an order to Finance Director for actual clearance - the
-  // Managing Director/CEO can view and route an order, but no longer
-  // approve it directly (a real workflow change, not just a UI
-  // restriction - sales.approve is no longer part of their role at
-  // all). Uses the existing messaging system rather than inventing a
-  // new routing mechanism.
-  const [forwardingId, setForwardingId] = useState<string | null>(null);
-  const [forwardSuccess, setForwardSuccess] = useState<string | null>(null);
+  // "Needs my action" or "All orders". Null means automatic: show what is
+  // waiting on this person if there is anything, otherwise everything.
+  const [view, setView] = useState<'mine' | 'all' | null>(null);
+  const [cancelId, setCancelId] = useState<string | null>(null);
 
   // Delivery details - pre-filled from the selected customer's stored
   // address/location when one exists, but always editable, since a
@@ -115,6 +100,11 @@ export default function SalesPage() {
     return () => clearTimeout(handle);
   }, [accessToken, showNewCustomer, newCustName, newCustPhone]);
 
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('order');
+    if (id) setSelectedId(id);
+  }, []);
+
   const selectedOrder = orders?.find((o) => o.id === selectedId) ?? null;
 
   const runAction = async (fn: () => Promise<unknown>) => {
@@ -125,40 +115,6 @@ export default function SalesPage() {
       loadOrders(accessToken);
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Action failed.');
-    }
-  };
-
-  const onForwardToFinance = async (order: SalesOrder) => {
-    if (!accessToken) return;
-    setForwardingId(order.id);
-    setActionError(null);
-    try {
-      const directory = await usersApi.directory(accessToken);
-      const financeDirector = directory.find((u) => u.roleCode === 'FINANCE_DIRECTOR');
-      if (!financeDirector) {
-        setActionError('No Finance Director account was found to forward this order to.');
-        return;
-      }
-      // Reuse an existing direct conversation with this Finance
-      // Director rather than starting a new one every time an order is
-      // forwarded - createConversation() has no deduplication of its
-      // own, confirmed directly, so every order forwarded would
-      // otherwise open its own separate thread.
-      const conversations = await messagingApi.listConversations(accessToken);
-      const existing = conversations.find((c) => c.type === 'DIRECT' && c.members.some((m) => m.user.id === financeDirector.id));
-      const conversation = existing ?? (await messagingApi.createConversation(accessToken, { type: 'DIRECT', memberIds: [financeDirector.id] }));
-      const itemsSummary = order.items.map((i) => `${i.product.name} - ${i.packagingSize.label} x ${i.bagCount}`).join(', ');
-      await messagingApi.sendMessage(
-        accessToken,
-        conversation.id,
-        `Please clear order ${order.orderNumber} for ${order.customer.name}: ${itemsSummary}. Total GHS ${order.totalAmount.toLocaleString()}.`,
-      );
-      setForwardSuccess(order.id);
-      setTimeout(() => setForwardSuccess(null), 4000);
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Failed to forward this order to Finance.');
-    } finally {
-      setForwardingId(null);
     }
   };
 
@@ -257,6 +213,11 @@ export default function SalesPage() {
   // here, not the order itself, keeps their real job working.
   const showFinancials = hasFinancialVisibility(me);
 
+  const isMine = (o: SalesOrder) => needsMyAction(o, hasPermission, me.id);
+  const mineCount = orders?.filter(isMine).length ?? 0;
+  const activeView = view ?? (mineCount > 0 ? 'mine' : 'all');
+  const visibleOrders = activeView === 'mine' ? orders?.filter(isMine) : orders;
+
   return (
     <DashboardShell me={me}>
       <div className="flex items-center justify-between">
@@ -302,7 +263,7 @@ export default function SalesPage() {
               </select>
             ) : (
               <div className="space-y-2 rounded-lg border border-husk-300 bg-white p-3">
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <input value={newCustName} onChange={(e) => setNewCustName(e.target.value)} placeholder="Customer name" className="rounded-lg border border-paddy-100 px-3 py-1.5 text-sm" />
                   <input value={newCustPhone} onChange={(e) => setNewCustPhone(e.target.value)} placeholder="Phone" className="rounded-lg border border-paddy-100 px-3 py-1.5 text-sm" />
                   <input value={newCustCompany} onChange={(e) => setNewCustCompany(e.target.value)} placeholder="Company (optional)" className="rounded-lg border border-paddy-100 px-3 py-1.5 text-sm" />
@@ -341,7 +302,7 @@ export default function SalesPage() {
             )}
           </div>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-ink-700">Delivery location</label>
               <input
@@ -375,7 +336,7 @@ export default function SalesPage() {
                     className="rounded-lg border border-paddy-100 px-2 py-1.5 text-sm"
                   >
                     <option value="">Product…</option>
-                    {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {products.filter((p) => p.isActive).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                   <select
                     value={item.packagingSizeId}
@@ -430,7 +391,21 @@ export default function SalesPage() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+      <div className="mt-6 flex gap-2" role="group" aria-label="Which orders to show">
+        {([['mine', `Needs my action (${mineCount})`], ['all', `All orders (${orders?.length ?? 0})`]] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setView(key)}
+            aria-pressed={activeView === key}
+            className={`rounded-full px-4 py-1.5 text-xs font-medium ${activeView === key ? 'bg-paddy-900 text-rice-50' : 'border border-paddy-100 bg-white text-ink-700 hover:bg-rice-50'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_1fr]">
         <div className="overflow-x-auto rounded-2xl border border-paddy-100 bg-white">
           <table className="w-full text-sm">
             <thead>
@@ -442,7 +417,7 @@ export default function SalesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-paddy-100">
-              {orders?.map((o) => (
+              {visibleOrders?.map((o) => (
                 <tr
                   key={o.id}
                   onClick={() => setSelectedId(o.id)}
@@ -452,14 +427,15 @@ export default function SalesPage() {
                   <td className="px-4 py-3 text-ink-900">{o.customer.name}</td>
                   {showFinancials && <td className="px-4 py-3 text-ink-700">{fmtGHS(o.totalAmount)}</td>}
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[o.status] ?? 'bg-ink-500/10'}`}>
-                      {o.status.replace('_', ' ')}
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${salesStatusTone(o.status)}`}>
+                      {salesStatusLabel(o.status)}
                     </span>
+                    {isMine(o) && <span className="ml-2 rounded-full bg-paddy-900 px-2 py-0.5 text-[10px] font-medium text-rice-50">Your turn</span>}
                   </td>
                 </tr>
               ))}
-              {orders?.length === 0 && (
-                <tr><td colSpan={showFinancials ? 4 : 3} className="px-4 py-8 text-center text-ink-500">No sales orders yet.</td></tr>
+              {orders && visibleOrders?.length === 0 && (
+                <tr><td colSpan={showFinancials ? 4 : 3} className="px-4 py-8 text-center text-ink-500">{activeView === 'mine' ? 'Nothing is waiting on you.' : 'No sales orders yet.'}</td></tr>
               )}
             </tbody>
           </table>
@@ -478,20 +454,9 @@ export default function SalesPage() {
               </div>
             )}
 
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {[
-                { label: 'Submitted', at: selectedOrder.submittedAt },
-                { label: 'Approved', at: selectedOrder.approvedAt },
-                { label: 'Fulfilled', at: selectedOrder.fulfilledAt },
-              ].map((step) => (
-                <span
-                  key={step.label}
-                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${step.at ? 'bg-paddy-100 text-paddy-900' : 'bg-ink-500/10 text-ink-500'}`}
-                  title={step.at ? new Date(step.at).toLocaleString() : 'Not yet'}
-                >
-                  {step.at ? '✓ ' : ''}{step.label}
-                </span>
-              ))}
+            <div className="mt-4 rounded-xl border border-paddy-100 bg-rice-50/50 p-4">
+              <ChainProgress order={selectedOrder} />
+              {selectedOrder.allocatedWarehouse && <p className="mt-3 text-xs text-ink-500">Delivering from {selectedOrder.allocatedWarehouse.name}</p>}
             </div>
 
             <div className="mt-4 space-y-1 border-t border-paddy-100 pt-4">
@@ -536,81 +501,49 @@ export default function SalesPage() {
                   </div>
                 ) : (
                   <button type="button" onClick={() => { setReceiptOrderId(selectedOrder.id); setReceiptUrlDraft(''); }} className="text-xs font-medium text-paddy-700 underline">
-                    🧾 Attach a receipt for the Managing Director&rsquo;s review
+                    🧾 Attach a receipt for the Finance Director&rsquo;s review
                   </button>
                 )}
               </div>
             )}
 
-            <div className="mt-4 flex flex-wrap gap-2 border-t border-paddy-100 pt-4">
+            <div className="mt-4 space-y-3 border-t border-paddy-100 pt-4">
               {selectedOrder.status === 'DRAFT' && hasPermission('sales.create') && (
                 <button
                   type="button"
                   onClick={() => runAction(() => salesOrdersApi.submit(accessToken!, selectedOrder.id))}
                   className="rounded-full bg-paddy-900 px-4 py-1.5 text-xs font-medium text-rice-50"
                 >
-                  Submit for approval
+                  Send to the Finance Director
                 </button>
               )}
-              {selectedOrder.status === 'SUBMITTED' && hasPermission('sales.view') && !hasPermission('sales.approve') && (
-                <button
-                  type="button"
-                  onClick={() => onForwardToFinance(selectedOrder)}
-                  disabled={forwardingId === selectedOrder.id}
-                  className="rounded-full bg-paddy-900 px-4 py-1.5 text-xs font-medium text-rice-50 disabled:opacity-50"
-                >
-                  {forwardingId === selectedOrder.id ? 'Sending…' : forwardSuccess === selectedOrder.id ? 'Sent to Finance Director ✓' : 'Submit to Finance Director for clearance'}
-                </button>
+
+              {selectedOrder.status === 'SUBMITTED' && hasPermission('sales.approve') && selectedOrder.submittedById !== me.id && (
+                <FinanceDecision key={selectedOrder.id} order={selectedOrder} accessToken={accessToken!} onDone={() => loadOrders(accessToken!)} />
               )}
-              {selectedOrder.status === 'SUBMITTED' && hasPermission('sales.approve') && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => runAction(() => salesOrdersApi.approve(accessToken!, selectedOrder.id))}
-                    className="rounded-full bg-paddy-900 px-4 py-1.5 text-xs font-medium text-rice-50"
-                  >
-                    Approve
-                  </button>
-                  {rejectingId === selectedOrder.id ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        value={rejectReason}
-                        onChange={(e) => setRejectReason(e.target.value)}
-                        placeholder="Reason…"
-                        className="rounded-lg border border-paddy-100 px-2 py-1.5 text-xs"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!rejectReason.trim()) return;
-                          runAction(() => salesOrdersApi.reject(accessToken!, selectedOrder.id, rejectReason));
-                          setRejectingId(null);
-                          setRejectReason('');
-                        }}
-                        className="rounded-full border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700"
-                      >
-                        Confirm reject
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setRejectingId(selectedOrder.id)}
-                      className="rounded-full border border-paddy-100 px-4 py-1.5 text-xs font-medium text-ink-700"
-                    >
-                      Reject
-                    </button>
-                  )}
-                </>
+
+              {selectedOrder.status === 'APPROVED' && hasPermission('sales.release') && (
+                <ReleaseForDelivery key={selectedOrder.id} order={selectedOrder} accessToken={accessToken!} onDone={() => loadOrders(accessToken!)} />
               )}
-              {['APPROVED', 'RESERVED'].includes(selectedOrder.status) && hasPermission('sales.fulfill') && (
-                <button
-                  type="button"
-                  onClick={() => runAction(() => salesOrdersApi.fulfill(accessToken!, selectedOrder.id))}
-                  className="rounded-full bg-paddy-900 px-4 py-1.5 text-xs font-medium text-rice-50"
-                >
-                  Mark fulfilled
-                </button>
+
+              {selectedOrder.status === 'RESERVED' && hasPermission('sales.fulfill') && (
+                <MarkDelivered key={selectedOrder.id} order={selectedOrder} accessToken={accessToken!} onDone={() => loadOrders(accessToken!)} />
+              )}
+
+              {['DRAFT', 'SUBMITTED', 'APPROVED', 'RESERVED'].includes(selectedOrder.status) && hasPermission('sales.create') && (
+                cancelId === selectedOrder.id ? (
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-ink-700">Cancel this order? {selectedOrder.status === 'RESERVED' ? 'The reserved stock is freed and the delivery task closed.' : 'Whoever holds it is told.'}</span>
+                    <button type="button" onClick={() => { runAction(() => salesOrdersApi.cancel(accessToken!, selectedOrder.id)); setCancelId(null); }} className="rounded-full border border-red-300 px-3 py-1 font-medium text-red-700">Yes, cancel it</button>
+                    <button type="button" onClick={() => setCancelId(null)} className="text-ink-500">Keep it</button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setCancelId(selectedOrder.id)} className="text-xs font-medium text-red-700 underline">Cancel this order</button>
+                )
+              )}
+
+              {!['FULFILLED', 'REJECTED', 'CANCELLED', 'DRAFT'].includes(selectedOrder.status) && !isMine(selectedOrder) && !hasPermission('sales.create') && (
+                <p className="text-xs text-ink-500">Waiting on the {waitingOn(selectedOrder.status)}. There is nothing for you to do on this order.</p>
               )}
             </div>
           </div>

@@ -83,7 +83,7 @@ export default function AssistantPage() {
       {answer && (
         <div className="mt-6 rounded-2xl border border-paddy-100 bg-white p-6">
           <p className="text-base text-ink-900">{answer.answer}</p>
-          <div className="mt-4 grid gap-3 border-t border-paddy-100 pt-4 text-xs text-ink-500 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-3 border-t border-paddy-100 pt-4 text-xs text-ink-500 sm:grid-cols-3">
             <div>
               <p className="font-medium uppercase tracking-wide">Source</p>
               <p className="mt-0.5">{answer.sourceData}</p>

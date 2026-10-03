@@ -8,6 +8,8 @@ import { DashboardShell } from '@/components/DashboardShell';
 import { hasFinancialVisibility } from '@/lib/nav-items';
 import { YieldPredictionCard } from '@/components/DataEntryKit';
 import { IconStatCard, DonutChart } from '@/components/StatCard';
+import { FinanceDesk, ReleaseDesk, DeliveryDesk, MyOrdersDesk } from '@/components/SalesDesks';
+import { roleLabel } from '@/lib/role-labels';
 import { Wheat, Truck, Factory, Package, DollarSign } from 'lucide-react';
 import {
   reportsApi,
@@ -185,16 +187,7 @@ export default function DashboardPage() {
   const [mdPredictBags, setMdPredictBags] = useState('1000');
   const [mdPrediction, setMdPrediction] = useState<YieldPrediction | null>(null);
   const [mdPredicting, setMdPredicting] = useState(false);
-  // Finance Director's own approval-queue panel - a real, confirmed
-  // gap found during a full role audit: their nav access was already
-  // complete, but their Overview page showed nothing tailored to their
-  // actual job (verifying payments, approving expenses), unlike every
-  // other supervisor-tier role which already has one.
-  const [fdPayments, setFdPayments] = useState<Payment[]>([]);
-  const [fdInvoices, setFdInvoices] = useState<Invoice[]>([]);
-  const [fdExpenses, setFdExpenses] = useState<Expense[]>([]);
-  // Shared Finance dashboard - Finance Officer and Finance Director
-  // both see this: packaged rice actually available to sell, the
+  // Finance Director's overview (the Finance Officer role was merged into it): packaged rice actually available to sell, the
   // sales pipeline (pending vs already sold), who owes the company
   // (real receivables, not just a raw balance), and what the company
   // itself owes (approved-but-outstanding expenses - the honest
@@ -355,7 +348,42 @@ export default function DashboardPage() {
       items.push(
         salesOrdersApi
           .list(accessToken, 'SUBMITTED')
-          .then((orders) => (orders.length > 0 ? { label: 'Sales orders awaiting your approval', count: orders.length, href: '/sales' } : null))
+          .then((orders) => {
+            const mine = orders.filter((o) => o.submittedById !== me?.id);
+            return mine.length > 0 ? { label: 'Sales orders waiting for your review', count: mine.length, href: '/sales' } : null;
+          })
+          .catch(() => null),
+      );
+    }
+    if (hasPermission('sales.release')) {
+      items.push(
+        salesOrdersApi
+          .list(accessToken, 'APPROVED')
+          .then((orders) => (orders.length > 0 ? { label: 'Orders approved by Finance, waiting for you to release for delivery', count: orders.length, href: '/sales' } : null))
+          .catch(() => null),
+      );
+    }
+    if (hasPermission('sales.fulfill')) {
+      items.push(
+        salesOrdersApi
+          .list(accessToken, 'RESERVED')
+          .then((orders) => {
+            const scoped = me?.roles.some((r) => r.scopes.some((sc) => sc.scopeType === 'GLOBAL'))
+              ? orders
+              : orders.filter((o) => o.allocatedWarehouse && (me?.roles ?? []).some((r) => r.scopes.some((sc) => sc.scopeType === 'WAREHOUSE' && sc.scopeId === o.allocatedWarehouse?.id)));
+            return scoped.length > 0 ? { label: 'Orders released for delivery', count: scoped.length, href: '/sales' } : null;
+          })
+          .catch(() => null),
+      );
+    }
+    if (hasPermission('finance.approve.director')) {
+      items.push(
+        expensesApi
+          .list(accessToken, 'PENDING')
+          .then((list) => {
+            const n = list.filter((e) => e.submittedByFinanceDirector).length;
+            return n > 0 ? { label: 'Expenses the Finance Director entered, waiting for your approval', count: n, href: '/expenses' } : null;
+          })
           .catch(() => null),
       );
     }
@@ -442,26 +470,7 @@ export default function DashboardPage() {
         .catch(() => {});
     }
 
-    if (roleCodes.includes('FINANCE_OFFICER')) {
-      paymentsApi
-        .list(accessToken)
-        .then((payments) => {
-          const mine = payments.filter((p) => p.recordedBy.id === me.id && isThisMonth(p.paymentDate));
-          const total = mine.reduce((sum, p) => sum + p.amount, 0);
-          setPersonalStats((prev) => [...prev,
-            { label: 'Payments you recorded this month', value: `GHS ${total.toLocaleString('en-US', { maximumFractionDigits: 2 })}` },
-          ]);
-        })
-        .catch(() => {});
-    }
-
     if (roleCodes.includes('FINANCE_DIRECTOR')) {
-      paymentsApi.list(accessToken).then(setFdPayments).catch(() => {});
-      invoicesApi.list(accessToken).then(setFdInvoices).catch(() => {});
-      expensesApi.list(accessToken).then(setFdExpenses).catch(() => {});
-    }
-
-    if (roleCodes.includes('FINANCE_DIRECTOR') || roleCodes.includes('FINANCE_OFFICER')) {
       salesOrdersApi.list(accessToken).then(setFinanceOrders).catch(() => {});
       expensesApi.list(accessToken).then(setFinanceExpenses).catch(() => {});
       receivablesApi.topDebtors(accessToken).then(setFinanceDebtors).catch(() => {});
@@ -735,7 +744,10 @@ export default function DashboardPage() {
   const isOperationsOfficer = me.roles.some((r) => r.code === 'OPERATIONS_OFFICER');
   const isOperationsManager = me.roles.some((r) => r.code === 'OPERATIONS_MANAGER');
   const isFinanceDirector = me.roles.some((r) => r.code === 'FINANCE_DIRECTOR');
-  const isFinanceOfficer = me.roles.some((r) => r.code === 'FINANCE_OFFICER');
+  // Warehouse-scoped people (a Warehouse Manager) only see deliveries leaving their own warehouse.
+  const deliveryScope: string[] | null = me.roles.some((r) => r.scopes.some((sc) => sc.scopeType === 'GLOBAL'))
+    ? null
+    : me.roles.flatMap((r) => r.scopes.filter((sc) => sc.scopeType === 'WAREHOUSE' && sc.scopeId).map((sc) => sc.scopeId as string));
   const isAdmin = me.roles.some((r) => r.code === 'ADMIN');
   const isSalesOfficer = me.roles.some((r) => r.code === 'SALES_OFFICER');
   const isAuditor = me.roles.some((r) => r.code === 'AUDITOR');
@@ -746,7 +758,7 @@ export default function DashboardPage() {
         <h1 className="font-display text-2xl font-medium text-paddy-900">
           Welcome, {me.firstName} {me.lastName}
         </h1>
-        <p className="text-sm text-ink-500">{me.roles.map((r) => r.code).join(', ')}</p>
+        <p className="text-sm text-ink-500">{me.roles.map((r) => roleLabel(r.code)).join(', ')}</p>
       </div>
 
       {attention.length > 0 && (
@@ -769,6 +781,15 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {accessToken && (
+        <>
+          {isFinanceDirector && <FinanceDesk accessToken={accessToken} meId={me.id} />}
+          {isMdOrCeo && <ReleaseDesk accessToken={accessToken} canApproveDirectorExpenses={hasPermission('finance.approve.director')} />}
+          {hasPermission('sales.fulfill') && <DeliveryDesk accessToken={accessToken} onlyWarehouseIds={deliveryScope} />}
+          {isSalesOfficer && <MyOrdersDesk accessToken={accessToken} meId={me.id} />}
+        </>
+      )}
+
       {personalStats.length > 0 && (
         <div className="mb-8">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Your activity this month</p>
@@ -787,7 +808,7 @@ export default function DashboardPage() {
               farmOverview data the detail panel below already shows,
               never a second, different source that could drift from
               it. */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <IconStatCard icon={Wheat} tone="green" label="Total paddy (all farms)" value={`${(farmOverview?.paddy.available.reduce((s, g) => s + g.kg, 0) ?? 0).toLocaleString()} kg`} />
             <IconStatCard icon={Truck} tone="blue" label="In transit" value={`${(farmOverview?.paddy.dispatched.reduce((s, g) => s + g.kg, 0) ?? 0).toLocaleString()} kg`} />
             <IconStatCard icon={Factory} tone="purple" label="Pending approvals" value={String(farmDirectorPendingCount)} />
@@ -838,7 +859,7 @@ export default function DashboardPage() {
           {farmOverview && (
             <div className="mt-4 rounded-2xl border border-paddy-100 bg-white p-5">
               <h2 className="font-display text-lg text-paddy-900">Paddy rice</h2>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {([
                   { key: 'received' as const, label: 'Received', data: farmOverview.paddy.received },
                   { key: 'available' as const, label: 'Available now', data: farmOverview.paddy.available },
@@ -915,7 +936,7 @@ export default function DashboardPage() {
           )}
 
           <p className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-soil-500">Farm equipment at a glance - tap a status to see which equipment</p>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <button
               type="button"
               onClick={() => setSelectedEquipmentStatus(selectedEquipmentStatus === 'WORKING' ? null : 'WORKING')}
@@ -979,7 +1000,7 @@ export default function DashboardPage() {
               already renders, just surfaced as the new icon-card
               format rather than a second, separately-fetched source. */}
           {warehouseOverview && (
-            <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <IconStatCard icon={Wheat} tone="green" label="Paddy available" value={`${warehouseOverview.paddy.available.reduce((s, g) => s + g.kg, 0).toLocaleString()} kg`} />
               <IconStatCard icon={Truck} tone="blue" label="In transit" value={`${warehouseOverview.paddy.inTransit.reduce((s, g) => s + g.kg, 0).toLocaleString()} kg`} />
               <IconStatCard icon={Factory} tone="purple" label="At milling" value={`${warehouseOverview.atMilling.reduce((s, g) => s + g.kg, 0).toLocaleString()} kg`} />
@@ -1033,7 +1054,7 @@ export default function DashboardPage() {
             <div className="mt-4 space-y-4">
               <div className="rounded-2xl border border-paddy-100 bg-white p-5">
                 <h2 className="font-display text-lg text-paddy-900">Paddy rice</h2>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {([
                     { key: 'received' as const, label: 'Received', data: warehouseOverview.paddy.received },
                     { key: 'available' as const, label: 'Available now', data: warehouseOverview.paddy.available },
@@ -1114,7 +1135,7 @@ export default function DashboardPage() {
       {isWarehouseSupervisor && (
         <div className="mb-8">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Warehouse equipment at a glance - tap a status to see which equipment</p>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <button
               type="button"
               onClick={() => setSelectedWhEquipmentStatus(selectedWhEquipmentStatus === 'WORKING' ? null : 'WORKING')}
@@ -1179,7 +1200,7 @@ export default function DashboardPage() {
               Rice/Broken Rice/Efficiency stats precisely, since this
               endpoint already tracks all four as real figures. */}
           {productionOverview && (
-            <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <IconStatCard icon={Wheat} tone="green" label="Total processed" value={`${productionOverview.processed.reduce((s, g) => s + g.kg, 0).toLocaleString()} kg`} />
               <IconStatCard icon={Package} tone="blue" label="Recovered rice" value={fmtKg(productionOverview.recoveredRiceKg)} />
               <IconStatCard icon={Truck} tone="orange" label="Broken rice" value={fmtKg(productionOverview.brokenRiceKg)} />
@@ -1258,7 +1279,7 @@ export default function DashboardPage() {
           )}
 
           <p className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-soil-500">Machinery at a glance - tap a status to see which machine</p>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => setSelectedMachineStatusGroup(selectedMachineStatusGroup === 'running' ? null : 'running')}
@@ -1305,7 +1326,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatCard
               label="Expenses pending approval"
               value={String(opsManagerExpenses.filter((e) => e.status === 'PENDING').length)}
@@ -1325,11 +1346,11 @@ export default function DashboardPage() {
       )}
 
 
-      {(isFinanceOfficer || isFinanceDirector) && (
+      {isFinanceDirector && (
         <div className="mb-8">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Finance overview - accountability and transparency, at a glance</p>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <IconStatCard
               icon={Truck} tone="orange" label="Orders pending"
               value={String(financeOrders.filter((o) => ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RESERVED'].includes(o.status)).length)}
@@ -1387,33 +1408,19 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {isFinanceDirector && (
-        <div className="mb-8">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Your approval queue - payments, expenses, and invoices at a glance</p>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <StatCard
-              label="Payments awaiting verification"
-              value={String(fdPayments.filter((p) => p.status === 'PENDING_VERIFICATION').length)}
-              unit={`GHS ${fdPayments.filter((p) => p.status === 'PENDING_VERIFICATION').reduce((s, p) => s + p.amount, 0).toLocaleString()}`}
-              tone="husk"
-            />
-            <StatCard
-              label="Expenses awaiting your approval"
-              value={String(fdExpenses.filter((e) => e.status === 'PENDING').length)}
-              unit={`GHS ${fdExpenses.filter((e) => e.status === 'PENDING').reduce((s, e) => s + e.amount, 0).toLocaleString()}`}
-              tone="husk"
-            />
-            <StatCard
-              label="Outstanding invoice balance"
-              value={`GHS ${fdInvoices.reduce((s, i) => s + i.balance, 0).toLocaleString()}`}
-              unit={`${fdInvoices.filter((i) => i.balance > 0).length} unpaid`}
-            />
-          </div>
-        </div>
-      )}
-
       {isMdOrCeo && (
         <div className="mb-8">
+          <Link
+            href="/oversight"
+            className="mb-4 flex items-center justify-between gap-4 rounded-2xl border-2 border-paddy-900 bg-paddy-900 p-5 text-rice-50 transition hover:bg-paddy-700"
+          >
+            <div>
+              <p className="font-display text-lg">Oversight: the whole company in one place</p>
+              <p className="mt-0.5 text-sm text-paddy-100">Spend at every farm and warehouse, power use and expected output at each milling center, plus stock, sales, and what needs attention.</p>
+            </div>
+            <span className="shrink-0 text-2xl">→</span>
+          </Link>
+
           {/* The headline view, matching the new reference design -
               every figure below is real: current snapshot totals from
               the same inventory-summary endpoint /inventory itself
@@ -1423,7 +1430,7 @@ export default function DashboardPage() {
               system doesn't track anywhere - labelled honestly as
               "Currently at milling" (a real snapshot) instead of
               inventing a per-day number. */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <IconStatCard icon={Wheat} tone="green" label="Paddy on farms" value={`${(mdInventorySummary?.paddy.farmKg ?? 0).toLocaleString()} kg`} />
             <IconStatCard icon={Truck} tone="blue" label="In transit" value={`${(mdInventorySummary?.paddy.inTransitKg ?? 0).toLocaleString()} kg`} />
             <IconStatCard icon={Factory} tone="purple" label="Currently at milling" value={`${(mdInventorySummary?.paddy.atMillingKg ?? 0).toLocaleString()} kg`} />
@@ -1431,7 +1438,7 @@ export default function DashboardPage() {
             <IconStatCard icon={DollarSign} tone="teal" label="Sales this month" value={`GHS ${(mdAnalytics?.monthlySales.at(-1)?.amount ?? 0).toLocaleString()}`} />
           </div>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="rounded-2xl border border-paddy-100 bg-white p-5 lg:col-span-1">
               <h2 className="font-display text-lg text-paddy-900">Inventory overview</h2>
               <div className="mt-4">
@@ -1489,7 +1496,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-paddy-100 bg-white p-5">
               <h2 className="font-display text-lg text-paddy-900">Farm performance</h2>
               <p className="text-xs text-ink-500">Real current stock per farm - no moisture or weekly-trend figure is tracked at this level, so neither is shown here.</p>
@@ -1564,7 +1571,7 @@ export default function DashboardPage() {
           </div>
 
           <p className="mb-2 mt-8 text-xs font-medium uppercase tracking-wide text-soil-500">Company-wide operations - Farm Supervisor, Warehouse Supervisor, and Operations Manager, in one place</p>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard label="Farm equipment working" value={String(mdFarmEquipment.filter((e) => e.status === 'WORKING').length)} unit={`of ${mdFarmEquipment.length}`} tone="paddy" />
             <StatCard label="Warehouse equipment working" value={String(mdWarehouseEquipment.filter((e) => e.status === 'WORKING').length)} unit={`of ${mdWarehouseEquipment.length}`} tone="paddy" />
             <StatCard label="Machines running or idle" value={String(mdMachines.filter((m) => m.status === 'RUNNING' || m.status === 'IDLE').length)} unit={`of ${mdMachines.length}`} tone="paddy" />
@@ -1573,7 +1580,7 @@ export default function DashboardPage() {
           <div className="mt-4 rounded-2xl border border-paddy-100 bg-white p-5">
             <h2 className="font-display text-lg text-paddy-900">Sales orders</h2>
             <p className="text-xs text-ink-500">Every order in the pipeline - submitted orders now go to the Finance Director for clearance, not to you directly.</p>
-            <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard
                 label="Awaiting Finance clearance"
                 value={String(mdSalesOrders.filter((o) => o.status === 'SUBMITTED').length)}
@@ -1648,7 +1655,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatCard
               label="Expenses pending approval"
               value={String(mdExpenses.filter((e) => e.status === 'PENDING').length)}
@@ -1748,7 +1755,7 @@ export default function DashboardPage() {
           <p className="mb-8 text-sm text-ink-500">Loading your farm&rsquo;s inventory…</p>
         ) : (
           <div className="mb-8">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <IconStatCard icon={Wheat} tone="green" label="Paddy available" value={fmtKg(myFarmInventory.totalKg)} />
               <IconStatCard icon={Factory} tone="purple" label="Pending submissions" value={String(myFarmPendingCount)} />
               <IconStatCard icon={Package} tone="orange" label="Approved today" value={String(myFarmApprovedTodayCount)} />
@@ -1795,7 +1802,7 @@ export default function DashboardPage() {
         <div className="mb-8">
 
           {isOperationsOfficer && (
-            <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <IconStatCard icon={Wheat} tone="green" label="Processed this month" value={`${opsOfficerThisMonth.processedKg.toLocaleString()} kg`} />
               <IconStatCard icon={Package} tone="blue" label="Recovered this month" value={`${opsOfficerThisMonth.recoveredKg.toLocaleString()} kg`} />
               <IconStatCard icon={Factory} tone="purple" label="Recovery rate" value={`${opsOfficerThisMonth.recoveryPercent.toFixed(1)}%`} />
@@ -1822,7 +1829,7 @@ export default function DashboardPage() {
               value is real fulfilled-order revenue this month (by
               fulfilledAt, the actual completion date), not every
               order's value regardless of whether it closed. */}
-          <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <IconStatCard icon={Package} tone="green" label="Delivered" value={String(salesOfficerOrders.filter((o) => o.status === 'FULFILLED').length)} />
             <IconStatCard icon={Truck} tone="blue" label="Pending" value={String(salesOfficerOrders.filter((o) => ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RESERVED'].includes(o.status)).length)} />
             <IconStatCard icon={Factory} tone="purple" label="Rejected or cancelled" value={String(salesOfficerOrders.filter((o) => ['REJECTED', 'CANCELLED'].includes(o.status)).length)} />
@@ -1830,7 +1837,7 @@ export default function DashboardPage() {
           </div>
 
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Your orders - delivered, pending, and everything else</p>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatCard
               label="Delivered"
               value={String(salesOfficerOrders.filter((o) => o.status === 'FULFILLED').length)}
@@ -1875,7 +1882,7 @@ export default function DashboardPage() {
           )}
 
           {isAdmin && (
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Link href="/admin" className="rounded-2xl border border-paddy-100 bg-white p-5 transition hover:border-paddy-500">
                 <p className="text-xs font-medium uppercase tracking-wide text-ink-500">System reset requests</p>
                 <p className="mt-2 font-display text-lg text-paddy-900">{adminResetRequests.filter((r) => r.status === 'APPROVED').length > 0
@@ -1947,7 +1954,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {!isOperationsOfficer && !isAdmin && !isSalesOfficer && !isFinanceOfficer && !isFinanceDirector && (summaryError ? (
+          {!isOperationsOfficer && !isAdmin && !isSalesOfficer && !isFinanceDirector && (summaryError ? (
             <p className="text-sm text-red-600">{summaryError}</p>
           ) : !summary ? (
             <p className="text-sm text-ink-500">Loading live figures…</p>

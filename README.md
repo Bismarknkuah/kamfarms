@@ -4147,6 +4147,189 @@ production build across all 41 routes, the real layout's checksum
 verified identical before and after, and a project-wide scan
 confirming zero em dashes.
 
+## Oversight for MD and CEO, and the homepage rebuilt to the reference
+
+**What was actually missing, found before building.** MD and CEO already
+held every permission needed (expense.view, milling.view, reports.view,
+farm and warehouse inventory) and, being globally scoped, already saw every
+expense. What they could not do was see it broken down: expenses arrived as
+a flat list and two monthly totals, nothing showed power use or expected
+output for a milling center at all, and nothing put every farm and warehouse
+side by side. An expense links to a farm or a warehouse only, so spend cannot
+be attributed to a milling center; milling costs appear under the warehouse
+they were entered against.
+
+**The Oversight page (/oversight), read-only.** Six tabs. Overview carries
+the headline figures, a needs-attention list (machine faults, equipment not
+working, expenses waiting for approval) and the latest activity. Expenses
+shows every farm and warehouse side by side, including ones with nothing
+spent, approved versus pending, spend by category, a six-month trend, and a
+filterable ledger with receipt viewing and CSV export. Milling and power
+shows, per milling center, power used this month, what that volume should
+have used, a 14-day meter trend, and the rice and power expected from paddy
+at the mill and on its way. Farms, Warehouses and Sales put stock, equipment,
+spend, revenue and receivables per location.
+
+**Two power figures, kept apart on purpose.** Power used on runs is the kWh
+operators log against each production run; the estimates are built from the
+same figure (average kWh per kg of paddy over past approved runs), so actual
+and expected are directly comparable, and a run more than 15 percent off is
+flagged. Machine meters is the separate physical reading taken at each
+machine, shown as a 14-day trend with unusual readings counted. They are
+labelled as two things because they are two things.
+
+**Estimates are never invented.** A grade with no approved history
+contributes nothing and is named as such; confidence is set by the thinnest
+grade in a total; forecasts are scaled to the weight actually on hand rather
+than a bag count at a standard weight; power reads no meter history, not
+zero, when it cannot be estimated.
+
+**Who is offered it.** A new onlyForRoles field on nav items shows the entry
+to MD and CEO only (sidebar, Quick Access bar, and a banner on their
+dashboard). It controls who is offered the link, not data access: every
+endpoint behind the page enforces its own permission, and all 18 it calls
+were confirmed permitted for both roles against the real controllers. Nav
+visibility was recomputed for all 13 roles from the seed: MD and CEO 23 to 24
+items, every other role unchanged.
+
+**Homepage rebuilt to the reference.** Home, About, Features, Our Products
+and Contact, with the current section marked; a hero with the stats strip
+overlapping its edge; Our Core Operations; a Traceable by design section with
+the six-step chain; a products section; and a Where to buy section. The
+product photo turned out to be a portrait sales poster, so the hero uses a
+clean crop of it (public/pectra-hero.jpg, cut above the poster's lettering)
+rather than stretching the poster across the page. The sales points printed
+on the poster became the Contact section as tap-to-call links, and all eight
+numbers were checked at 2.2x zoom against the poster. Bag sizes and the
+six-step chain reuse the existing copy.
+
+**An accessibility fix found while testing.** The collapsed phone menu was
+only clipped to zero height, so keyboard and screen-reader users could still
+tab onto its invisible links. It is now removed from the tab order and the
+accessibility tree while closed.
+
+**Charts on the Oversight page render instantly.** Recharts replays a
+grow-from-zero animation whenever its container resizes, which made bars
+re-grow on every filter change; for a decision page that is noise.
+
+**What was verified, and what that does and does not prove.** 40 fixture
+tests of the aggregation helpers, with known answers including awkward cases:
+an expense tied to neither a farm nor a warehouse, a rejected expense, a grade
+with no history, a future-dated entry. 41 browser checks of the Oversight page
+against a mock API using the real MD permission set, comparing displayed
+figures with values computed independently from the fixtures. 14 browser
+checks of the homepage at desktop and phone widths. 51 backend tests, 42
+routes building, layout checksum unchanged. That proves the logic, rendering
+and wiring. It does not prove the page against real production data, and
+fonts could not be loaded in the build environment, so a wider stand-in font
+was used, which is the conservative case for text wrapping.
+
+**Worth knowing, not changed here.** The expense list the Oversight page loads
+(the same one the MD dashboard and the Expenses page already load) returns
+every receipt photo inline as base64. As more expenses carry photos, that
+response grows without bound. A sensible next step is for the list to omit the
+image data and fetch a receipt only when it is opened.
+
+## The sales chain, the Finance Director's authority, and the Finance Officer retired
+
+**The error that started this.** Creating a sales order failed with
+"items.0.productId must be a UUID". The seed gives Pectra Rice the id
+00000000-0000-0000-0000-000000000021, and class-validator's @IsUUID() also
+checks the RFC 4122 version and variant bits, which that hand-written id does
+not have. 58 fields across 30 DTOs used the strict check, so anything using a
+seeded record could fail the same way. They now use one shared check
+(common/validators/is-uuid-like.ts) that accepts any well-formed 8-4-4-4-12 id
+and still rejects free text, empty strings and injection attempts. A test fails
+if a DTO ever goes back to the strict decorator.
+
+**A second bug behind it.** Approving an order could never have worked from the
+screen: the server required a warehouse (allocatedWarehouseId or the order's
+preferred one), the create form never sent one, and the Approve button sent an
+empty body. Approval is now a purely financial decision and needs no warehouse.
+
+**The chain, one accountable person per step.** The Sales Officer submits and
+the Finance Director is notified. The Finance Director approves (with an
+optional note for the MD) or rejects (a real reason is required). The MD or CEO
+then releases it: they choose the warehouse, the stock is reserved, and a
+delivery task is created for the Warehouse Supervisor. The Supervisor marks it
+delivered. Statuses: DRAFT, SUBMITTED, APPROVED (Finance has approved, waiting
+for the MD), RESERVED (released, with the Warehouse Supervisor), FULFILLED.
+No stage can be skipped. Every stage change is guarded so two people acting at
+once cannot approve twice or reserve the same stock twice. Stock is now
+reserved at release, not at approval, so a warehouse is only chosen by the
+person coordinating the delivery.
+
+**Who holds what.** sales.approve is held by the Finance Director only (the
+Warehouse Supervisor used to hold it as well, which let them approve orders
+and bypass Finance). New sales.release goes to the MD and CEO. The Finance
+Director also gains tasks.complete and audit.view. Cancelling is open to the
+Sales Officer at any stage before delivery and frees reserved stock and closes
+the delivery task.
+
+**Expenses the Finance Director enters.** Nobody may approve their own entry,
+and the Finance Director was the only approver, so an expense they entered
+would have been stuck for ever. A narrow permission, finance.approve.director,
+lets the MD or CEO approve exactly those and nothing else; the server decides
+which expenses qualify and tells the screen, so the buttons shown are the ones
+that will work.
+
+**The Finance Officer role is retired.** It held nothing the Finance Director
+lacked except tasks.complete. prisma/retire-roles.ts runs on every start,
+after sync-permissions.ts. It is idempotent, and deliberately non-fatal (a
+failure is logged and the API still starts). Anyone who held only that role is
+set to DISABLED, never deleted and never moved into another role; their names
+are printed in the deploy log under [retire-roles]. Re-enable them and assign
+the right role from the Users page. The seeded demo account finance.1@kam.local
+is gone from the seed. The RoleCode enum in schema.prisma still lists the old
+value on purpose: nothing reads that enum, and leaving it means db push never
+has to alter the type.
+
+**Notifications.** Each hand-off sends an in-app notification to whoever holds
+the order next (Finance Director, then MD and CEO, then the Warehouse
+Supervisor and that warehouse's managers), and tells the Sales Officer at each
+stage. A failed notification never undoes the step. SMS and WhatsApp are still
+not connected.
+
+**Screens.** The order page has a progress timeline (who did what, when, and
+who it is waiting on), a "Needs my action" filter, and role-specific actions.
+Each role's Overview opens with its own desk: the Finance Director's decision
+desk (orders, expenses and payments, actionable in place), the MD and CEO's
+release desk, the Warehouse Supervisor's delivery desk (limited to their own
+warehouse for a Warehouse Manager), and the Sales Officer's "where are my
+orders". The old "forward to the Finance Director through chat" workaround is
+gone. My Office now sends the Finance Director to the order screen instead of
+rejecting with a canned reason. The sidebar and welcome line show "Sales
+Officer" instead of SALES_OFFICER, and the homepage says twelve roles.
+
+**A phone-layout bug found by the new tests.** The MD's Overview was 24px wider
+than a phone screen. The cause was a layout pattern: a grid written
+"grid gap-4 lg:grid-cols-3" has no phone column definition, so its track grows
+to the widest card. 93 such grids across 31 files now have a base single column.
+
+**What was verified, and what that does and does not prove.**
+Backend: 131 tests pass, 0 fail, including 50 for the sales chain (every hand-off,
+who is notified, the stage guards, the two-people-at-once cases, cancelling
+mid-chain, and a full walk from submit to delivery), 12 for the expense rule,
+7 for the role retirement, and 16 for the UUID fix. 29 older suites cannot
+compile in the build sandbox because the Prisma client cannot be generated
+there; that was already true before this work. Frontend: 43 fixture checks on
+the shared sales-flow logic, a navigation audit of all 12 roles, 0 type
+errors, and a production build of 42 routes with the layout checksum
+unchanged. Browser: 60 checks drive the real screens as a Sales Officer,
+Finance Director, MD, Warehouse Supervisor and a warehouse-scoped manager
+against a mock backend that enforces the same chain rules and permissions, and
+the earlier Oversight (41) and homepage (14) suites still pass. That proves the
+rules, the wiring and the screens agree. It does not prove them against the
+real database or production data, and the mock was written by the same hand as
+the service, so it checks consistency more than independence. The retirement
+script was exercised against a mock database only.
+
+**Worth knowing.** The expense list still returns every receipt photo inline as
+base64 and grows with each photo; omitting the image data from the list and
+fetching a receipt when it is opened is the sensible next step. The Finance
+Director's Overview no longer makes a second full expense request, which
+removes one of the two heaviest calls it made.
+
 ## A note on verification in this build environment
 
 This code was written and tested in a network-restricted sandbox that

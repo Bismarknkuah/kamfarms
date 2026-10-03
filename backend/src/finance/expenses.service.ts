@@ -13,6 +13,45 @@ export class ExpensesService {
     private readonly audit: AuditService,
   ) {}
 
+  /** Ids (among those given) of people who hold the Finance Director role. */
+  private async financeDirectorIds(userIds: string[]): Promise<Set<string>> {
+    if (userIds.length === 0) return new Set();
+    const rows = await this.prisma.userRole.findMany({
+      where: { userId: { in: userIds }, role: { code: 'FINANCE_DIRECTOR' } },
+      select: { userId: true },
+    });
+    return new Set(rows.map((r: { userId: string }) => r.userId));
+  }
+
+  /** Tells the UI whether the Finance Director entered an expense, because
+   * that decides who may approve it (see assertMayDecide). Computed here,
+   * not guessed on the client, so the buttons shown always match what the
+   * server will actually allow. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async withFinanceDirectorFlag(rows: any[]) {
+    const ids = await this.financeDirectorIds(Array.from(new Set(rows.map((r) => r.submittedById))));
+    return rows.map((r) => ({ ...r, submittedByFinanceDirector: ids.has(r.submittedById) }));
+  }
+
+  /** Who may approve or reject an expense.
+   *
+   * Every expense is decided by the Finance Director (finance.approve). Nobody
+   * may decide their own entry, so an expense the Finance Director enters
+   * personally would otherwise be stuck for ever with no one able to clear
+   * it. Those, and only those, go to the Managing Director or CEO, who hold
+   * the narrow finance.approve.director permission: it opens this one door
+   * and nothing else, so they still cannot decide anyone else's expense. */
+  private async assertMayDecide(expense: { submittedById: string }, actor: AuthenticatedUser, verb: 'approve' | 'reject') {
+    if (expense.submittedById === actor.id) {
+      throw new ForbiddenException(`You cannot ${verb} your own expense.`);
+    }
+    if (actor.permissionCodes.has('finance.approve')) return;
+    const enteredByFinanceDirector = (await this.financeDirectorIds([expense.submittedById])).has(expense.submittedById);
+    if (!enteredByFinanceDirector) {
+      throw new ForbiddenException('Expenses are decided by the Finance Director. Only an expense the Finance Director entered personally comes to you.');
+    }
+  }
+
   /** Was returning every expense company-wide to anyone who could reach
    * this endpoint at all - including a Farm Manager who should only
    * ever see their own farm's expenses. finance.view holders (Finance
@@ -21,7 +60,7 @@ export class ExpensesService {
    * for both FARM and WAREHOUSE and nothing is filtered. A
    * location-scoped caller's farmId/warehouseId filter is intersected
    * with what they can actually see, not trusted outright. */
-  list(actor: AuthenticatedUser, filters: { status?: string; farmId?: string; warehouseId?: string }) {
+  async list(actor: AuthenticatedUser, filters: { status?: string; farmId?: string; warehouseId?: string }) {
     const where: Record<string, unknown> = { status: filters.status as any };
 
     const farmScope = scopedLocationIds(actor, 'FARM');
@@ -45,11 +84,12 @@ export class ExpensesService {
       where.OR = or;
     }
 
-    return this.prisma.expense.findMany({
+    const rows = await this.prisma.expense.findMany({
       where,
       include: { category: true, farm: true, warehouse: true, submittedBy: true, approvedBy: true },
       orderBy: { date: 'desc' },
     });
+    return this.withFinanceDirectorFlag(rows);
   }
 
   async findById(id: string, actor: AuthenticatedUser) {
@@ -69,7 +109,8 @@ export class ExpensesService {
         throw new ForbiddenException({ message: 'You are not authorized for this expense.', errorCode: 'SCOPE_DENIED' });
       }
     }
-    return expense;
+    const [flagged] = await this.withFinanceDirectorFlag([expense]);
+    return flagged;
   }
 
   async create(dto: CreateExpenseDto, actor: AuthenticatedUser) {
@@ -84,7 +125,8 @@ export class ExpensesService {
     if (dto.farmId) assertScope(actor, 'FARM', dto.farmId, 'this farm');
     if (dto.warehouseId) assertScope(actor, 'WAREHOUSE', dto.warehouseId, 'this warehouse');
 
-    const expense = await this.prisma.$transaction(async (tx) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const expense = await this.prisma.$transaction(async (tx: any) => {
       const year = new Date().getFullYear();
       const prefix = `EXP-${year}-`;
       const count = await tx.expense.count({ where: { expenseNumber: { startsWith: prefix } } });
@@ -124,9 +166,7 @@ export class ExpensesService {
     if (expense.status !== 'PENDING') {
       throw new BadRequestException(`Only PENDING expenses can be approved (current status: ${expense.status}).`);
     }
-    if (expense.submittedById === actor.id) {
-      throw new ForbiddenException('You cannot approve your own expense.');
-    }
+    await this.assertMayDecide(expense, actor, 'approve');
 
     const updated = await this.prisma.expense.update({
       where: { id },
@@ -149,9 +189,7 @@ export class ExpensesService {
     if (expense.status !== 'PENDING') {
       throw new BadRequestException(`Only PENDING expenses can be rejected (current status: ${expense.status}).`);
     }
-    if (expense.submittedById === actor.id) {
-      throw new ForbiddenException('You cannot reject your own expense.');
-    }
+    await this.assertMayDecide(expense, actor, 'reject');
 
     const updated = await this.prisma.expense.update({
       where: { id },

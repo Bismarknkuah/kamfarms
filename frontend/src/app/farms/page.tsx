@@ -212,7 +212,7 @@ export default function FarmsPage() {
       )}
 
       {farms && (
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
           {farms.map((farm) => (
             <div
               key={farm.id}
@@ -328,7 +328,7 @@ export default function FarmsPage() {
                         </div>
                       ) : (
                         <div>
-                          <div className="grid gap-2 sm:grid-cols-2">
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                             <input value={newManagerFirstName} onChange={(e) => setNewManagerFirstName(e.target.value)} placeholder="First name" className="rounded-lg border border-paddy-100 px-2 py-1.5 text-sm" />
                             <input value={newManagerLastName} onChange={(e) => setNewManagerLastName(e.target.value)} placeholder="Last name" className="rounded-lg border border-paddy-100 px-2 py-1.5 text-sm" />
                             <input value={newManagerEmail} onChange={(e) => setNewManagerEmail(e.target.value)} placeholder="Email" type="email" className="rounded-lg border border-paddy-100 px-2 py-1.5 text-sm" />

@@ -1,11 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Min } from 'class-validator';
+import { IsDateString, IsNumber, IsOptional, IsPositive, IsString, Min } from 'class-validator';
+import { IsUuidLike } from '../../common/validators/is-uuid-like';
 
 export class CreatePaddyEntryDto {
-  @ApiProperty() @IsUUID() farmId: string;
+  @ApiProperty() @IsUuidLike() farmId: string;
   @ApiProperty({ example: '2026-09-01' }) @IsDateString() entryDate: string;
-  @ApiProperty({ required: false }) @IsOptional() @IsUUID() paddyTypeId?: string;
-  @ApiProperty() @IsUUID() paddyGradeId: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsUuidLike() paddyTypeId?: string;
+  @ApiProperty() @IsUuidLike() paddyGradeId: string;
 
   @ApiProperty({
     required: false,

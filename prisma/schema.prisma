@@ -35,6 +35,9 @@ enum RoleCode {
   OPERATIONS_OFFICER
   SALES_OFFICER
   FINANCE_DIRECTOR
+  // Retired role. Kept in this enum only so `db push` never has to alter
+  // the type: nothing reads this enum (Role.code is a plain string), and
+  // the role itself is removed from the database by prisma/retire-roles.ts.
   FINANCE_OFFICER
   AUDITOR
   CUSTOM

@@ -4,6 +4,7 @@ import { SalesOrdersService } from './sales-orders.service';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
 import { ApproveSalesOrderDto } from './dto/approve-sales-order.dto';
 import { RejectSalesOrderDto } from './dto/reject-sales-order.dto';
+import { ReleaseSalesOrderDto } from './dto/release-sales-order.dto';
 import { AnnotateFulfillmentSourceDto } from './dto/annotate-fulfillment-source.dto';
 import { AttachReceiptDto } from './dto/attach-receipt.dto';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
@@ -18,13 +19,13 @@ export class SalesOrdersController {
   constructor(private readonly salesOrdersService: SalesOrdersService) {}
 
   @Get()
-  @RequirePermission([PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_APPROVE, PERMISSIONS.SALES_FULFILL, PERMISSIONS.SALES_VIEW])
+  @RequirePermission([PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_APPROVE, PERMISSIONS.SALES_RELEASE, PERMISSIONS.SALES_FULFILL, PERMISSIONS.SALES_VIEW])
   list(@Query('status') status?: string, @Query('customerId') customerId?: string) {
     return this.salesOrdersService.list({ status, customerId });
   }
 
   @Get(':id')
-  @RequirePermission([PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_APPROVE, PERMISSIONS.SALES_FULFILL, PERMISSIONS.SALES_VIEW])
+  @RequirePermission([PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_APPROVE, PERMISSIONS.SALES_RELEASE, PERMISSIONS.SALES_FULFILL, PERMISSIONS.SALES_VIEW])
   findOne(@Param('id') id: string) {
     return this.salesOrdersService.findById(id);
   }
@@ -51,6 +52,18 @@ export class SalesOrdersController {
   @RequirePermission(PERMISSIONS.SALES_APPROVE)
   approve(@Param('id') id: string, @Body() dto: ApproveSalesOrderDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.salesOrdersService.approve(id, dto, actor);
+  }
+
+  @Get(':id/availability')
+  @RequirePermission([PERMISSIONS.SALES_APPROVE, PERMISSIONS.SALES_RELEASE])
+  availability(@Param('id') id: string) {
+    return this.salesOrdersService.availability(id);
+  }
+
+  @Post(':id/release')
+  @RequirePermission(PERMISSIONS.SALES_RELEASE)
+  release(@Param('id') id: string, @Body() dto: ReleaseSalesOrderDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.salesOrdersService.release(id, dto, actor);
   }
 
   @Post(':id/reject')

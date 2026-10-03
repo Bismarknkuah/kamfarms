@@ -147,7 +147,7 @@ describe('UsersService.create - team.manage scoping', () => {
     const warehouseSupervisor = actor('WAREHOUSE_SUPERVISOR', ['team.manage']);
 
     await expect(
-      service.create({ ...baseDto, roleCodes: ['FINANCE_OFFICER'] } as any, warehouseSupervisor, {}),
+      service.create({ ...baseDto, roleCodes: ['FINANCE_DIRECTOR'] } as any, warehouseSupervisor, {}),
     ).rejects.toThrow('You can only add a new WAREHOUSE_MANAGER to your team.');
   });
 

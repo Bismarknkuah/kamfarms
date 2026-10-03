@@ -177,7 +177,7 @@ export default function WarehousesPage() {
       )}
 
       {warehouses && (
-        <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {warehouses.map((wh) => (
             <div key={wh.id} className={`rounded-2xl border bg-white p-5 ${wh.isActive ? 'border-paddy-100' : 'border-ink-500/20 opacity-70'}`}>
               {editingId === wh.id ? (

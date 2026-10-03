@@ -105,7 +105,7 @@ export default function FarmDetailPage() {
             </div>
           )}
 
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="rounded-2xl border border-paddy-100 bg-white p-5">
               <h2 className="font-display text-lg text-paddy-900">Recent paddy entries</h2>
               <div className="mt-3 space-y-2">
@@ -141,7 +141,7 @@ export default function FarmDetailPage() {
           {equipment.length > 0 && (
             <div className="mt-6 rounded-2xl border border-paddy-100 bg-white p-5">
               <h2 className="font-display text-lg text-paddy-900">🔧 Machinery &amp; equipment</h2>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {equipment.map((eq) => (
                   <div key={eq.id} className="flex items-center justify-between rounded-lg bg-rice-50 px-3 py-2 text-sm">
                     <div>

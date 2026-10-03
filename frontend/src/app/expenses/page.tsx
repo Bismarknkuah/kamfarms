@@ -56,7 +56,16 @@ export default function ExpensesPage() {
 
   const myFarmId = me ? findSingleLocationScope(me, 'FARM') : null;
   const myWarehouseId = me ? findSingleLocationScope(me, 'WAREHOUSE') : null;
-  const canApprove = hasPermission('finance.approve');
+  // Mirrors the server's rule exactly, so the buttons shown are the ones that will work:
+  // the Finance Director decides everyone's expenses except their own; an expense the
+  // Finance Director entered personally is decided by the MD or CEO instead.
+  const canApproveAny = hasPermission('finance.approve');
+  const canApproveDirectorEntries = hasPermission('finance.approve.director');
+  const mayDecide = (e: Expense) => {
+    if (e.submittedById && e.submittedById === me?.id) return false;
+    if (canApproveAny) return true;
+    return canApproveDirectorEntries && !!e.submittedByFinanceDirector;
+  };
   const isOtherCategory = categories.find((c) => c.id === categoryId)?.name === 'Other';
 
   const load = (token: string) => {
@@ -397,7 +406,7 @@ export default function ExpensesPage() {
       {hasPermission('expense.create') && (
         <div className="mt-4 rounded-2xl border border-husk-300 bg-husk-100/30 p-5">
           <h3 className="font-display text-lg text-paddy-900">Log an expense</h3>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">
               <option value="">Category…</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -484,11 +493,14 @@ export default function ExpensesPage() {
                   <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[e.status] ?? 'bg-ink-500/10'}`}>{e.status}</span>
                 </td>
                 <td className="px-4 py-3">
-                  {e.status === 'PENDING' && canApprove && (
+                  {e.status === 'PENDING' && mayDecide(e) && (
                     <div className="flex gap-2">
                       <button type="button" onClick={() => onApprove(e.id)} className="rounded-full bg-paddy-900 px-3 py-1 text-xs font-medium text-rice-50">Approve</button>
                       <button type="button" onClick={() => onReject(e.id)} className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50">Reject</button>
                     </div>
+                  )}
+                  {e.status === 'PENDING' && canApproveAny && e.submittedById === me?.id && (
+                    <span className="text-xs text-ink-500">The MD or CEO approves expenses you enter</span>
                   )}
                 </td>
               </tr>

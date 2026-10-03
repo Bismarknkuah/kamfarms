@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsUUID } from 'class-validator';
+import { IsUuidLike } from '../../common/validators/is-uuid-like';
 
 export class AssignWarehouseManagerDto {
-  @ApiProperty() @IsUUID() userId: string;
+  @ApiProperty() @IsUuidLike() userId: string;
 }

@@ -192,7 +192,7 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
           {/* Step 1 - where and when */}
           <div className="rounded-xl bg-white/60 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-soil-500">1. Where did this paddy come from?</p>
-            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
               {!autoSelectedFarm && (
                 <div>
                   <label className="mb-1 block text-xs font-medium text-ink-700">Farm</label>
@@ -229,7 +229,7 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
                         </button>
                       )}
                     </div>
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
                         <label className="mb-2 block text-xs font-medium text-ink-700">Number of bags</label>
                         <BagStepper value={row.bagCount} onChange={(v) => updateRow(index, 'bagCount', v)} />
@@ -257,7 +257,7 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
           {/* Step 3 - optional extra detail */}
           <div className="rounded-xl bg-white/60 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-soil-500">3. Moisture, quality grade, or a note (optional)</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-700">Moisture %</label>
                 <input type="number" value={moisturePercent} onChange={(e) => setMoisturePercent(e.target.value)} placeholder="Optional" className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
@@ -343,7 +343,7 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
 
                 {editingEntryId === e.id && (
                   <div className="mt-2 space-y-2 border-t border-paddy-100 pt-2">
-                    <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                       <select value={editGradeId} onChange={(ev) => setEditGradeId(ev.target.value)} className="rounded-lg border border-paddy-100 px-2 py-1.5 text-xs">
                         {grades.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
                       </select>
@@ -555,7 +555,7 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
           <p className="text-sm text-ink-500">{autoSelectedFarm ? 'Request a delivery of paddy from your farm to a warehouse.' : 'Order any farm to dispatch paddy to a warehouse - pick which farm below.'}
           </p>
           <div className="mt-3 rounded-xl bg-white/60 p-4">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {!autoSelectedFarm && (
                 <div>
                   <label className="mb-1 block text-xs font-medium text-ink-700">Farm</label>
@@ -592,7 +592,7 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
                         </button>
                       )}
                     </div>
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
                         <label className="mb-2 block text-xs font-medium text-ink-700">Number of bags</label>
                         <BagStepper value={row.bagCount} onChange={(v) => updateOrderRow(index, 'bagCount', v)} />
@@ -645,7 +645,7 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
 
           <div className="mt-3 rounded-xl bg-white/60 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-soil-500">1. Which order, and what actually shipped</p>
-            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-ink-700">Order</label>
                 <select value={deliveryOrderId} onChange={(e) => setDeliveryOrderId(e.target.value)} className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm">
@@ -666,7 +666,7 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
 
           <div className="mt-3 rounded-xl bg-white/60 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-soil-500">2. Driver &amp; vehicle</p>
-            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-700">Driver name</label>
                 <input value={driverName} onChange={(e) => setDriverName(e.target.value)} placeholder="Optional" className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
@@ -688,7 +688,7 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
 
           <div className="mt-3 rounded-xl bg-white/60 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-soil-500">3. Costs</p>
-            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-700">Labour cost (GHS)</label>
                 <input type="number" value={labourCost} onChange={(e) => setLabourCost(e.target.value)} placeholder="Optional" className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
@@ -775,7 +775,7 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
 
                 {editingReportId === r.id && (
                   <div className="mt-2 space-y-2 border-t border-paddy-100 pt-2">
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <input type="number" value={editBagCount} onChange={(e) => setEditBagCount(e.target.value)} placeholder="Actual bags" className="rounded-lg border border-paddy-100 px-2 py-1.5 text-xs" />
                       <input type="number" value={editKg} onChange={(e) => setEditKg(e.target.value)} placeholder="Actual KG" className="rounded-lg border border-paddy-100 px-2 py-1.5 text-xs" />
                       <input value={editDriverName} onChange={(e) => setEditDriverName(e.target.value)} placeholder="Driver name" className="rounded-lg border border-paddy-100 px-2 py-1.5 text-xs" />
@@ -927,7 +927,7 @@ export function PaddyRequestApprovalQueue({ accessToken }: { accessToken: string
 
             {assigningId === r.id ? (
               <div className="mt-3 space-y-2 border-t border-paddy-100 pt-3">
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <select value={assignFarmId} onChange={(e) => setAssignFarmId(e.target.value)} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">
                     <option value="">Which farm can provide this?…</option>
                     {farms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
@@ -1073,7 +1073,7 @@ export function InventoryAdjustmentRequestAction({ accessToken, meId }: { access
       <h2 className="font-display text-2xl font-medium text-paddy-900">Request a stock correction</h2>
       <p className="mt-1 text-sm text-ink-500">Physical count doesn&rsquo;t match the system? Request a correction - it only takes effect once your supervisor approves it, never immediately.
       </p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {isFarm ? (
           <select value={paddyGradeId} onChange={(e) => setPaddyGradeId(e.target.value)} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">
             <option value="">Paddy grade…</option>
@@ -1222,7 +1222,7 @@ export function InventoryAdjustmentQueue({ accessToken }: { accessToken: string 
             {editingId === a.id && (
               <div className="mt-3 space-y-2 border-t border-paddy-100 pt-3">
                 <p className="text-xs font-medium uppercase tracking-wide text-soil-500">Correct the figures before approving</p>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <input type="number" value={editKg} onChange={(e) => setEditKg(e.target.value)} placeholder="Corrected KG (signed)" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
                   <input type="number" value={editBags} onChange={(e) => setEditBags(e.target.value)} placeholder="Corrected bags (signed)" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
                 </div>
@@ -1281,7 +1281,7 @@ export function ShipmentQuickAction({ accessToken }: { accessToken: string }) {
     <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
       <h2 className="font-display text-2xl font-medium text-paddy-900">Receive a shipment</h2>
       <p className="mt-1 text-sm text-ink-500">{inTransit.length} shipment{inTransit.length === 1 ? '' : 's'} currently in transit to you.</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <select value={selectedId} onChange={(e) => { setSelectedId(e.target.value); const s = inTransit.find((x) => x.id === e.target.value); if (s) { setReceivedKg(String(s.expectedKg)); setReceivedBags(String(s.expectedBags)); } }} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">
           <option value="">Select shipment…</option>
           {inTransit.map((s) => <option key={s.id} value={s.id}>{s.shipmentNumber} - {s.farm.name}</option>)}

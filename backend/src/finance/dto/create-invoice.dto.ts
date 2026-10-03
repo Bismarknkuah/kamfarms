@@ -1,9 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsNumber, IsOptional, IsUUID, Min } from 'class-validator';
+import { IsDateString, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsUuidLike } from '../../common/validators/is-uuid-like';
 
 export class CreateInvoiceDto {
   @ApiProperty({ description: 'Must be a FULFILLED sales order.' })
-  @IsUUID()
+  @IsUuidLike()
   salesOrderId: string;
 
   @ApiProperty({ required: false, default: 0 }) @IsOptional() @IsNumber() @Min(0) discount?: number;

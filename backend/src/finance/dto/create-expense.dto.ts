@@ -1,13 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
+import { IsDateString, IsEnum, IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
+import { IsUuidLike } from '../../common/validators/is-uuid-like';
 import { PaymentMethod } from '@prisma/client';
 
 export class CreateExpenseDto {
-  @ApiProperty() @IsUUID() categoryId: string;
+  @ApiProperty() @IsUuidLike() categoryId: string;
   @ApiProperty() @IsNumber() @IsPositive() amount: number;
   @ApiProperty() @IsDateString() date: string;
-  @ApiProperty({ required: false }) @IsOptional() @IsUUID() farmId?: string;
-  @ApiProperty({ required: false }) @IsOptional() @IsUUID() warehouseId?: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsUuidLike() farmId?: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsUuidLike() warehouseId?: string;
   @ApiProperty({ required: false, enum: PaymentMethod }) @IsOptional() @IsEnum(PaymentMethod) paymentMethod?: PaymentMethod;
   @ApiProperty({ required: false }) @IsOptional() @IsString() reference?: string;
   @ApiProperty({ required: false, description: 'Only meaningful when categoryId points to the "Other" category.' })

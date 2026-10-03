@@ -228,7 +228,7 @@ export default function DeliveriesPage() {
                 {orderRows.map((row, index) => {
                   const otherSelected = orderRows.filter((_, i) => i !== index).map((r) => r.paddyGradeId);
                   return (
-                    <div key={index} className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+                    <div key={index} className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
                       <div>
                         {index === 0 && <label className="mb-1 block text-xs font-medium text-ink-700">Bag size / grade</label>}
                         <select value={row.paddyGradeId} onChange={(e) => updateOrderRow(index, 'paddyGradeId', e.target.value)} className="w-full rounded-lg border border-paddy-100 px-2 py-1.5 text-sm">
@@ -308,7 +308,7 @@ export default function DeliveriesPage() {
           {reportingOrderId && (
             <div className="mt-4 rounded-2xl border border-husk-300 bg-husk-100/30 p-5">
               <h3 className="font-display text-lg text-paddy-900">Dispatch report</h3>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div><label className="mb-1 block text-xs font-medium text-ink-700">Actual bags</label><input type="number" value={reportBagCount} onChange={(e) => setReportBagCount(e.target.value)} className="w-full rounded-lg border border-paddy-100 px-2 py-1.5 text-sm" /></div>
                 <div><label className="mb-1 block text-xs font-medium text-ink-700">Actual KG</label><input type="number" value={reportKg} onChange={(e) => setReportKg(e.target.value)} className="w-full rounded-lg border border-paddy-100 px-2 py-1.5 text-sm" /></div>
                 <div><label className="mb-1 block text-xs font-medium text-ink-700">Departure time</label><input type="time" value={departureTime} onChange={(e) => setDepartureTime(e.target.value)} className="w-full rounded-lg border border-paddy-100 px-2 py-1.5 text-sm" /></div>

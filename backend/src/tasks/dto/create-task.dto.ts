@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsDateString, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsUuidLike } from '../../common/validators/is-uuid-like';
 import { DeliveryPriority } from '@prisma/client';
 
 export class CreateTaskDto {
@@ -8,7 +9,7 @@ export class CreateTaskDto {
 
   @ApiProperty({ required: false, description: 'Assign to a specific user.' })
   @IsOptional()
-  @IsUUID()
+  @IsUuidLike()
   assignedToId?: string;
 
   @ApiProperty({ required: false, description: 'Or assign to any holder of this role code, e.g. WAREHOUSE_MANAGER.' })
@@ -16,8 +17,8 @@ export class CreateTaskDto {
   @IsString()
   assignedRoleCode?: string;
 
-  @ApiProperty({ required: false }) @IsOptional() @IsUUID() farmId?: string;
-  @ApiProperty({ required: false }) @IsOptional() @IsUUID() warehouseId?: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsUuidLike() farmId?: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsUuidLike() warehouseId?: string;
   @ApiProperty({ required: false, enum: DeliveryPriority }) @IsOptional() @IsEnum(DeliveryPriority) priority?: DeliveryPriority;
   @ApiProperty({ required: false }) @IsOptional() @IsDateString() dueDate?: string;
 }

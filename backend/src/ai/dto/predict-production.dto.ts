@@ -1,8 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsPositive, IsUUID } from 'class-validator';
+import { IsNumber, IsOptional, IsPositive } from 'class-validator';
+import { IsUuidLike } from '../../common/validators/is-uuid-like';
 
 export class PredictProductionDto {
   @ApiProperty() @IsNumber() @IsPositive() paddyKg: number;
-  @ApiProperty() @IsUUID() paddyGradeId: string;
-  @ApiProperty({ required: false }) @IsOptional() @IsUUID() millingCenterId?: string;
+  @ApiProperty() @IsUuidLike() paddyGradeId: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsUuidLike() millingCenterId?: string;
 }

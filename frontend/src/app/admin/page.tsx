@@ -110,7 +110,7 @@ export default function AdminPage() {
 
       {tab === 'Backups' && (
         hasPermission('backup.manage') ? (
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="rounded-2xl border border-paddy-100 bg-white p-5">
               <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Last successful backup</p>
               <p className="mt-2 font-display text-lg text-paddy-900">

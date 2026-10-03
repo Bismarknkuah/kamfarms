@@ -81,7 +81,7 @@ export default function WarehouseDetailPage() {
 
           {inventory && (
             <>
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="rounded-2xl border border-paddy-100 bg-white p-5">
                   <p className="text-xs font-medium uppercase tracking-wide text-soil-500">Paddy on hand</p>
                   <p className="mt-1 font-display text-2xl text-paddy-900">{inventory.paddyTotalKg.toLocaleString()} KG</p>

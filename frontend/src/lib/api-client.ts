@@ -570,7 +570,25 @@ export interface SalesOrder {
   approvedAt: string | null;
   fulfilledAt: string | null;
   createdAt: string;
+  submittedById: string;
+  approvedBy?: { firstName: string; lastName: string } | null;
+  allocatedWarehouse?: { id: string; name: string } | null;
+  preferredWarehouseId?: string | null;
+  /** The delivery task created when the order is released: it is how
+   * "who released this, and when" is known. */
+  tasks?: { id: string; title: string; status: string; createdAt: string; createdBy: { firstName: string; lastName: string } }[];
   items: SalesOrderItem[];
+}
+
+export interface SalesOrderAvailability {
+  orderId: string;
+  preferredWarehouseId: string | null;
+  warehouses: {
+    warehouseId: string;
+    warehouseName: string;
+    canFulfillAll: boolean;
+    lines: { itemId: string; product: string; size: string; requestedBags: number; availableBags: number; enough: boolean }[];
+  }[];
 }
 
 export const customersApi = {
@@ -593,8 +611,16 @@ export const salesOrdersApi = {
     request<SalesOrder>(`/sales-orders/${id}/submit`, { method: 'POST' }, accessToken),
   attachReceipt: (accessToken: string, id: string, receiptUrl: string) =>
     request<SalesOrder>(`/sales-orders/${id}/receipt`, { method: 'POST', body: JSON.stringify({ receiptUrl }) }, accessToken),
-  approve: (accessToken: string, id: string) =>
-    request<SalesOrder>(`/sales-orders/${id}/approve`, { method: 'POST', body: JSON.stringify({}) }, accessToken),
+  /** The Finance Director's decision. Purely financial: no warehouse involved. */
+  approve: (accessToken: string, id: string, note?: string) =>
+    request<SalesOrder>(`/sales-orders/${id}/approve`, { method: 'POST', body: JSON.stringify(note ? { note } : {}) }, accessToken),
+  /** The Managing Director's / CEO's step: choose the warehouse and hand the delivery to the Warehouse Supervisor. */
+  release: (accessToken: string, id: string, data: { allocatedWarehouseId?: string; note?: string }) =>
+    request<SalesOrder>(`/sales-orders/${id}/release`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
+  availability: (accessToken: string, id: string) =>
+    request<SalesOrderAvailability>(`/sales-orders/${id}/availability`, { method: 'GET' }, accessToken),
+  cancel: (accessToken: string, id: string) =>
+    request<SalesOrder>(`/sales-orders/${id}/cancel`, { method: 'POST' }, accessToken),
   reject: (accessToken: string, id: string, reason: string) =>
     request<SalesOrder>(`/sales-orders/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }, accessToken),
   fulfill: (accessToken: string, id: string) =>
@@ -1338,6 +1364,10 @@ export interface Expense {
   attachmentUrl: string | null;
   notes: string | null;
   rejectionReason: string | null;
+  submittedById?: string;
+  /** Set by the server: an expense the Finance Director entered personally is
+   * approved by the MD or CEO instead, because nobody may approve their own. */
+  submittedByFinanceDirector?: boolean;
   submittedBy: { firstName: string; lastName: string };
 }
 

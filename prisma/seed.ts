@@ -34,58 +34,45 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
   {
     code: 'MD',
     name: 'Managing Director',
-    // sales.approve and finance.approve deliberately removed - a real,
-    // explicit workflow change: an order or expense reaching the
-    // Managing Director is now submitted to the Finance Director for
-    // actual clearance, not approved by the Managing Director
-    // directly. sales.view and expense.view added specifically so
-    // this removal doesn't also silently cut off the Managing
-    // Director's own access to the Sales and Expenses pages
-    // themselves - confirmed directly that finance.approve and
-    // sales.approve were the only permissions gating those nav items
-    // that the Managing Director held, which would have left them
-    // unable to even browse orders or expenses to forward for
-    // clearance. The Managing Director still sees every order and
-    // expense in full (farm.inventory.view, warehouse.inventory.view,
-    // finance.view all remain), and can forward anything to Finance
-    // through the existing messaging feature - the change is
-    // specifically about who holds the final approval action, not
-    // about visibility. organization.manage and masterdata.manage
-    // added - the Managing Director can now actually edit company
-    // details and manage master data (not just view), while CEO stays
-    // view-only for both, matching the specific asymmetry requested
-    // between the two otherwise-identical top-executive roles.
+    // Sales and expenses are cleared by Finance, not here. The chain for a
+    // sale is Sales Officer -> Finance Director (reviews and approves) ->
+    // Managing Director (sales.release: releases the approved order to the
+    // Warehouse Supervisor, who arranges the delivery). finance.approve.
+    // director is deliberately narrow: it lets the Managing Director
+    // approve an expense the Finance Director entered personally, which
+    // the Finance Director cannot approve themselves (nobody may approve
+    // their own entry). It cannot approve anyone else's expense - that
+    // stays with the Finance Director. sales.view and expense.view keep
+    // the Sales and Expenses pages reachable. organization.manage and
+    // masterdata.manage let the Managing Director edit company details
+    // and master data, while the CEO stays view-only for both, matching
+    // the specific asymmetry requested between the two executive roles.
     permissionCodes: [
-      'dashboard.view', 'farm.view', 'farm.inventory.view', 'warehouse.view', 'warehouse.inventory.view',
-      'milling.view', 'machine.view', 'delivery.view', 'finance.view', 'sales.view', 'expense.view',
-      'reports.view', 'reports.export', 'ai.view', 'ai.use', 'messages.send', 'messages.broadcast',
-      'tasks.assign', 'audit.view', 'reset.approve', 'organization.manage', 'masterdata.manage',
+      'dashboard.view', 'farm.view', 'farm.inventory.view', 'warehouse.view',
+      'warehouse.inventory.view', 'milling.view', 'machine.view', 'delivery.view', 'finance.view',
+      'sales.view', 'expense.view', 'reports.view', 'reports.export', 'ai.view', 'ai.use',
+      'messages.send', 'messages.broadcast', 'tasks.assign', 'audit.view', 'reset.approve',
+      'organization.manage', 'masterdata.manage', 'sales.release', 'finance.approve.director',
     ],
   },
   {
     code: 'CEO',
     name: 'Chief Executive Officer',
-    // Spec: "the CEO should have more analytical views... access to the
-    // inbuilt AI to make decisions and make some predictions... able to
-    // give remarks/recommendations to all user role types." Same
-    // top-executive reach as MD (both are ultimate decision-makers with
-    // full analytical access) - kept as an identical permission set
-    // deliberately, rather than inventing a functional distinction the
-    // spec itself doesn't actually draw between the two roles beyond
-    // both being top-level executive views. sales.approve and
-    // finance.approve removed here too, matching MD exactly - same
-    // real workflow change: submitted to Finance Director for actual
-    // clearance, not approved directly. sales.view and expense.view
-    // added, same reason as MD: without them, this removal would have
-    // silently cut off the CEO's own access to the Sales and Expenses
-    // pages' nav items entirely, not just the approve action.
-    // Visibility (farm/warehouse inventory, finance.view) is fully
-    // retained.
+    // Same top-executive reach as the Managing Director, kept as an
+    // identical permission set on purpose rather than inventing a
+    // distinction the spec does not draw. Sales and expenses are cleared
+    // by Finance: the CEO holds sales.release (the hand-off to the
+    // Warehouse Supervisor once the Finance Director has approved an
+    // order) and the narrow finance.approve.director (approving only an
+    // expense the Finance Director entered personally, which they cannot
+    // approve themselves). Visibility of farm and warehouse inventory and
+    // finance records is fully retained.
     permissionCodes: [
-      'dashboard.view', 'farm.view', 'farm.inventory.view', 'warehouse.view', 'warehouse.inventory.view',
-      'milling.view', 'machine.view', 'delivery.view', 'finance.view', 'sales.view', 'expense.view',
-      'reports.view', 'reports.export', 'ai.view', 'ai.use', 'messages.send', 'messages.broadcast',
-      'tasks.assign', 'audit.view', 'reset.approve',
+      'dashboard.view', 'farm.view', 'farm.inventory.view', 'warehouse.view',
+      'warehouse.inventory.view', 'milling.view', 'machine.view', 'delivery.view', 'finance.view',
+      'sales.view', 'expense.view', 'reports.view', 'reports.export', 'ai.view', 'ai.use',
+      'messages.send', 'messages.broadcast', 'tasks.assign', 'audit.view', 'reset.approve',
+      'sales.release', 'finance.approve.director',
     ],
   },
   {
@@ -149,8 +136,9 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
     permissionCodes: [
       'dashboard.view', 'warehouse.view', 'warehouse.create', 'warehouse.update', 'warehouse.delete',
       'warehouse.inventory.view', 'warehouse.transfer', 'milling.manage', 'inventory.adjust',
-      'sales.approve', 'sales.fulfill', 'milling.view', 'reports.view', 'reports.export', 'ai.view', 'ai.use',
-      'messages.send', 'tasks.assign', 'tasks.complete', 'expense.view', 'team.manage', 'masterdata.manage',
+      'sales.fulfill', 'milling.view', 'reports.view', 'reports.export', 'ai.view', 'ai.use',
+      'messages.send', 'tasks.assign', 'tasks.complete', 'expense.view', 'team.manage',
+      'masterdata.manage',
     ],
   },
   {
@@ -222,28 +210,20 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
   {
     code: 'FINANCE_DIRECTOR',
     name: 'Finance Director',
-    // sales.approve added - the real other half of the same workflow
-    // change: an order the Managing Director forwards for clearance
-    // needs someone who can actually approve it (reserving stock),
-    // not just review it. finance.approve stays here too - expense
-    // approval was already correctly centralized to this role, MD/CEO
-    // simply no longer duplicate it.
+    // The single owner of everything financial. This role now also carries
+    // everything the retired Finance Officer role held (tasks.complete was
+    // the only difference), so there is one accountable finance seat:
+    // sales.approve (reviews and approves every order before it reaches the
+    // Managing Director), finance.approve (every expense), payment.verify,
+    // invoice.create and expense.create. audit.view lets the Finance
+    // Director see who did what across the company's financial activity.
+    // Nobody may approve their own entry, so an expense the Finance
+    // Director enters is approved by the Managing Director or CEO
+    // (finance.approve.director), never by the Finance Director.
     permissionCodes: [
-      'dashboard.view', 'finance.view', 'finance.approve', 'sales.approve', 'payment.verify', 'invoice.create',
-      'expense.create', 'reports.view', 'reports.export', 'ai.view', 'messages.send',
-      'tasks.assign', 'reset.approve',
-    ],
-  },
-  {
-    code: 'FINANCE_OFFICER',
-    name: 'Finance Officer',
-    // reports.export added - same reason as Warehouse Manager: without
-    // it, a Finance Officer could never reach the Reports page or
-    // download the finance report their own dashboard already
-    // summarizes.
-    permissionCodes: [
-      'dashboard.view', 'finance.view', 'payment.verify', 'invoice.create', 'expense.create',
-      'reports.view', 'reports.export', 'messages.send', 'tasks.complete',
+      'dashboard.view', 'finance.view', 'finance.approve', 'sales.approve', 'payment.verify',
+      'invoice.create', 'expense.create', 'reports.view', 'reports.export', 'ai.view', 'messages.send',
+      'tasks.assign', 'reset.approve', 'tasks.complete', 'audit.view',
     ],
   },
   {
@@ -444,7 +424,6 @@ async function main() {
     { email: 'sales.1@kam.local', firstName: 'Nana', lastName: 'Yeboah', roleCode: 'SALES_OFFICER', scope: { scopeType: 'GLOBAL', scopeId: null } },
     { email: 'sales.2@kam.local', firstName: 'Akosua', lastName: 'Frimpong', roleCode: 'SALES_OFFICER', scope: { scopeType: 'GLOBAL', scopeId: null } },
     { email: 'financedirector@kam.local', firstName: 'Kwesi', lastName: 'Appiah', roleCode: 'FINANCE_DIRECTOR', scope: { scopeType: 'GLOBAL', scopeId: null } },
-    { email: 'finance.1@kam.local', firstName: 'Adwoa', lastName: 'Nyarko', roleCode: 'FINANCE_OFFICER', scope: { scopeType: 'GLOBAL', scopeId: null } },
     { email: 'auditor@kam.local', firstName: 'Kwadwo', lastName: 'Osei', roleCode: 'AUDITOR', scope: { scopeType: 'GLOBAL', scopeId: null } },
   ];
 
@@ -512,7 +491,7 @@ async function main() {
   // query, not guessed.
   const salesOfficer1 = await prisma.user.findUniqueOrThrow({ where: { email: 'sales.1@kam.local' } });
   const salesOfficer2 = await prisma.user.findUniqueOrThrow({ where: { email: 'sales.2@kam.local' } });
-  const financeOfficer = await prisma.user.findUniqueOrThrow({ where: { email: 'finance.1@kam.local' } });
+  const financeDirector = await prisma.user.findUniqueOrThrow({ where: { email: 'financedirector@kam.local' } });
   const pectraRiceId = '00000000-0000-0000-0000-000000000021';
   const now = new Date();
 
@@ -563,8 +542,8 @@ async function main() {
         amount: e.amount,
         date,
         status: 'APPROVED',
-        submittedById: financeOfficer.id,
-        approvedById: financeOfficer.id,
+        submittedById: financeDirector.id,
+        approvedById: financeDirector.id,
         approvedAt: date,
       },
     });

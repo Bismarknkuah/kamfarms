@@ -14,8 +14,7 @@
 | `OPERATIONS_MANAGER` | Operations Manager | GLOBAL or MILLING_CENTER |
 | `OPERATIONS_OFFICER` | Operations Officer | MILLING_CENTER / WAREHOUSE |
 | `SALES_OFFICER` | Sales Officer | GLOBAL (customer/order visibility) |
-| `FINANCE_DIRECTOR` | Finance Director | GLOBAL - includes reset approval |
-| `FINANCE_OFFICER` | Finance Officer | GLOBAL - financial records, no ops editing |
+| `FINANCE_DIRECTOR` | Finance Director | GLOBAL - owns every financial decision (sales, expenses, payments, invoices); includes reset approval |
 | `AUDITOR` | Auditor | GLOBAL - read-only |
 
 A user can hold multiple roles (e.g. Warehouse Manager *and* Sales Officer),
@@ -70,7 +69,47 @@ login (`mustChangePassword: true`).
 | operations.1@kam.local | OPERATIONS_OFFICER | Warehouse 1 |
 | sales.1@kam.local / sales.2@kam.local | SALES_OFFICER | GLOBAL |
 | financedirector@kam.local | FINANCE_DIRECTOR | GLOBAL |
-| finance.1@kam.local | FINANCE_OFFICER | GLOBAL |
 | auditor@kam.local | AUDITOR | GLOBAL |
 
 Never reuse this password pattern outside local development.
+
+## The sales chain: who decides what
+
+A sale passes through four people, each accountable for one step. Whoever
+holds the order next is notified when the previous person acts.
+
+| Step | Who | Permission | Order status |
+|---|---|---|---|
+| 1. Create and submit | Sales Officer | `sales.create` | DRAFT then SUBMITTED |
+| 2. Review and approve (or reject, with a reason) | Finance Director | `sales.approve` | APPROVED (or REJECTED) |
+| 3. Release for delivery: choose the warehouse, reserve the stock | Managing Director or CEO | `sales.release` | RESERVED |
+| 4. Deliver | Warehouse Supervisor | `sales.fulfill` | FULFILLED |
+
+Notes:
+
+- `sales.approve` is held by the Finance Director **only**. Nobody else can
+  approve an order, and nobody can approve an order they submitted.
+- Approval is a financial decision and does not pick a warehouse or touch stock.
+  Stock is reserved at step 3, when a warehouse is chosen, and the Warehouse
+  Supervisor receives a delivery task linked to the order.
+- An order cannot skip a stage: it cannot be released before Finance approves
+  it, nor delivered before it is released.
+- The Sales Officer can cancel an order at any stage before delivery; any
+  reserved stock is freed and the delivery task is closed.
+
+## Expenses: who decides
+
+The Finance Director decides every expense (`finance.approve`). Nobody may
+decide their own entry, so an expense the Finance Director enters personally
+is decided by the Managing Director or CEO instead, through the deliberately
+narrow `finance.approve.director` permission. That permission opens that one
+door only: it cannot be used on anyone else's expense.
+
+## Retired roles
+
+`FINANCE_OFFICER` was removed and merged into the Finance Director, who holds
+everything it held. On the next deploy `prisma/retire-roles.ts` removes the
+role from the database. Anyone who held only that role is set to DISABLED
+(nothing is deleted and nobody is moved into another role for them); an
+administrator re-enables the account and assigns the right role from the Users
+page. The script is idempotent and never blocks the API from starting.

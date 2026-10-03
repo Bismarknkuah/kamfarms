@@ -105,7 +105,7 @@ export default function PackagingPage() {
         <div className="mt-4 rounded-2xl border-2 border-paddy-900 bg-rice-50 p-6">
           <h2 className="font-display text-lg text-paddy-900">Record a packaging batch</h2>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <select value={millingCenterId} onChange={(e) => setMillingCenterId(e.target.value)} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">
               <option value="">Source milling center…</option>
               {millingCenters.map((mc) => <option key={mc.id} value={mc.id}>{mc.name}</option>)}
@@ -116,7 +116,7 @@ export default function PackagingPage() {
           <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-soil-500">Products packaged</p>
           <div className="space-y-3">
             {batchRows.map((row, index) => (
-              <div key={index} className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+              <div key={index} className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
                 <div>
                   {index === 0 && <label className="mb-1 block text-xs font-medium text-ink-700">Product</label>}
                   <select value={row.productId} onChange={(e) => updateBatchRow(index, 'productId', e.target.value)} className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm">
@@ -149,7 +149,7 @@ export default function PackagingPage() {
             + Add another product or size
           </button>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <input type="number" value={sourceBulkKg} onChange={(e) => setSourceBulkKg(e.target.value)} placeholder="Bulk KG actually consumed (optional)" className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
               <p className="mt-1 text-xs text-ink-500">Leave blank if there was no packaging loss.</p>

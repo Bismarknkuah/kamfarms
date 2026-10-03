@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsUuidLike } from '../../common/validators/is-uuid-like';
 import { ConversationType } from '@prisma/client';
 
 export class CreateConversationDto {
@@ -15,6 +16,6 @@ export class CreateConversationDto {
     description: 'Member user ids to add immediately (creator is always included automatically).',
   })
   @IsArray()
-  @IsUUID('4', { each: true })
+  @IsUuidLike({ each: true })
   memberIds: string[];
 }

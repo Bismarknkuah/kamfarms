@@ -1,11 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsDateString, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Min } from 'class-validator';
+import { IsArray, IsDateString, IsNumber, IsOptional, IsPositive, IsString, Min } from 'class-validator';
+import { IsUuidLike } from '../../common/validators/is-uuid-like';
 
 export class CreatePackagingBatchDto {
-  @ApiProperty() @IsUUID() productId: string;
-  @ApiProperty() @IsUUID() packagingSizeId: string;
+  @ApiProperty() @IsUuidLike() productId: string;
+  @ApiProperty() @IsUuidLike() packagingSizeId: string;
   @ApiProperty({ description: 'Number of bags packaged.' }) @IsNumber() @Min(1) bagCount: number;
-  @ApiProperty() @IsUUID() millingCenterId: string;
+  @ApiProperty() @IsUuidLike() millingCenterId: string;
 
   @ApiProperty({
     required: false,

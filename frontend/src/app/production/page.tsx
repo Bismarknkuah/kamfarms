@@ -314,7 +314,7 @@ export default function ProductionPage() {
           <h2 className="font-display text-2xl font-medium text-paddy-900">Confirm paddy received at milling</h2>
           <p className="mt-1 text-sm text-ink-500">What actually arrived today - add one row per size, so both Size 4 and Size 5 can be confirmed together.</p>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <select value={receiptMillingCenterId} onChange={(e) => setReceiptMillingCenterId(e.target.value)} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">
               <option value="">Milling center…</option>
               {millingCenters.map((mc) => <option key={mc.id} value={mc.id}>{mc.name}</option>)}
@@ -374,7 +374,7 @@ export default function ProductionPage() {
             automatically once this is submitted for approval.
           </p>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <select value={prMillingCenterId} onChange={(e) => setPrMillingCenterId(e.target.value)} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">
               <option value="">Milling center…</option>
               {millingCenters.map((mc) => <option key={mc.id} value={mc.id}>{mc.name}</option>)}
@@ -461,7 +461,7 @@ export default function ProductionPage() {
             for you.
           </p>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-ink-700">Machine</label>
               <select
@@ -562,7 +562,7 @@ export default function ProductionPage() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="overflow-x-auto rounded-2xl border border-paddy-100 bg-white">
           <table className="w-full text-sm">
             <thead>

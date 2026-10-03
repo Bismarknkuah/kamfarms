@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -68,7 +69,7 @@ function SalesQuickAction({ accessToken }: { accessToken: string }) {
     <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
       <h2 className="font-display text-lg text-paddy-900">💰 Quick order</h2>
       <p className="mt-1 text-sm text-ink-500">One product, one size - for a multi-item order, use the full Sales page.</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">
           <option value="">Customer…</option>
           {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -106,7 +107,7 @@ function SalesQuickAction({ accessToken }: { accessToken: string }) {
   );
 }
 
-// ── Finance Officer: quick payment ───────────────────────────────────
+// ── Sales Officer: record a payment (the Finance Director verifies it) ────────────────────────────────────
 function PaymentQuickAction({ accessToken }: { accessToken: string }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [recent, setRecent] = useState<Payment[]>([]);
@@ -154,7 +155,7 @@ function PaymentQuickAction({ accessToken }: { accessToken: string }) {
   return (
     <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
       <h2 className="font-display text-lg text-paddy-900">💳 Record a payment</h2>
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">
           <option value="">Customer…</option>
           {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -167,7 +168,7 @@ function PaymentQuickAction({ accessToken }: { accessToken: string }) {
           <option value="OTHER_APPROVED_METHOD">Other approved method</option>
         </select>
       </div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input value={receiptUrl} onChange={(e) => setReceiptUrl(e.target.value)} placeholder="Receipt link (optional) - Drive, Dropbox, etc." className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
         <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Note (optional)" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
       </div>
@@ -241,15 +242,24 @@ function PaddyApprovalQueue({ accessToken }: { accessToken: string }) {
 
 function SalesApprovalQueue({ accessToken }: { accessToken: string }) {
   const [items, setItems] = useState<SalesOrder[]>([]);
-  const load = () => { salesOrdersApi.list(accessToken, 'SUBMITTED').then(setItems).catch(() => {}); };
-  useEffect(load, [accessToken]);
+  useEffect(() => { salesOrdersApi.list(accessToken, 'SUBMITTED').then(setItems).catch(() => {}); }, [accessToken]);
+  // Orders are reviewed on the order screen, where the stock check and a
+  // real rejection reason are available (a canned reason would tell the
+  // Sales Officer nothing).
   return (
-    <ApprovalQueue
-      accessToken={accessToken} title="Sales orders" icon="💰"
-      items={items.map((o) => ({ id: o.id, label: `${o.orderNumber} - GHS ${o.totalAmount.toLocaleString()}` }))}
-      onApprove={async (id) => { await salesOrdersApi.approve(accessToken, id); load(); }}
-      onReject={async (id) => { await salesOrdersApi.reject(accessToken, id, 'Reviewed and rejected from My Office.'); load(); }}
-    />
+    <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
+      <h2 className="font-display text-lg text-paddy-900">{'\u{1F4B0}'} Sales orders</h2>
+      <p className="mt-1 text-sm text-ink-500">{items.length} awaiting your review.</p>
+      <div className="mt-4 space-y-2">
+        {items.map((o) => (
+          <Link key={o.id} href={`/sales?order=${o.id}`} className="flex items-center justify-between rounded-lg bg-white px-4 py-2.5 text-sm hover:bg-rice-50">
+            <span className="text-ink-900">{o.orderNumber} - GHS {o.totalAmount.toLocaleString()}</span>
+            <span className="rounded-full bg-paddy-900 px-3 py-1 text-xs font-medium text-rice-50">Review</span>
+          </Link>
+        ))}
+        {items.length === 0 && <p className="text-sm text-ink-500">Nothing waiting - you&rsquo;re caught up.</p>}
+      </div>
+    </div>
   );
 }
 
@@ -383,7 +393,7 @@ function StockTransferQuickAction({ accessToken }: { accessToken: string }) {
       </div>
 
       {mode === 'dispatch' ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <select value={sourceWarehouseId} onChange={(e) => setSourceWarehouseId(e.target.value)} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">
             <option value="">From warehouse…</option>
             {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
@@ -415,7 +425,7 @@ function StockTransferQuickAction({ accessToken }: { accessToken: string }) {
               <option key={t.id} value={t.id}>{t.transferNumber} - {t.product.name} ({t.packagingSize.label}) from {t.sourceWarehouse.name}, {t.bagCount} bags expected</option>
             ))}
           </select>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input type="number" value={receivedBagCount} onChange={(e) => setReceivedBagCount(e.target.value)} placeholder="Bags actually received" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
             <input type="number" value={receivedKg} onChange={(e) => setReceivedKg(e.target.value)} placeholder="KG actually received" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
           </div>
@@ -495,7 +505,7 @@ function PaddyRequestQuickAction({ accessToken }: { accessToken: string }) {
       <h2 className="font-display text-lg text-paddy-900">🌾 Request paddy from a farm</h2>
       <p className="mt-1 text-sm text-ink-500">Say what you need - any Farm Supervisor can accept and tell you which farm and when.</p>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {!autoSelectedWarehouse && (
           <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">
             <option value="">Warehouse…</option>

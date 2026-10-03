@@ -242,7 +242,7 @@ export default function UsersPage() {
           <h2 className="font-display text-base text-paddy-900">New user</h2>
           <p className="mt-1 text-xs text-ink-500">A temporary password is generated automatically - you&rsquo;ll see it once, right after creating the account.</p>
           {createError && <p className="mt-2 text-sm text-red-600">{createError}</p>}
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <input value={newFirstName} onChange={(e) => setNewFirstName(e.target.value)} placeholder="First name" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
             <input value={newLastName} onChange={(e) => setNewLastName(e.target.value)} placeholder="Last name" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
             <input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="Email" type="email" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />

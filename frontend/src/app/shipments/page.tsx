@@ -131,7 +131,7 @@ export default function ShipmentsPage() {
                         <label className="mb-2 block text-xs font-medium text-ink-700">Condition on arrival</label>
                         <ConditionChips value={receivedCondition} onChange={setReceivedCondition} />
                       </div>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div>
                           <label className="mb-1 block text-xs font-medium text-ink-700">Weight (KG) <span className="font-normal text-ink-500">- optional</span></label>
                           <input type="number" inputMode="decimal" value={receivedKg} onChange={(e) => setReceivedKg(e.target.value)} placeholder="Only if weighed" className="w-full rounded-xl border-2 border-paddy-100 px-3 py-2.5 text-sm" />

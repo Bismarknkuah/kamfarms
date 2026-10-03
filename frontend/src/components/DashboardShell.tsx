@@ -1,5 +1,6 @@
 'use client';
 
+import { roleLabel } from '@/lib/role-labels';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -37,6 +38,7 @@ import {
   FileDown,
   ClipboardEdit,
   Inbox,
+  Eye,
   type LucideIcon,
 } from 'lucide-react';
 import { MeResponse, authApi } from '@/lib/api-client';
@@ -84,6 +86,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'file-down': FileDown,
   'clipboard-edit': ClipboardEdit,
   'inbox': Inbox,
+  eye: Eye,
 };
 
 function NavIcon({ name, className }: { name: string; className?: string }) {
@@ -117,7 +120,10 @@ export function DashboardShell({ me, children }: { me: MeResponse; children: Rea
 
   const myRoleCodes = me.roles.map((r) => r.code);
   const visibleItems = NAV_ITEMS.filter(
-    (item) => hasNavPermission(me, item.permission) && !item.hideForRoles?.some((code) => myRoleCodes.includes(code)),
+    (item) =>
+      hasNavPermission(me, item.permission) &&
+      !item.hideForRoles?.some((code) => myRoleCodes.includes(code)) &&
+      (!item.onlyForRoles || item.onlyForRoles.some((code) => myRoleCodes.includes(code))),
   );
   // The "multi task bar" - quick shortcuts for the actions each role
   // does most often. Re-derived from visibleItems, never the raw map
@@ -161,7 +167,7 @@ export function DashboardShell({ me, children }: { me: MeResponse; children: Rea
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-rice-50">{me.firstName} {me.lastName}</p>
-          <p className="truncate text-xs text-paddy-300">{me.roles.map((r) => r.code).join(', ')}</p>
+          <p className="truncate text-xs text-paddy-300">{me.roles.map((r) => roleLabel(r.code)).join(', ')}</p>
         </div>
       </div>
 

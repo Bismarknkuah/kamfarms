@@ -70,7 +70,7 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="rounded-2xl border border-paddy-100 bg-white p-5">
               <h2 className="font-display text-lg text-paddy-900">Sales by product</h2>
               <p className="text-xs text-ink-500">Which products are actually driving revenue.</p>

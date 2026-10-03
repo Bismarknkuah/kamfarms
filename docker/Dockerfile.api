@@ -97,4 +97,4 @@ EXPOSE 4000
 # Seeds, Agrochemicals) live in seed data too, and needed the same
 # kind of narrow, idempotent, every-deploy sync rather than a one-time
 # manual seed run to actually reach the live database.
-CMD ["sh", "-c", "npx prisma@5.22.0 db push --schema=prisma/schema.prisma --accept-data-loss --skip-generate && npx ts-node --transpile-only prisma/sync-permissions.ts && npx ts-node --transpile-only prisma/sync-expense-categories.ts && node backend/dist/main.js"]
+CMD ["sh", "-c", "npx prisma@5.22.0 db push --schema=prisma/schema.prisma --accept-data-loss --skip-generate && npx ts-node --transpile-only prisma/sync-permissions.ts && npx ts-node --transpile-only prisma/retire-roles.ts && npx ts-node --transpile-only prisma/sync-expense-categories.ts && node backend/dist/main.js"]

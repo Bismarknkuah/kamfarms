@@ -21,10 +21,25 @@ export interface NavItem {
    * "Dispatch" / "Request a stock correction" entries rather than the
    * combined My Office page other roles still use). */
   hideForRoles?: string[];
+  /** The opposite of hideForRoles: shows this item ONLY to people holding
+   * one of these roles, even if others hold the permission. Used for a
+   * page that exists for one audience (the MD/CEO Oversight page) so it
+   * isn't offered to roles that merely hold some of the same view
+   * permissions. This is about who is offered the link, not data access:
+   * every endpoint behind the page enforces its own permissions. */
+  onlyForRoles?: string[];
 }
 
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: 'layout-dashboard', description: 'Your dashboard home.' },
+  {
+    label: 'Oversight',
+    href: '/oversight',
+    icon: 'eye',
+    description: 'The whole company in one place: every farm, warehouse, milling center, sale, and expense, with power use and expected output.',
+    permission: 'reports.view',
+    onlyForRoles: ['MD', 'CEO'],
+  },
   {
     label: 'My Office',
     href: '/office',
@@ -152,8 +167,8 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Sales',
     href: '/sales',
     icon: 'dollar-sign',
-    description: 'Create an order, approve one waiting on you, or mark an approved order fulfilled.',
-    permission: ['sales.create', 'sales.approve', 'sales.fulfill', 'sales.view'],
+    description: 'Follow an order from request to delivery: create it, review it, release it, or deliver it.',
+    permission: ['sales.create', 'sales.approve', 'sales.release', 'sales.fulfill', 'sales.view'],
     // Warehouse Manager holds sales.fulfill (marking an approved order
     // fulfilled once the goods physically go out) - a real, confirmed
     // bug found during a full audit: this nav item was hidden for them
@@ -291,7 +306,7 @@ export function findSingleLocationScope(me: MeResponse, scopeType: 'FARM' | 'WAR
  * Analytics pages directly by URL but never saw the same figures
  * summarized on their own dashboard, an inconsistency with no
  * legitimate reason behind it. */
-export const FINANCIAL_VISIBILITY_ROLES = new Set(['SALES_OFFICER', 'FINANCE_OFFICER', 'FINANCE_DIRECTOR', 'MD', 'CEO', 'AUDITOR']);
+export const FINANCIAL_VISIBILITY_ROLES = new Set(['SALES_OFFICER', 'FINANCE_DIRECTOR', 'MD', 'CEO', 'AUDITOR']);
 
 export function hasFinancialVisibility(me: MeResponse): boolean {
   return me.roles.some((r) => FINANCIAL_VISIBILITY_ROLES.has(r.code));
@@ -312,14 +327,13 @@ export const QUICK_ACTIONS_BY_ROLE: Record<string, string[]> = {
   FARM_MANAGER: ['/log-paddy-intake', '/dispatch-quick', '/stock-correction', '/tasks'],
   FARM_DIRECTOR: ['/warehouse-requests', '/farms', '/reports', '/tasks'],
   WAREHOUSE_MANAGER: ['/shipments', '/deliveries', '/packaging', '/inventory'],
-  WAREHOUSE_SUPERVISOR: ['/warehouses', '/shipments', '/inventory', '/tasks'],
+  WAREHOUSE_SUPERVISOR: ['/sales', '/tasks', '/warehouses', '/shipments'],
   OPERATIONS_OFFICER: ['/production', '/quality', '/inventory', '/tasks'],
   OPERATIONS_MANAGER: ['/production', '/quality', '/reports', '/tasks'],
   SALES_OFFICER: ['/sales', '/messages', '/tasks'],
-  FINANCE_OFFICER: ['/finance', '/expenses', '/sales'],
-  FINANCE_DIRECTOR: ['/finance', '/sales', '/expenses', '/reports'],
-  MD: ['/analytics', '/audit-log', '/sales', '/finance'],
-  CEO: ['/analytics', '/audit-log', '/sales', '/finance'],
+  FINANCE_DIRECTOR: ['/sales', '/expenses', '/finance', '/reports'],
+  MD: ['/oversight', '/sales', '/analytics', '/audit-log', '/finance'],
+  CEO: ['/oversight', '/sales', '/analytics', '/audit-log', '/finance'],
   AUDITOR: ['/audit-log', '/analytics', '/reports'],
   ADMIN: ['/users', '/roles', '/master-data', '/admin'],
 };

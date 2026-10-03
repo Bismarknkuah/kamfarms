@@ -38,13 +38,13 @@ export class ExpensesController {
   }
 
   @Post(':id/approve')
-  @RequirePermission(PERMISSIONS.FINANCE_APPROVE)
+  @RequirePermission([PERMISSIONS.FINANCE_APPROVE, PERMISSIONS.FINANCE_APPROVE_DIRECTOR])
   approve(@Param('id') id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.expensesService.approve(id, actor);
   }
 
   @Post(':id/reject')
-  @RequirePermission(PERMISSIONS.FINANCE_APPROVE)
+  @RequirePermission([PERMISSIONS.FINANCE_APPROVE, PERMISSIONS.FINANCE_APPROVE_DIRECTOR])
   reject(@Param('id') id: string, @Body() dto: RejectExpenseDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.expensesService.reject(id, dto, actor);
   }

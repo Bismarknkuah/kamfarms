@@ -160,7 +160,7 @@ export default function InventoryPage() {
         <div className="mt-6 rounded-2xl border border-paddy-100 bg-white p-5">
           <h2 className="font-display text-lg text-paddy-900">Your warehouse - three-part overview</h2>
           <p className="text-xs text-ink-500">Tap a card for the breakdown by size.</p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             {([
               { key: 'received' as const, label: 'Paddy received', bags: warehouseOverview.paddy.received.reduce((s, g) => s + g.bags, 0) },
               { key: 'available' as const, label: 'Paddy available', bags: warehouseOverview.paddy.available.reduce((s, g) => s + g.bags, 0) },
@@ -356,7 +356,7 @@ export default function InventoryPage() {
               className="w-56 rounded-lg border border-paddy-100 px-3 py-1.5 text-xs"
             />
           </div>
-          <div className="grid gap-6 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <InventorySection title="On farms" rows={data.farms} emptyLabel="No paddy on hand at any farm right now." filterText={locationFilter} />
             {hasPermission('warehouse.inventory.view') && (
               <InventorySection title="In warehouses" rows={data.warehouses} emptyLabel="No stock in any warehouse right now." filterText={locationFilter} />

@@ -5,7 +5,7 @@ import { AuthenticatedUser } from '../../auth/types/authenticated-user';
 
 describe('PaymentsService', () => {
   const salesOfficer = { id: 'sales-1' } as AuthenticatedUser;
-  const financeOfficer = { id: 'finance-1' } as AuthenticatedUser;
+  const financeDirector = { id: 'finance-1' } as AuthenticatedUser;
 
   const pendingPayment = {
     id: 'pay-1',
@@ -60,10 +60,10 @@ describe('PaymentsService', () => {
     await expect(service.verify('pay-1', salesOfficer)).rejects.toThrow(ForbiddenException);
   });
 
-  it('allows a different Finance Officer to verify the payment', async () => {
+  it('allows someone other than the person who recorded it (the Finance Director) to verify the payment', async () => {
     const { service, prisma } = buildService();
 
-    const result = await service.verify('pay-1', financeOfficer);
+    const result = await service.verify('pay-1', financeDirector);
 
     expect(prisma.payment.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'VERIFIED', verifiedById: 'finance-1' }) }),
@@ -74,13 +74,13 @@ describe('PaymentsService', () => {
     const { service, prisma } = buildService();
     prisma.payment.findUnique.mockResolvedValue({ ...pendingPayment, status: 'VERIFIED' });
 
-    await expect(service.verify('pay-1', financeOfficer)).rejects.toThrow(BadRequestException);
+    await expect(service.verify('pay-1', financeDirector)).rejects.toThrow(BadRequestException);
   });
 
   it('requires a reason to reject a payment (enforced by DTO validation upstream, and status-checked here)', async () => {
     const { service } = buildService();
 
-    await service.reject('pay-1', { reason: 'Bank reference does not match records.' }, financeOfficer);
+    await service.reject('pay-1', { reason: 'Bank reference does not match records.' }, financeDirector);
     // No throw = success; explicit reason is required by RejectPaymentDto's @MinLength at the controller boundary.
   });
 });

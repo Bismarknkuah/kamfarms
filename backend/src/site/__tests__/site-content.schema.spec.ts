@@ -140,7 +140,7 @@ describe('brand, company contact details and sign-in options', () => {
   it('fills in the brand and sign-in options for a page saved before they existed', () => {
     const out = sanitizeSiteContent(valid());
     expect(out.brand).toEqual({ name: 'KAM', subtitle: 'TRADING & FARMS LTD.', logoMediaId: null });
-    expect(out.signin).toEqual({ showDemoAccounts: false, notice: '' });
+    expect(out.signin).toEqual({ showDemoAccounts: true, notice: '' });
     expect(out.contact.details).toEqual([]);
   });
   it('accepts a brand name, a subtitle and an uploaded logo, and lets the subtitle be emptied on purpose', () => {
@@ -166,8 +166,11 @@ describe('brand, company contact details and sign-in options', () => {
   it('limits the contact lines to twelve', () => {
     invalid(valid({ contact: { heading: 'x', details: Array.from({ length: 13 }, (_, i) => ({ label: `L${i}`, value: 'v' })), locations: [] } }), /too many entries \(at most 12\)/);
   });
-  it('shows the demo accounts only when explicitly told to, never by accident', () => {
-    for (const v of [undefined, false, 'true', 1, null]) expect(sanitizeSiteContent(valid({ signin: { showDemoAccounts: v } })).signin.showDemoAccounts).toBe(false);
+  it('shows the demo accounts until the Administrator turns them off, and only a plain true or false is a switch', () => {
+    expect(sanitizeSiteContent(valid()).signin.showDemoAccounts).toBe(true);
+    expect(sanitizeSiteContent(valid({ signin: { showDemoAccounts: undefined } })).signin.showDemoAccounts).toBe(true);
+    expect(sanitizeSiteContent(valid({ signin: { showDemoAccounts: false } })).signin.showDemoAccounts).toBe(false);
+    for (const v of ['true', 'false', 1, 0, null]) expect(sanitizeSiteContent(valid({ signin: { showDemoAccounts: v } })).signin.showDemoAccounts).toBe(false);
     expect(sanitizeSiteContent(valid({ signin: { showDemoAccounts: true, notice: ' Maintenance tonight ' } })).signin).toEqual({ showDemoAccounts: true, notice: 'Maintenance tonight' });
     invalid(valid({ signin: { notice: 'x'.repeat(301) } }), /signin.notice: is too long/);
   });

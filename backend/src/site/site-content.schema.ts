@@ -239,7 +239,9 @@ export function sanitizeSiteContent(input: unknown): SiteContent {
       logoMediaId: logo as string | null,
     },
     signin: {
-      showDemoAccounts: signin.showDemoAccounts === true,
+      // On until the Administrator turns it off (Control Center, or Homepage > Sign-in page): the one-click demo
+      // buttons are how the team tests each role. Only a plain true/false is a switch; anything else is off.
+      showDemoAccounts: signin.showDemoAccounts === undefined ? true : signin.showDemoAccounts === true,
       notice: text(signin.notice, 'signin.notice', 300),
     },
   };

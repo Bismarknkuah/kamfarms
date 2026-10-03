@@ -21,25 +21,11 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
   {
     code: 'ADMIN',
     name: 'System Administrator',
-    // settings.manage removed, then reintroduced here with a real
-    // capability behind it this time: configuring the notification
-    // sender identity (email/phone outgoing messages come from) - the
-    // original grant gated nothing anywhere in the backend at all.
-    // masterdata.manage now has a real, working page behind it too
-    // (Master Data) - previously granted with no UI to actually use
-    // it at all. messages.send added - a real, confirmed gap found
-    // during a full cross-role audit: Admin could see the Messages
-    // nav item (it has no permission gate at all) but could never
-    // actually send anything, only ever receive - every other role
-    // except Auditor already held this.
-    permissionCodes: [
-      'dashboard.view', 'users.manage', 'roles.manage', 'permissions.manage', 'messages.send',
-      'settings.manage', 'audit.view', 'backup.manage', 'reset.request', 'reset.execute',
-      'reports.view', 'reports.export', 'farm.view', 'farm.create', 'farm.update', 'farm.delete',
-      'warehouse.view', 'warehouse.create', 'warehouse.update', 'warehouse.delete', 'milling.view',
-      'milling.manage', 'organization.manage', 'masterdata.manage', 'machine.view', 'machine.manage',
-      'site.manage',
-    ],
+    // The System Administrator holds EVERY permission in the catalog, not a hand-picked list, so a permission
+    // added later can never leave the Administrator locked out of the screen it guards. The server also grants
+    // this at sign-in (backend/src/auth/administrator-access.ts), so there is no gap between a new server
+    // version starting and this sync running.
+    permissionCodes: PERMISSION_CATALOG.map((p) => p.code),
   },
   {
     code: 'MD',

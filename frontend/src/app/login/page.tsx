@@ -354,7 +354,7 @@ export default function LoginPage() {
           Secure &middot; Your session stays on this device only &middot; Sign out when you leave a shared computer
         </p>
 
-        {/* Quick demo access: off unless the System Administrator turns it on (Homepage > Sign-in page) */}
+        {/* Quick demo access, for testing each role in one click. On until the System Administrator turns it off (Admin dashboard, or Homepage > Sign-in page) */}
         {content.signin.showDemoAccounts && (
           <>
         <div className="mt-6 rounded-2xl border border-husk-300 bg-husk-100/50 p-5">

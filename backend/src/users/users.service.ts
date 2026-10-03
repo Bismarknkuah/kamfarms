@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ADMINISTRATOR_ROLE_CODE } from '../auth/administrator-access';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -219,6 +220,9 @@ export class UsersService {
       include: { roles: { include: { role: true } } },
     });
     if (!before) throw new NotFoundException('User not found.');
+    if (dto.status && dto.status !== 'ACTIVE' && before.roles.some((r) => r.role.code === ADMINISTRATOR_ROLE_CODE)) {
+      await this.assertAnotherActiveAdministrator(id);
+    }
     // Same real, server-side enforcement as create(): a team.manage-
     // only holder can only edit or deactivate someone already within
     // their own team, never an arbitrary account by id.
@@ -279,6 +283,7 @@ export class UsersService {
     }
     const role = await this.prisma.role.findUnique({ where: { code: roleCode } });
     if (!role) throw new NotFoundException('Role not found.');
+    if (roleCode === ADMINISTRATOR_ROLE_CODE) await this.assertAnotherActiveAdministrator(userId);
 
     await this.prisma.userRole.deleteMany({ where: { userId, roleId: role.id } });
 
@@ -291,6 +296,16 @@ export class UsersService {
     });
 
     return this.findById(userId);
+  }
+
+  /** The system must always keep at least one active System Administrator, or nobody could manage it any more. */
+  private async assertAnotherActiveAdministrator(excludingUserId: string) {
+    const others = await this.prisma.userRole.count({
+      where: { role: { code: ADMINISTRATOR_ROLE_CODE }, userId: { not: excludingUserId }, user: { status: 'ACTIVE', deletedAt: null } },
+    });
+    if (others === 0) {
+      throw new BadRequestException('There must always be at least one active System Administrator. Make someone else an Administrator first.');
+    }
   }
 
   private sanitize(user: Record<string, unknown>) {

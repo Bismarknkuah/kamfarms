@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtPayload } from '../types/jwt-payload';
 import { AuthenticatedUser, ResolvedRole } from '../types/authenticated-user';
+import { grantAdministratorAccess } from '../administrator-access';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -39,12 +40,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Account is not active.');
     }
 
-    const roles: ResolvedRole[] = user.roles.map((ur) => ({
-      roleId: ur.roleId,
-      roleCode: ur.role.code,
-      permissions: ur.role.permissions.map((rp) => rp.permission.code),
-      scopes: ur.scopes.map((s) => ({ scopeType: s.scopeType, scopeId: s.scopeId })),
-    }));
+    // The System Administrator is widened to every permission and every place here (see administrator-access.ts).
+    const roles: ResolvedRole[] = grantAdministratorAccess(
+      user.roles.map((ur) => ({
+        roleId: ur.roleId,
+        roleCode: ur.role.code,
+        permissions: ur.role.permissions.map((rp) => rp.permission.code),
+        scopes: ur.scopes.map((s) => ({ scopeType: s.scopeType, scopeId: s.scopeId })),
+      })),
+    );
 
     const permissionCodes = new Set<string>();
     roles.forEach((r) => r.permissions.forEach((p) => permissionCodes.add(p)));

@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ADMINISTRATOR_ROLE_CODE } from '../auth/administrator-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateRoleDto } from './dto/create-role.dto';
@@ -90,6 +91,9 @@ export class RolesService {
 
   async updatePermissions(code: string, dto: UpdateRolePermissionsDto, actor: AuthenticatedUser) {
     const role = await this.findByCode(code);
+    if (role.code === ADMINISTRATOR_ROLE_CODE) {
+      throw new BadRequestException('The System Administrator role always holds every permission, so it cannot be changed. Create or copy another role if you need a limited one.');
+    }
     const permissions = await this.prisma.permission.findMany({ where: { code: { in: dto.permissionCodes } } });
     if (permissions.length !== dto.permissionCodes.length) {
       throw new BadRequestException('One or more permission codes are unknown.');

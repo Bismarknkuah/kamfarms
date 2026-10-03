@@ -1,4 +1,5 @@
 import { MeResponse } from './api-client';
+import { canDo } from './access';
 
 export interface NavItem {
   label: string;
@@ -286,9 +287,30 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export function hasNavPermission(me: MeResponse, permission?: string | string[]): boolean {
-  if (!permission) return true;
-  const codes = Array.isArray(permission) ? permission : [permission];
-  return codes.some((code) => me.permissions.includes(code));
+  return canDo(me, permission);
+}
+
+/**
+ * The System Administrator does not get the flat list the other roles share. Their menu is in three groups, with the
+ * things only they run first. Each entry is resolved against NAV_ITEMS, so a page's label, icon and description are
+ * still defined in one place. Pages that exist for a single role's daily work (log paddy intake, dispatch, stock
+ * correction requests, My Office, the MD/CEO Oversight page) are left out on purpose.
+ */
+export const ADMIN_NAV_SECTIONS: { title: string; hrefs: string[] }[] = [
+  { title: 'Administration', hrefs: ['/dashboard', '/users', '/roles', '/organization', '/master-data', '/settings', '/site-editor', '/audit-log', '/admin'] },
+  { title: 'Company data', hrefs: ['/reports', '/analytics', '/trace', '/inventory', '/farms', '/warehouses', '/shipments', '/sales', '/finance', '/expenses', '/paddy-entries', '/deliveries', '/production', '/packaging', '/quality'] },
+  { title: 'Workspace', hrefs: ['/messages', '/tasks', '/notifications', '/assistant'] },
+];
+
+export function adminNavSections(): { title: string; items: NavItem[] }[] {
+  return ADMIN_NAV_SECTIONS.map((section) => ({
+    title: section.title,
+    items: section.hrefs
+      .map((href) => NAV_ITEMS.find((item) => item.href === href))
+      .filter((item): item is NavItem => Boolean(item))
+      // The Administrator's home is a control center, not the "Overview" every other role has.
+      .map((item) => (item.href === '/dashboard' ? { ...item, label: 'Control center' } : item)),
+  }));
 }
 
 /** Finds the single location a person is individually scoped to (a Farm

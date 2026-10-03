@@ -46,7 +46,8 @@ import {
 import { MeResponse, authApi } from '@/lib/api-client';
 import { clearRefreshToken, readRefreshToken } from '@/lib/session';
 import { InstallPrompt } from './InstallPrompt';
-import { NAV_ITEMS, hasNavPermission, QUICK_ACTIONS_BY_ROLE } from '@/lib/nav-items';
+import { NAV_ITEMS, adminNavSections, hasNavPermission, QUICK_ACTIONS_BY_ROLE, type NavItem } from '@/lib/nav-items';
+import { isAdministrator } from '@/lib/access';
 import { CallOverlay } from './CallOverlay';
 import { TopBar } from './TopBar';
 
@@ -123,12 +124,17 @@ export function DashboardShell({ me, children }: { me: MeResponse; children: Rea
   useEffect(() => { setAccessToken(sessionStorage.getItem('kam_roms_access_token') ?? ''); }, []);
 
   const myRoleCodes = me.roles.map((r) => r.code);
-  const visibleItems = NAV_ITEMS.filter(
-    (item) =>
-      hasNavPermission(me, item.permission) &&
-      !item.hideForRoles?.some((code) => myRoleCodes.includes(code)) &&
-      (!item.onlyForRoles || item.onlyForRoles.some((code) => myRoleCodes.includes(code))),
-  );
+  // The System Administrator has their own menu, in groups (see ADMIN_NAV_SECTIONS); everyone else shares the flat list.
+  const adminMode = isAdministrator(me);
+  const adminSections = adminMode ? adminNavSections() : [];
+  const visibleItems = adminMode
+    ? adminSections.flatMap((section) => section.items)
+    : NAV_ITEMS.filter(
+        (item) =>
+          hasNavPermission(me, item.permission) &&
+          !item.hideForRoles?.some((code) => myRoleCodes.includes(code)) &&
+          (!item.onlyForRoles || item.onlyForRoles.some((code) => myRoleCodes.includes(code))),
+      );
   // The "multi task bar" - quick shortcuts for the actions each role
   // does most often. Re-derived from visibleItems, never the raw map
   // directly: a role's quick-action hrefs are only ever shown here if
@@ -156,6 +162,23 @@ export function DashboardShell({ me, children }: { me: MeResponse; children: Rea
     router.replace('/login');
   };
 
+  const renderNavItem = (item: NavItem) => {
+    const active = pathname === item.href;
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        onClick={() => setDrawerOpen(false)}
+        className={`mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+          active ? 'bg-husk-500 text-white' : 'text-paddy-100 hover:bg-paddy-700'
+        }`}
+      >
+        <NavIcon name={item.icon} className="h-4 w-4 shrink-0" />
+        {item.label}
+      </Link>
+    );
+  };
+
   const sidebarContent = (
     <div className="flex h-full flex-col bg-paddy-900 text-rice-50">
       <div className="border-b border-paddy-700 p-5">
@@ -163,6 +186,11 @@ export function DashboardShell({ me, children }: { me: MeResponse; children: Rea
           KAM<span className="text-husk-300">-ROMS</span>
         </Link>
         <p className="mt-0.5 text-xs text-paddy-300">KAM Trading and Farms Limited</p>
+        {adminMode && (
+          <span data-testid="admin-badge" className="mt-2 inline-block rounded-full bg-husk-500 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-white">
+            Administrator console
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-3 border-b border-paddy-700 p-4">
@@ -176,22 +204,14 @@ export function DashboardShell({ me, children }: { me: MeResponse; children: Rea
       </div>
 
       <nav className="flex-1 overflow-y-auto p-3">
-        {visibleItems.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setDrawerOpen(false)}
-              className={`mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-                active ? 'bg-husk-500 text-white' : 'text-paddy-100 hover:bg-paddy-700'
-              }`}
-            >
-              <NavIcon name={item.icon} className="h-4 w-4 shrink-0" />
-              {item.label}
-            </Link>
-          );
-        })}
+        {adminMode
+          ? adminSections.map((section) => (
+              <div key={section.title} data-testid="admin-nav-section" className="mb-3">
+                <p className="mb-1 px-3 pt-2 text-[11px] font-semibold uppercase tracking-widest text-husk-300">{section.title}</p>
+                {section.items.map(renderNavItem)}
+              </div>
+            ))
+          : visibleItems.map(renderNavItem)}
       </nav>
 
       <div className="border-t border-paddy-700 p-3">

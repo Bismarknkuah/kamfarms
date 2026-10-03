@@ -76,3 +76,31 @@ describe('RolesService.delete', () => {
     expect(prisma.role.delete).toHaveBeenCalledWith({ where: { id: 'r2' } });
   });
 });
+
+describe('RolesService.updatePermissions - the System Administrator role', () => {
+  const actor = { id: 'admin-1' } as AuthenticatedUser;
+
+  function buildService(code: string) {
+    const prisma = {
+      role: { findUnique: jest.fn().mockResolvedValue({ id: 'r1', code, name: code, description: null, isSystemRole: true, permissions: [] }) },
+      permission: { findMany: jest.fn().mockResolvedValue([{ id: 'p1', code: 'reports.view' }]) },
+      rolePermission: { deleteMany: jest.fn(), createMany: jest.fn() },
+      $transaction: jest.fn().mockResolvedValue([]),
+    };
+    const audit = { record: jest.fn() } as unknown as AuditService;
+    return { service: new RolesService(prisma as any, audit), prisma, audit };
+  }
+
+  it('refuses to narrow the Administrator, changes nothing and records nothing', async () => {
+    const { service, prisma, audit } = buildService('ADMIN');
+    await expect(service.updatePermissions('ADMIN', { permissionCodes: ['reports.view'] }, actor)).rejects.toThrow(/always holds every permission/);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect((audit as any).record).not.toHaveBeenCalled();
+  });
+
+  it('still lets every other role be edited exactly as before', async () => {
+    const { service, prisma } = buildService('MD');
+    await service.updatePermissions('MD', { permissionCodes: ['reports.view'] }, actor);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+});

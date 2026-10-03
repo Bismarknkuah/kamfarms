@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { UsersService } from '../users.service';
 import { AuditService } from '../../audit/audit.service';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user';
@@ -192,5 +193,78 @@ describe('UsersService.create - team.manage scoping', () => {
     const admin = actor('ADMIN', ['users.manage']);
 
     await expect(service.create({ ...baseDto } as any, admin, {})).resolves.toBeDefined();
+  });
+});
+
+describe('UsersService - the last active System Administrator can never be removed or disabled', () => {
+  const actor: AuthenticatedUser = {
+    id: 'admin-1', email: 'a@kam.local', firstName: 'A', lastName: 'B', status: 'ACTIVE', mustChangePassword: false,
+    roles: [{ roleId: 'r-admin', roleCode: 'ADMIN', permissions: [], scopes: [] }], permissionCodes: new Set(['users.manage']),
+  };
+
+  function build(otherActiveAdmins: number, target: { roles: string[] }) {
+    const prisma = {
+      role: { findUnique: jest.fn().mockResolvedValue({ id: 'role-admin', code: 'ADMIN' }) },
+      userRole: { count: jest.fn().mockResolvedValue(otherActiveAdmins), deleteMany: jest.fn() },
+      user: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'u2', roles: target.roles.map((code) => ({ role: { code } })) }),
+        update: jest.fn().mockResolvedValue({ id: 'u2' }),
+      },
+    };
+    const audit = { record: jest.fn() } as unknown as AuditService;
+    const service = new UsersService(prisma as any, audit);
+    jest.spyOn(service, 'findById').mockResolvedValue({} as any);
+    return { service, prisma };
+  }
+
+  it('refuses to take the Administrator role from the only other active Administrator', async () => {
+    const { service, prisma } = build(0, { roles: ['ADMIN'] });
+    await expect(service.removeRole('u2', 'ADMIN', actor)).rejects.toThrow(BadRequestException);
+    await expect(service.removeRole('u2', 'ADMIN', actor)).rejects.toThrow(/at least one active System Administrator/);
+    expect(prisma.userRole.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('allows it when someone else is still an active Administrator', async () => {
+    const { service, prisma } = build(1, { roles: ['ADMIN'] });
+    await service.removeRole('u2', 'ADMIN', actor);
+    expect(prisma.userRole.deleteMany).toHaveBeenCalled();
+  });
+
+  it('does not count the person being changed, and only counts active, not-deleted Administrators', async () => {
+    const { service, prisma } = build(1, { roles: ['ADMIN'] });
+    await service.removeRole('u2', 'ADMIN', actor);
+    expect(prisma.userRole.count).toHaveBeenCalledWith({
+      where: { role: { code: 'ADMIN' }, userId: { not: 'u2' }, user: { status: 'ACTIVE', deletedAt: null } },
+    });
+  });
+
+  it('does not check anything when removing any other role', async () => {
+    const { service, prisma } = build(0, { roles: ['MD'] });
+    await service.removeRole('u2', 'MD', actor);
+    expect(prisma.userRole.count).not.toHaveBeenCalled();
+    expect(prisma.userRole.deleteMany).toHaveBeenCalled();
+  });
+
+  it('refuses to disable the only other active Administrator', async () => {
+    const { service, prisma } = build(0, { roles: ['ADMIN'] });
+    await expect(service.update('u2', { status: 'DISABLED' } as any, actor, {})).rejects.toThrow(/at least one active System Administrator/);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('allows disabling an Administrator when another active one remains', async () => {
+    const { service, prisma } = build(1, { roles: ['ADMIN'] });
+    await service.update('u2', { status: 'DISABLED' } as any, actor, {});
+    expect(prisma.user.update).toHaveBeenCalled();
+  });
+
+  it('never blocks disabling someone who is not an Administrator, and never blocks re-activating or editing a name', async () => {
+    const plain = build(0, { roles: ['SALES_OFFICER'] });
+    await plain.service.update('u2', { status: 'DISABLED' } as any, actor, {});
+    expect(plain.prisma.userRole.count).not.toHaveBeenCalled();
+    const admin = build(0, { roles: ['ADMIN'] });
+    await admin.service.update('u2', { status: 'ACTIVE' } as any, actor, {});
+    await admin.service.update('u2', { firstName: 'Ama' } as any, actor, {});
+    expect(admin.prisma.userRole.count).not.toHaveBeenCalled();
+    expect(admin.prisma.user.update).toHaveBeenCalledTimes(2);
   });
 });

@@ -12,7 +12,7 @@ import { FinanceDesk, ReleaseDesk, DeliveryDesk, MyOrdersDesk } from '@/componen
 import { roleLabel } from '@/lib/role-labels';
 import { Wheat, Truck, Factory, Package, DollarSign } from 'lucide-react';
 import { WatchlistCard } from '@/components/WatchlistCard';
-import { AdminControlCenter } from '@/components/AdminControlCenter';
+import { AdminDashboard } from '@/components/admin/AdminDashboard';
 import {
   reportsApi,
   ExecutiveSummary,
@@ -28,10 +28,6 @@ import {
   invoicesApi,
   systemResetApi,
   ResetRequest,
-  backupApi,
-  masterDataApi,
-  Product,
-  PackagingSize,
   callsApi,
   CallRequest,
   Invoice,
@@ -40,7 +36,6 @@ import {
   shipmentsApi,
   productionApi,
   usersApi,
-  AppUser,
   auditApi,
   AuditLogEntry,
   farmsApi,
@@ -206,8 +201,6 @@ export default function DashboardPage() {
   // data having nothing to do with their actual job. System
   // administration is about the system itself - who has access, and
   // what's recently changed - not rice inventory.
-  const [adminUsers, setAdminUsers] = useState<AppUser[]>([]);
-  const [adminAuditLog, setAdminAuditLog] = useState<AuditLogEntry[]>([]);
   // Auditor's own dashboard - the last role that still fell into the
   // generic company summary with nothing about its actual job. An
   // Auditor's day is the audit trail itself, so it leads here: who did
@@ -221,10 +214,6 @@ export default function DashboardPage() {
   // health, and master-data counts, all linking straight to the real
   // pages rather than just restating "you have access" with no numbers
   // behind it.
-  const [adminResetRequests, setAdminResetRequests] = useState<ResetRequest[]>([]);
-  const [adminBackupStatus, setAdminBackupStatus] = useState<{ lastSuccess: { completedAt: string | null } | null; lastFailure: { completedAt: string | null } | null } | null>(null);
-  const [adminProducts, setAdminProducts] = useState<Product[]>([]);
-  const [adminPackagingSizes, setAdminPackagingSizes] = useState<PackagingSize[]>([]);
   // Sales Officer's own order-status overview - a real, confirmed fix:
   // they should see their own orders' progress (delivered, pending,
   // rejected/cancelled) and what's actually available to sell, not
@@ -281,6 +270,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!accessToken || !me) return;
+    // The System Administrator's page (AdminDashboard) loads its own data, so none of the other roles' desks and
+    // summaries are fetched for them. Without this, an Administrator, who now passes every permission check, would
+    // trigger every one of those requests for a page that never shows them.
+    if (me.roles.some((r) => r.code === 'ADMIN')) return;
     // Fetched unconditionally now - reports.view is held by every
     // role (confirmed directly), so this is always safe to call. The
     // previous version tried to skip this as an optimization for a
@@ -483,15 +476,6 @@ export default function DashboardPage() {
       auditApi.list(accessToken).then((res) => setAuditorLog(res.items)).catch((err: unknown) =>
         setAuditorLogError(err instanceof ApiError ? err.message : 'Failed to load the audit trail.'),
       );
-    }
-
-    if (roleCodes.includes('ADMIN')) {
-      usersApi.list(accessToken).then((res) => setAdminUsers(res.items)).catch(() => {});
-      auditApi.list(accessToken).then((res) => setAdminAuditLog(res.items)).catch(() => {});
-      systemResetApi.list(accessToken).then(setAdminResetRequests).catch(() => {});
-      backupApi.status(accessToken).then(setAdminBackupStatus).catch(() => {});
-      masterDataApi.products(accessToken).then(setAdminProducts).catch(() => {});
-      masterDataApi.packagingSizes(accessToken).then(setAdminPackagingSizes).catch(() => {});
     }
 
     if (roleCodes.includes('WAREHOUSE_MANAGER')) {
@@ -753,6 +737,16 @@ export default function DashboardPage() {
   const isAdmin = me.roles.some((r) => r.code === 'ADMIN');
   const isSalesOfficer = me.roles.some((r) => r.code === 'SALES_OFFICER');
   const isAuditor = me.roles.some((r) => r.code === 'AUDITOR');
+
+  // The System Administrator has a page of their own (control center, demo switch, resets, backups), not the
+  // desks and task strips the other roles share.
+  if (isAdmin && accessToken) {
+    return (
+      <DashboardShell me={me}>
+        <AdminDashboard me={me} accessToken={accessToken} />
+      </DashboardShell>
+    );
+  }
 
   return (
     <DashboardShell me={me}>
@@ -1876,30 +1870,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-          {isAdmin && accessToken && <AdminControlCenter accessToken={accessToken} />}
-
-          {isAdmin && (
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Link href="/admin" className="rounded-2xl border border-paddy-100 bg-white p-5 transition hover:border-paddy-500">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-500">System reset requests</p>
-                <p className="mt-2 font-display text-lg text-paddy-900">{adminResetRequests.filter((r) => r.status === 'APPROVED').length > 0
-                    ? `${adminResetRequests.filter((r) => r.status === 'APPROVED').length} ready to execute`
-                    : `${adminResetRequests.filter((r) => !['REJECTED', 'CANCELLED', 'EXECUTED'].includes(r.status)).length} in progress`}
-                </p>
-              </Link>
-              <Link href="/admin" className="rounded-2xl border border-paddy-100 bg-white p-5 transition hover:border-paddy-500">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Last successful backup</p>
-                <p className="mt-2 font-display text-lg text-paddy-900">{adminBackupStatus?.lastSuccess?.completedAt ? new Date(adminBackupStatus.lastSuccess.completedAt).toLocaleDateString() : 'None recorded'}
-                </p>
-              </Link>
-              <Link href="/master-data" className="rounded-2xl border border-paddy-100 bg-white p-5 transition hover:border-paddy-500">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Master data</p>
-                <p className="mt-2 font-display text-lg text-paddy-900">{adminProducts.filter((p) => p.isActive).length} products · {adminPackagingSizes.filter((s) => s.isActive).length} sizes active
-                </p>
-              </Link>
-            </div>
-          )}
-
           {isAuditor && (
             <div className="mb-6 rounded-2xl border-2 border-paddy-900 bg-white p-5">
               <div className="flex items-start justify-between gap-4">
@@ -1930,22 +1900,6 @@ export default function DashboardPage() {
               <div className="mt-4 flex flex-wrap gap-2 border-t border-paddy-100 pt-4">
                 {[['/inventory','Inventory'],['/finance','Finance'],['/sales','Sales'],['/production','Production'],['/organization','Organization']].map(([href,label]) => (
                   <Link key={href} href={href} className="rounded-full border border-paddy-100 px-3 py-1.5 text-xs font-medium text-paddy-900 hover:bg-paddy-50">{label}</Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {isAdmin && adminAuditLog.length > 0 && (
-            <div className="mt-4 rounded-2xl border border-paddy-100 bg-white p-5">
-              <h2 className="font-display text-lg text-paddy-900">Recent system activity</h2>
-              <div className="mt-3 space-y-1.5">
-                {adminAuditLog.slice(0, 8).map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between rounded-lg bg-rice-50 px-3 py-2 text-sm">
-                    <span className="text-ink-900">
-                      {entry.user ? `${entry.user.firstName} ${entry.user.lastName}` : 'System'} - {entry.action}
-                    </span>
-                    <span className="text-xs text-ink-500">{new Date(entry.createdAt).toLocaleString()}</span>
-                  </div>
                 ))}
               </div>
             </div>

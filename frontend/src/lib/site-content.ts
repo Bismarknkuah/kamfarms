@@ -124,8 +124,9 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
     signInLabel: 'KAM team and partners: sign in',
   },
   brand: { name: 'KAM', subtitle: 'TRADING & FARMS LTD.', logoMediaId: null },
-  // Off until the System Administrator turns it on: the demo buttons use a published password.
-  signin: { showDemoAccounts: false, notice: '' },
+  // On until the System Administrator turns it off (Admin dashboard, or Homepage > Sign-in page): the one-click
+  // demo buttons are how the team tests each role. Switch off before real staff use the system.
+  signin: { showDemoAccounts: true, notice: '' },
 };
 
 /** Saved content laid over the defaults, section by section, so a field added later never leaves a hole. */
@@ -151,6 +152,20 @@ export function mergeSiteContent(stored: unknown): SiteContent {
 }
 
 /** Where a slide's picture or video comes from, or null if it has no source. */
+/** Blank rows are dropped rather than rejected, so an unused "Add" never blocks saving. */
+export function cleanSiteContentForSave(d: SiteContent): SiteContent {
+  const lines = (a: string[]) => a.map((s) => s.trim()).filter(Boolean);
+  return {
+    ...d,
+    hero: { ...d.hero, checklist: lines(d.hero.checklist) },
+    stats: d.stats.filter((s) => s.label.trim() || s.value.trim()),
+    about: { ...d.about, paragraphs: lines(d.about.paragraphs), highlights: lines(d.about.highlights), work: d.about.work.filter((w) => w.label.trim() || w.detail.trim()) },
+    operations: { ...d.operations, items: d.operations.items.filter((i) => i.title.trim() || i.body.trim()) },
+    products: { ...d.products, sizes: lines(d.products.sizes), highlights: lines(d.products.highlights) },
+    contact: { ...d.contact, details: d.contact.details.filter((x) => x.label.trim() || x.value.trim()), locations: d.contact.locations.map((l) => ({ ...l, phones: lines(l.phones) })).filter((l) => l.name.trim() || l.phones.length > 0) },
+  };
+}
+
 export function slideSrc(slide: SiteSlide): string | null {
   if (slide.mediaId) return siteMediaUrl(slide.mediaId);
   return slide.url || null;

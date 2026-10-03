@@ -97,4 +97,6 @@ EXPOSE 4000
 # Seeds, Agrochemicals) live in seed data too, and needed the same
 # kind of narrow, idempotent, every-deploy sync rather than a one-time
 # manual seed run to actually reach the live database.
-CMD ["sh", "-c", "npx prisma@5.22.0 db push --schema=prisma/schema.prisma --accept-data-loss --skip-generate && npx ts-node --transpile-only prisma/sync-permissions.ts && npx ts-node --transpile-only prisma/retire-roles.ts && npx ts-node --transpile-only prisma/sync-expense-categories.ts && node backend/dist/main.js"]
+# A sync step that fails is logged loudly and the API STARTS ANYWAY. Before, one failing step stopped the whole
+# chain, so the API never came up at all. Only the schema push is required: without the tables there is nothing to serve.
+CMD ["sh", "-c", "npx prisma@5.22.0 db push --schema=prisma/schema.prisma --accept-data-loss --skip-generate && { npx ts-node --transpile-only prisma/sync-permissions.ts || echo '[startup] WARNING: the permission sync failed. Starting the API anyway. Read the lines above.'; } && { npx ts-node --transpile-only prisma/retire-roles.ts || echo '[startup] WARNING: retire-roles failed. Starting the API anyway.'; } && { npx ts-node --transpile-only prisma/sync-expense-categories.ts || echo '[startup] WARNING: the expense category sync failed. Starting the API anyway.'; } && node backend/dist/main.js"]

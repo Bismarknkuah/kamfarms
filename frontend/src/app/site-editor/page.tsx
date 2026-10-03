@@ -5,7 +5,7 @@ import { ExternalLink } from 'lucide-react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ApiError, type SiteMediaItem, siteApi } from '@/lib/api-client';
-import { type SiteContent, mergeSiteContent, newEntryId } from '@/lib/site-content';
+import { type SiteContent, cleanSiteContentForSave, mergeSiteContent, newEntryId } from '@/lib/site-content';
 import { AddButton, Panel, RowButtons, StringList, TextField, move, smallButton } from '@/components/site-editor/fields';
 import { SlideshowEditor } from '@/components/site-editor/SlideshowEditor';
 import { LogoPicker } from '@/components/site-editor/LogoPicker';
@@ -14,20 +14,6 @@ const SECTIONS = [
   ['slideshow', 'Slideshow'], ['brand', 'Brand and logo'], ['hero', 'Top of the page'], ['numbers', 'Numbers'], ['about', 'About us'],
   ['operations', 'What we do'], ['product', 'Product'], ['contact-details', 'Contact details'], ['locations', 'Sales points'], ['signin', 'Sign-in page'], ['footer', 'Footer'],
 ] as const;
-
-/** Blank rows are dropped rather than rejected, so an unused "Add" never blocks saving. */
-function cleanForSave(d: SiteContent): SiteContent {
-  const lines = (a: string[]) => a.map((s) => s.trim()).filter(Boolean);
-  return {
-    ...d,
-    hero: { ...d.hero, checklist: lines(d.hero.checklist) },
-    stats: d.stats.filter((s) => s.label.trim() || s.value.trim()),
-    about: { ...d.about, paragraphs: lines(d.about.paragraphs), highlights: lines(d.about.highlights), work: d.about.work.filter((w) => w.label.trim() || w.detail.trim()) },
-    operations: { ...d.operations, items: d.operations.items.filter((i) => i.title.trim() || i.body.trim()) },
-    products: { ...d.products, sizes: lines(d.products.sizes), highlights: lines(d.products.highlights) },
-    contact: { ...d.contact, details: d.contact.details.filter((x) => x.label.trim() || x.value.trim()), locations: d.contact.locations.map((l) => ({ ...l, phones: lines(l.phones) })).filter((l) => l.name.trim() || l.phones.length > 0) },
-  };
-}
 
 const card = 'rounded-xl border border-paddy-100 p-4';
 
@@ -103,7 +89,7 @@ export default function SiteEditorPage() {
     setSaving(true);
     setStatus(null);
     try {
-      const res = await siteApi.saveContent(accessToken, cleanForSave(draft));
+      const res = await siteApi.saveContent(accessToken, cleanSiteContentForSave(draft));
       applySaved(res);
       await refreshMedia();
       setStatus({ kind: 'ok', text: 'Saved. The homepage shows your changes straight away.' });
@@ -300,7 +286,7 @@ export default function SiteEditorPage() {
               <TextField label="Notice above the form (optional)" value={draft.signin.notice} max={300} rows={2} onChange={(v) => setSignin({ notice: v })} help="For example: the system will be unavailable on Sunday from 6 to 8 pm. Leave empty to show nothing." />
               <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-sm text-ink-700">
                 <input type="checkbox" checked={draft.signin.showDemoAccounts} onChange={(e) => setSignin({ showDemoAccounts: e.target.checked })} className="mt-1 h-4 w-4 rounded border-paddy-100" />
-                <span><span className="font-medium text-ink-900">Show the demo account buttons</span><span className="mt-0.5 block text-ink-500">Lets anyone who opens the sign-in page sign in as a demo user without a password. Keep this OFF on the live system unless you are giving a demonstration.</span></span>
+                <span><span className="font-medium text-ink-900">Show the demo account buttons</span><span className="mt-0.5 block text-ink-500">Lets anyone who opens the sign-in page sign in as a demo user without a password. It is on by default so you can test every role. Turn it OFF before real staff use the system. You can also switch it from your Administrator dashboard.</span></span>
               </label>
             </Panel>
 

@@ -18,7 +18,7 @@ The public homepage (the page visitors see at the website's address) can be chan
 | Product | Name, tagline, description, bag sizes, selling points and button text. |
 | Contact details | The company's own address, phone numbers, WhatsApp, email and links, shown as tap-to-use cards above the sales points. |
 | Sales points | Add a new place with up to four phone numbers (each becomes a tap-to-call link), edit or remove existing ones. |
-| Sign-in page | A notice shown above the sign-in form, and whether the demo account buttons are offered. **They are off by default**: they sign in without a password and must not be offered on the live system. |
+| Sign-in page | A notice shown above the sign-in form, and whether the demo account buttons are offered. **They are on by default**, so every role can be tested in one click. They sign in with a published password, so switch them off before real staff use the system. The Administrator can flip them from the Admin dashboard without opening this editor. |
 | Footer | Company name, the line under it, and the sign-in button text. |
 
 **Start again** puts the homepage back to its original text and removes the slideshow. Uploaded files are kept.

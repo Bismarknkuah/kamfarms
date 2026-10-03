@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { canDo } from './access';
 import { useRouter } from 'next/navigation';
 import { authApi, MeResponse, ApiError } from './api-client';
 
@@ -48,10 +49,8 @@ export function useCurrentUser() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const hasPermission = (code: string | string[]) => {
-    const codes = Array.isArray(code) ? code : [code];
-    return codes.some((c) => me?.permissions.includes(c) ?? false);
-  };
+  // The System Administrator may do everything (see lib/access.ts); everyone else only what the server listed.
+  const hasPermission = (code: string | string[]) => canDo(me, code);
 
   return { me, accessToken, loading, error, hasPermission };
 }

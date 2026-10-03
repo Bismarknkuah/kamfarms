@@ -263,6 +263,13 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'audit.view',
   },
   {
+    label: 'System settings',
+    href: '/settings',
+    icon: 'sliders-horizontal',
+    description: 'Change the system\'s rules yourself: lockout policy, delivery tolerance, milling and machine checks, who is alerted, and the Watchlist limits.',
+    permission: 'settings.manage',
+  },
+  {
     label: 'Homepage',
     href: '/site-editor',
     icon: 'layout-template',
@@ -342,5 +349,5 @@ export const QUICK_ACTIONS_BY_ROLE: Record<string, string[]> = {
   MD: ['/oversight', '/sales', '/analytics', '/audit-log', '/finance'],
   CEO: ['/oversight', '/sales', '/analytics', '/audit-log', '/finance'],
   AUDITOR: ['/audit-log', '/analytics', '/reports'],
-  ADMIN: ['/users', '/roles', '/site-editor', '/master-data', '/admin'],
+  ADMIN: ['/users', '/roles', '/settings', '/site-editor', '/admin'],
 };

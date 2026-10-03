@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { LocationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -8,13 +8,11 @@ import { scopedLocationIds } from '../common/utils/scope.util';
 import { CreateProductionRecordDto } from './dto/create-production-record.dto';
 import { RejectProductionRecordDto } from './dto/reject-production-record.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { SettingsService, settingNumber, settingRoles } from '../settings/settings.service';
 
 /** Same principle as the meter-reading anomaly alert: whoever
  * supervises Operations Officers, plus the top executives - not
  * everyone who happens to hold milling.view. */
-const MASS_BALANCE_ALERT_ROLE_CODES = ['OPERATIONS_MANAGER', 'MD', 'CEO'];
-const IMPOSSIBLE_OUTPUT_TOLERANCE = 1.005;
-const ABNORMAL_VARIANCE_PERCENT = 5;
 
 @Injectable()
 export class ProductionRecordsService {
@@ -23,6 +21,7 @@ export class ProductionRecordsService {
     private readonly audit: AuditService,
     private readonly ledger: InventoryLedgerService,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   /** Was returning production records from every milling center,
@@ -59,10 +58,10 @@ export class ProductionRecordsService {
     return record;
   }
 
-  private computeMassBalance(paddyProcessedKg: number, recoveredKg: number, brokenKg: number, hullKg: number, wasteKg: number) {
+  private computeMassBalance(paddyProcessedKg: number, recoveredKg: number, brokenKg: number, hullKg: number, wasteKg: number, limits: { impossibleOutputTolerance: number; abnormalVariancePercent: number }) {
     const outputSum = recoveredKg + brokenKg + hullKg + wasteKg;
 
-    if (outputSum > paddyProcessedKg * IMPOSSIBLE_OUTPUT_TOLERANCE) {
+    if (outputSum > paddyProcessedKg * limits.impossibleOutputTolerance) {
       throw new BadRequestException({
         message: `Impossible mass balance: outputs (${outputSum.toFixed(2)} KG) exceed paddy processed (${paddyProcessedKg.toFixed(2)} KG).`,
         errorCode: 'MASS_BALANCE_IMPOSSIBLE',
@@ -70,7 +69,7 @@ export class ProductionRecordsService {
     }
 
     const variancePercent = ((paddyProcessedKg - outputSum) / paddyProcessedKg) * 100;
-    const massBalanceFlag = Math.abs(variancePercent) > ABNORMAL_VARIANCE_PERCENT;
+    const massBalanceFlag = Math.abs(variancePercent) > limits.abnormalVariancePercent;
 
     return {
       recoveryPercent: (recoveredKg / paddyProcessedKg) * 100,
@@ -85,12 +84,17 @@ export class ProductionRecordsService {
     const center = await this.prisma.millingCenter.findUnique({ where: { id: dto.millingCenterId } });
     if (!center || !center.isActive) throw new BadRequestException('Milling center not found or inactive.');
 
+    const limits = {
+      impossibleOutputTolerance: 1 + (await settingNumber(this.settings, 'production.impossible_output_tolerance_percent')) / 100,
+      abnormalVariancePercent: await settingNumber(this.settings, 'production.abnormal_variance_percent'),
+    };
     const { recoveryPercent, brokenPercent, hullPercent, wastePercent, massBalanceFlag } = this.computeMassBalance(
       dto.paddyProcessedKg,
       dto.recoveredRiceKg,
       dto.brokenRiceKg,
       dto.riceHullKg,
       dto.wasteLossKg,
+      limits,
     );
 
     const record = await this.prisma.$transaction(async (tx) => {
@@ -147,8 +151,9 @@ export class ProductionRecordsService {
     // existed but nothing ever told a human, matching exactly the same
     // gap the meter-reading anomaly alert closed last batch.
     if (record.massBalanceFlag) {
+      const alertRoles = await settingRoles(this.settings, 'alerts.mass_balance_roles');
       const supervisors = await this.prisma.user.findMany({
-        where: { deletedAt: null, status: 'ACTIVE', roles: { some: { role: { code: { in: MASS_BALANCE_ALERT_ROLE_CODES } } } } },
+        where: { deletedAt: null, status: 'ACTIVE', roles: { some: { role: { code: { in: alertRoles } } } } },
         select: { id: true },
       });
       if (supervisors.length > 0) {

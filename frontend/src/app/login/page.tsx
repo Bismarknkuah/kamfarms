@@ -8,7 +8,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, Wheat, ArrowLeft } from 'lucide-react';
-import { authApi, ApiError } from '@/lib/api-client';
+import { authApi, ApiError, siteMediaUrl } from '@/lib/api-client';
 import { storeRefreshToken } from '@/lib/session';
 import { SlideshowStage, useSlideshow } from '@/components/SiteSlideshow';
 import { useSiteContent } from '@/lib/site-content';
@@ -183,7 +183,12 @@ export default function LoginPage() {
         </svg>
 
         <Link href="/" className="flex items-center gap-3 text-rice-50" aria-label="KAM-ROMS, back to the homepage">
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-husk-500 text-paddy-900"><Wheat className="h-5 w-5" /></span>
+          {content.brand.logoMediaId ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={siteMediaUrl(content.brand.logoMediaId)} alt="" className="h-11 w-11 rounded-full bg-white object-cover" />
+          ) : (
+            <span className="grid h-11 w-11 place-items-center rounded-full bg-husk-500 text-paddy-900"><Wheat className="h-5 w-5" /></span>
+          )}
           <span className="leading-tight">
             <span className="block font-display text-2xl font-medium">KAM<span className="text-husk-300">-ROMS</span></span>
             <span className="block text-[11px] tracking-[0.14em] text-paddy-100">KAM TRADING AND FARMS LIMITED</span>
@@ -234,6 +239,9 @@ export default function LoginPage() {
         </Link>
 
         <div className="w-full max-w-md">
+        {content.signin.notice && (
+          <p role="status" data-testid="signin-notice" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">{content.signin.notice}</p>
+        )}
         <div className="rounded-2xl border border-paddy-100 bg-white p-8 shadow-sm">
           <div className="mb-7 text-center">
             <p className="font-display text-base italic text-soil-500">KAM-ROMS</p>
@@ -346,7 +354,9 @@ export default function LoginPage() {
           Secure &middot; Your session stays on this device only &middot; Sign out when you leave a shared computer
         </p>
 
-        {/* Quick demo access */}
+        {/* Quick demo access: off unless the System Administrator turns it on (Homepage > Sign-in page) */}
+        {content.signin.showDemoAccounts && (
+          <>
         <div className="mt-6 rounded-2xl border border-husk-300 bg-husk-100/50 p-5">
           <button
             type="button"
@@ -383,6 +393,8 @@ export default function LoginPage() {
             </div>
           )}
         </div>
+          </>
+        )}
         </div>
       </section>
 

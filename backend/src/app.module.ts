@@ -36,6 +36,7 @@ import { AiModule } from './ai/ai.module';
 import { AuditViewerModule } from './audit-viewer/audit-viewer.module';
 import { BackupModule } from './backup/backup.module';
 import { SystemResetModule } from './system-reset/system-reset.module';
+import { SystemOverviewModule } from './system-overview/system-overview.module';
 // Roles, Permissions, Health modules implemented - imports above now resolve.
 
 @Module({
@@ -66,6 +67,7 @@ import { SystemResetModule } from './system-reset/system-reset.module';
     SalesModule,
     SiteModule,
     InsightsModule,
+    SystemOverviewModule,
     FinanceModule,
     MessagingModule,
     CallsModule,

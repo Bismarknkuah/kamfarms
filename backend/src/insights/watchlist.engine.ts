@@ -126,6 +126,9 @@ export const WATCH = {
   missingReceiptShare: 0.6,
 } as const;
 
+/** The limits in force: the built-in ones, or those the System Administrator has set. */
+export type Thresholds = { -readonly [K in keyof typeof WATCH]: number };
+
 const DAY = 86_400_000;
 const daysAgo = (now: Date, n: number) => new Date(now.getTime() - n * DAY);
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
@@ -174,7 +177,7 @@ type Push = (s: Omit<Signal, 'id'>) => void;
 // ----------------------------------------------------------------------------------------------
 // MILLING CENTERS: how much rice the paddy gave, how much power it took, and whether power was used with nothing logged
 // ----------------------------------------------------------------------------------------------
-function millingSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
+function millingSignals(i: WatchInput, start: Date, t: Tracker, push: Push, cfg: Thresholds) {
   const K: LocationKind = 'MILLING_CENTER';
   for (const c of i.centers) {
     const allRuns = i.runs.filter((r) => r.centerId === c.id);
@@ -185,16 +188,16 @@ function millingSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
     const base = { locationKind: K, locationId: c.id, locationName: c.name, tab: 'milling' as WatchTab };
 
     // 1. Rice recovery against the center's own usual
-    if (history.length < WATCH.minBaselineRuns) {
-      t.skip(K, c.id, `Rice recovery needs ${WATCH.minBaselineRuns} earlier approved runs; there ${history.length === 1 ? 'is' : 'are'} ${history.length}.`);
+    if (history.length < cfg.minBaselineRuns) {
+      t.skip(K, c.id, `Rice recovery needs ${cfg.minBaselineRuns} earlier approved runs; there ${history.length === 1 ? 'is' : 'are'} ${history.length}.`);
     } else if (recent.length === 0) {
       t.skip(K, c.id, 'No production runs were logged in this period.');
     } else {
       t.check(K, c.id, 'Rice recovery');
       const hist = history.map(rec);
       const m = median(hist);
-      const sigma = Math.max(robustSigma(hist, m), WATCH.recoverySigmaFloor);
-      const drop = Math.max(WATCH.recoveryDropPoints, WATCH.recoverySigma * sigma);
+      const sigma = Math.max(robustSigma(hist, m), cfg.recoverySigmaFloor);
+      const drop = Math.max(cfg.recoveryDropPoints, cfg.recoverySigma * sigma);
       const conf = confidenceFor(history.length);
       const low = recent.filter((r) => m - rec(r) >= drop);
       if (low.length > 0) {
@@ -228,19 +231,19 @@ function millingSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
     // 2. Power per kilogram of paddy
     const histPower = history.filter((r) => r.kwh !== null && r.kwh > 0).map((r) => (r.kwh as number) / r.paddyKg);
     const recentPower = recent.filter((r) => r.kwh !== null && r.kwh > 0);
-    if (histPower.length < WATCH.minBaselineRuns) {
-      t.skip(K, c.id, `Power per kg needs ${WATCH.minBaselineRuns} earlier approved runs with power logged; there ${histPower.length === 1 ? 'is' : 'are'} ${histPower.length}.`);
-    } else if (recentPower.length < WATCH.minRunsWithPower) {
-      t.skip(K, c.id, `Power per kg needs ${WATCH.minRunsWithPower} runs with power logged in this period; there ${recentPower.length === 1 ? 'is' : 'are'} ${recentPower.length}.`);
+    if (histPower.length < cfg.minBaselineRuns) {
+      t.skip(K, c.id, `Power per kg needs ${cfg.minBaselineRuns} earlier approved runs with power logged; there ${histPower.length === 1 ? 'is' : 'are'} ${histPower.length}.`);
+    } else if (recentPower.length < cfg.minRunsWithPower) {
+      t.skip(K, c.id, `Power per kg needs ${cfg.minRunsWithPower} runs with power logged in this period; there ${recentPower.length === 1 ? 'is' : 'are'} ${recentPower.length}.`);
     } else {
       t.check(K, c.id, 'Power per kg of paddy');
       const usual = median(histPower);
       const now = sum(recentPower.map((r) => r.kwh as number)) / sum(recentPower.map((r) => r.paddyKg));
       const over = now / usual - 1;
-      if (over >= WATCH.powerMedium) {
+      if (over >= cfg.powerMedium) {
         push({
           ...base, code: 'HIGH_POWER_PER_KG', confidence: confidenceFor(histPower.length),
-          severity: over >= WATCH.powerHigh ? 'HIGH' : 'MEDIUM',
+          severity: over >= cfg.powerHigh ? 'HIGH' : 'MEDIUM',
           title: `${c.name}: more power per kg of paddy than usual`,
           detail: `Over ${plural(recentPower.length, 'run')} the center used ${now.toFixed(3)} kWh per kg of paddy, ${Math.round(over * 100)}% more than its usual ${usual.toFixed(3)}.`,
           expected: `${usual.toFixed(3)} kWh per kg (median of ${histPower.length} earlier approved runs)`,
@@ -256,13 +259,13 @@ function millingSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
     for (const m of i.meterDays.filter((x) => x.centerId === c.id)) byDay.set(dayKey(m.date), (byDay.get(dayKey(m.date)) ?? 0) + m.kwh);
     const runDays = new Set(allRuns.map((r) => dayKey(r.date)));
     const inWindow = [...byDay.entries()].filter(([d]) => d >= dayKey(start) && d <= dayKey(i.now));
-    if (inWindow.length < WATCH.minMeteredDays) {
-      t.skip(K, c.id, `Power against production needs meter readings on ${WATCH.minMeteredDays} days; there ${inWindow.length === 1 ? 'is' : 'are'} ${inWindow.length}.`);
+    if (inWindow.length < cfg.minMeteredDays) {
+      t.skip(K, c.id, `Power against production needs meter readings on ${cfg.minMeteredDays} days; there ${inWindow.length === 1 ? 'is' : 'are'} ${inWindow.length}.`);
     } else {
       t.check(K, c.id, 'Metered power against production');
       const productionDays = [...byDay.entries()].filter(([d]) => runDays.has(d)).map(([, k]) => k);
       const typical = productionDays.length >= 3 ? median(productionDays) : 0;
-      const threshold = Math.max(WATCH.idlePowerMinKwh, WATCH.idlePowerShare * typical);
+      const threshold = Math.max(cfg.idlePowerMinKwh, cfg.idlePowerShare * typical);
       const idle = inWindow.filter(([d, k]) => !runDays.has(d) && k >= threshold).sort(([a], [b]) => (a < b ? -1 : 1));
       if (idle.length > 0) {
         push({
@@ -283,15 +286,15 @@ function millingSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
 // ----------------------------------------------------------------------------------------------
 // WAREHOUSES: paddy arriving short, and orders held but not leaving
 // ----------------------------------------------------------------------------------------------
-function warehouseSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
+function warehouseSignals(i: WatchInput, start: Date, t: Tracker, push: Push, cfg: Thresholds) {
   const K: LocationKind = 'WAREHOUSE';
   const farmName = new Map(i.farms.map((f) => [f.id, f.name] as [string, string]));
   for (const w of i.warehouses) {
     const base = { locationKind: K, locationId: w.id, locationName: w.name, tab: 'warehouses' as WatchTab };
 
     const arrived = i.shipments.filter((s) => s.warehouseId === w.id && s.receivedAt >= start && s.receivedAt <= i.now);
-    if (arrived.length < WATCH.minShipments) {
-      t.skip(K, w.id, `Receiving shortfalls need ${WATCH.minShipments} shipments received in this period; there ${arrived.length === 1 ? 'is' : 'are'} ${arrived.length}.`);
+    if (arrived.length < cfg.minShipments) {
+      t.skip(K, w.id, `Receiving shortfalls need ${cfg.minShipments} shipments received in this period; there ${arrived.length === 1 ? 'is' : 'are'} ${arrived.length}.`);
     } else {
       t.check(K, w.id, 'Paddy received against dispatched');
       const expected = sum(arrived.map((s) => s.expectedBags));
@@ -301,8 +304,8 @@ function warehouseSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
       const shortPct = expected > 0 ? (shortBags / expected) * 100 : 0;
       const share = short.length / arrived.length;
       let severity: Severity | null = null;
-      if ((shortPct >= WATCH.shortfallHighPct && shortBags >= WATCH.shortfallHighBags) || (share >= 0.5 && shortBags >= WATCH.shortfallHighBags)) severity = 'HIGH';
-      else if (shortPct >= WATCH.shortfallMediumPct && shortBags >= WATCH.shortfallMediumBags) severity = 'MEDIUM';
+      if ((shortPct >= cfg.shortfallHighPct && shortBags >= cfg.shortfallHighBags) || (share >= 0.5 && shortBags >= cfg.shortfallHighBags)) severity = 'HIGH';
+      else if (shortPct >= cfg.shortfallMediumPct && shortBags >= cfg.shortfallMediumBags) severity = 'MEDIUM';
       if (severity) {
         const byFarm = new Map<string, number>();
         for (const s of short) byFarm.set(s.farmId, (byFarm.get(s.farmId) ?? 0) + (s.expectedBags - s.receivedBags));
@@ -325,15 +328,15 @@ function warehouseSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
     const stuck = i.reserved
       .filter((r) => r.warehouseId === w.id)
       .map((r) => ({ r, days: Math.floor((i.now.getTime() - r.since.getTime()) / DAY) }))
-      .filter((x) => x.days >= WATCH.reservedDays)
+      .filter((x) => x.days >= cfg.reservedDays)
       .sort((a, b) => b.days - a.days);
     if (stuck.length > 0) {
       push({
         ...base, code: 'RESERVED_NOT_DELIVERED', confidence: 'HIGH',
-        severity: stuck[0].days >= WATCH.reservedHighDays ? 'HIGH' : 'MEDIUM',
+        severity: stuck[0].days >= cfg.reservedHighDays ? 'HIGH' : 'MEDIUM',
         title: `${w.name}: reserved orders not leaving`,
-        detail: `${plural(stuck.length, 'order')} ${stuck.length === 1 ? 'has' : 'have'} been reserved for ${WATCH.reservedDays} days or more, the oldest for ${stuck[0].days} days. The stock is held against ${stuck.length === 1 ? 'it' : 'them'} the whole time.`,
-        expected: `Delivered within about ${WATCH.reservedDays} days of release`,
+        detail: `${plural(stuck.length, 'order')} ${stuck.length === 1 ? 'has' : 'have'} been reserved for ${cfg.reservedDays} days or more, the oldest for ${stuck[0].days} days. The stock is held against ${stuck.length === 1 ? 'it' : 'them'} the whole time.`,
+        expected: `Delivered within about ${cfg.reservedDays} days of release`,
         actual: `Oldest still waiting after ${stuck[0].days} days`,
         evidence: stuck.map((x) => `${x.r.number}: ${plural(x.days, 'day')}`).slice(0, 6),
         whatToCheck: 'Ask the Warehouse Supervisor why these deliveries have not gone out.',
@@ -345,7 +348,7 @@ function warehouseSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
 // ----------------------------------------------------------------------------------------------
 // ANY PLACE: stock written down, set against its sister places
 // ----------------------------------------------------------------------------------------------
-function writeDownSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
+function writeDownSignals(i: WatchInput, start: Date, t: Tracker, push: Push, cfg: Thresholds) {
   const groups: { kind: LocationKind; places: Place[]; tab: WatchTab; word: string }[] = [
     { kind: 'MILLING_CENTER', places: i.centers, tab: 'milling', word: 'milling centers' },
     { kind: 'WAREHOUSE', places: i.warehouses, tab: 'warehouses', word: 'warehouses' },
@@ -362,8 +365,8 @@ function writeDownSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
       const others = rows.filter((x) => x !== r).map((x) => sum(x.items.map((a) => -a.bags)));
       const peer = others.length > 0 ? median(others) : 0;
       let severity: Severity | null = null;
-      if ((bags >= WATCH.writeDownHighBags && bags >= 3 * peer) || (r.items.length >= WATCH.writeDownHighCount && bags >= WATCH.writeDownMediumBags)) severity = 'HIGH';
-      else if (bags >= WATCH.writeDownMediumBags && bags >= 2 * peer) severity = 'MEDIUM';
+      if ((bags >= cfg.writeDownHighBags && bags >= 3 * peer) || (r.items.length >= cfg.writeDownHighCount && bags >= cfg.writeDownMediumBags)) severity = 'HIGH';
+      else if (bags >= cfg.writeDownMediumBags && bags >= 2 * peer) severity = 'MEDIUM';
       if (!severity) continue;
       push({
         locationKind: g.kind, locationId: r.p.id, locationName: r.p.name, tab: g.tab, code: 'STOCK_WRITE_DOWNS', severity,
@@ -382,7 +385,7 @@ function writeDownSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
 // ----------------------------------------------------------------------------------------------
 // FARMS: paddy logged compared with usual (allowing for the season), and how often entries are rejected
 // ----------------------------------------------------------------------------------------------
-function farmSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
+function farmSignals(i: WatchInput, start: Date, t: Tracker, push: Push, cfg: Thresholds) {
   const K: LocationKind = 'FARM';
   const end = new Date(i.now.getTime() + 1);
   const approved = i.intake.filter((x) => x.status === 'APPROVED');
@@ -392,24 +395,24 @@ function farmSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
     const current = bagsBetween(f.id, start, end);
     const prior = [1, 2, 3].map((k) => bagsBetween(f.id, daysAgo(i.now, i.windowDays * (k + 1)), daysAgo(i.now, i.windowDays * k)));
     const baseline = mean(prior);
-    const eligible = baseline >= WATCH.minBaselineBags && prior.filter((b) => b > 0).length >= 2;
+    const eligible = baseline >= cfg.minBaselineBags && prior.filter((b) => b > 0).length >= 2;
     return { f, current, baseline, ratio: eligible ? current / baseline : NaN, eligible };
   });
 
   for (const r of rows) {
     const base = { locationKind: K, locationId: r.f.id, locationName: r.f.name, tab: 'farms' as WatchTab };
     if (!r.eligible) {
-      t.skip(K, r.f.id, `Paddy intake needs about ${WATCH.minBaselineBags} bags a period over the three periods before; this farm has not logged that much.`);
+      t.skip(K, r.f.id, `Paddy intake needs about ${cfg.minBaselineBags} bags a period over the three periods before; this farm has not logged that much.`);
     } else {
       t.check(K, r.f.id, 'Paddy intake against usual');
       const peers = rows.filter((x) => x !== r && x.eligible).map((x) => x.ratio);
       const peerMedian = peers.length > 0 ? median(peers) : NaN;
-      const seasonal = !Number.isNaN(peerMedian) && peerMedian <= WATCH.seasonalPeerRatio;
-      const flagged = seasonal ? r.ratio <= WATCH.peerRelative * peerMedian && r.ratio <= WATCH.intakeDropRatio : r.ratio <= WATCH.intakeDropRatio;
+      const seasonal = !Number.isNaN(peerMedian) && peerMedian <= cfg.seasonalPeerRatio;
+      const flagged = seasonal ? r.ratio <= cfg.peerRelative * peerMedian && r.ratio <= cfg.intakeDropRatio : r.ratio <= cfg.intakeDropRatio;
       if (flagged) {
         push({
           ...base, code: 'INTAKE_DROP', confidence: 'MEDIUM',
-          severity: r.ratio <= WATCH.intakeHighRatio && !seasonal ? 'HIGH' : 'MEDIUM',
+          severity: r.ratio <= cfg.intakeHighRatio && !seasonal ? 'HIGH' : 'MEDIUM',
           title: `${r.f.name}: much less paddy logged than usual`,
           detail: `${plural(r.current, 'bag')} were approved in the last ${i.windowDays} days, against about ${fmt0(r.baseline)} in each of the three periods before (${Math.round(r.ratio * 100)}% of usual).${seasonal ? ' Most farms are down too, so part of this is probably the season, but this farm fell much further than the others.' : ''}`,
           expected: `About ${fmt0(r.baseline)} bags`,
@@ -421,16 +424,16 @@ function farmSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
     }
 
     const decided = i.intake.filter((x) => x.farmId === r.f.id && x.date >= start && x.date <= i.now);
-    if (decided.length < WATCH.minDecidedEntries) {
-      t.skip(K, r.f.id, `Rejection rate needs ${WATCH.minDecidedEntries} decided paddy entries in this period; there ${decided.length === 1 ? 'is' : 'are'} ${decided.length}.`);
+    if (decided.length < cfg.minDecidedEntries) {
+      t.skip(K, r.f.id, `Rejection rate needs ${cfg.minDecidedEntries} decided paddy entries in this period; there ${decided.length === 1 ? 'is' : 'are'} ${decided.length}.`);
     } else {
       t.check(K, r.f.id, 'Paddy entries rejected');
       const rejected = decided.filter((x) => x.status === 'REJECTED').length;
       const rate = rejected / decided.length;
-      if (rate >= WATCH.rejectMedium) {
+      if (rate >= cfg.rejectMedium) {
         push({
           ...base, code: 'HIGH_REJECTION_RATE', confidence: decided.length >= 20 ? 'HIGH' : 'MEDIUM',
-          severity: rate >= WATCH.rejectHigh ? 'HIGH' : 'MEDIUM',
+          severity: rate >= cfg.rejectHigh ? 'HIGH' : 'MEDIUM',
           title: `${r.f.name}: many paddy entries rejected`,
           detail: `${rejected} of ${decided.length} paddy entries decided in the last ${i.windowDays} days were rejected (${Math.round(rate * 100)}%).`,
           expected: 'Most entries approved at the first attempt',
@@ -446,7 +449,7 @@ function farmSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
 // ----------------------------------------------------------------------------------------------
 // FARMS AND WAREHOUSES: spending compared with usual, and expenses with no receipt
 // ----------------------------------------------------------------------------------------------
-function spendingSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
+function spendingSignals(i: WatchInput, start: Date, t: Tracker, push: Push, cfg: Thresholds) {
   const end = new Date(i.now.getTime() + 1);
   const groups: { kind: LocationKind; places: Place[]; tab: WatchTab; pick: (e: ExpenseRow) => string | null }[] = [
     { kind: 'FARM', places: i.farms, tab: 'farms', pick: (e) => e.farmId },
@@ -462,13 +465,13 @@ function spendingSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
       const base = { locationKind: g.kind, locationId: p.id, locationName: p.name, tab: g.tab };
       const total = sum(current.map((e) => e.amount));
 
-      if (baseline < WATCH.minBaselineSpend) {
-        t.skip(g.kind, p.id, `Spending against usual needs about ${ghs(WATCH.minBaselineSpend)} a period over the three periods before; there is less than that on record.`);
+      if (baseline < cfg.minBaselineSpend) {
+        t.skip(g.kind, p.id, `Spending against usual needs about ${ghs(cfg.minBaselineSpend)} a period over the three periods before; there is less than that on record.`);
       } else {
         t.check(g.kind, p.id, 'Spending against usual');
         let severity: Severity | null = null;
-        if (total >= WATCH.spikeHighFactor * baseline && total - baseline >= WATCH.spikeHighExtra) severity = 'HIGH';
-        else if (total >= WATCH.spikeMediumFactor * baseline && total - baseline >= WATCH.spikeMediumExtra) severity = 'MEDIUM';
+        if (total >= cfg.spikeHighFactor * baseline && total - baseline >= cfg.spikeHighExtra) severity = 'HIGH';
+        else if (total >= cfg.spikeMediumFactor * baseline && total - baseline >= cfg.spikeMediumExtra) severity = 'MEDIUM';
         if (severity) {
           const biggest = [...current].sort((a, b) => b.amount - a.amount).slice(0, 4);
           push({
@@ -483,9 +486,9 @@ function spendingSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
         }
       }
 
-      if (current.length >= WATCH.minExpensesForReceipts && total >= WATCH.minSpendForReceipts) {
+      if (current.length >= cfg.minExpensesForReceipts && total >= cfg.minSpendForReceipts) {
         const without = current.filter((e) => !e.hasReceipt);
-        if (without.length / current.length >= WATCH.missingReceiptShare) {
+        if (without.length / current.length >= cfg.missingReceiptShare) {
           push({
             ...base, code: 'MISSING_RECEIPTS', severity: 'LOW', confidence: 'MEDIUM',
             title: `${p.name}: many expenses without a receipt`,
@@ -504,17 +507,17 @@ function spendingSignals(i: WatchInput, start: Date, t: Tracker, push: Push) {
 const SEVERITY_RANK: Record<Severity, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 const KIND_RANK: Record<LocationKind, number> = { MILLING_CENTER: 0, WAREHOUSE: 1, FARM: 2 };
 
-export function buildWatchlist(input: WatchInput): Watchlist {
+export function buildWatchlist(input: WatchInput, cfg: Thresholds = WATCH): Watchlist {
   const start = daysAgo(input.now, input.windowDays);
   const signals: Signal[] = [];
   const tracker = new Tracker();
   const push: Push = (s) => signals.push({ ...s, id: `${s.locationKind}:${s.locationId}:${s.code}` });
 
-  millingSignals(input, start, tracker, push);
-  warehouseSignals(input, start, tracker, push);
-  writeDownSignals(input, start, tracker, push);
-  farmSignals(input, start, tracker, push);
-  spendingSignals(input, start, tracker, push);
+  millingSignals(input, start, tracker, push, cfg);
+  warehouseSignals(input, start, tracker, push, cfg);
+  writeDownSignals(input, start, tracker, push, cfg);
+  farmSignals(input, start, tracker, push, cfg);
+  spendingSignals(input, start, tracker, push, cfg);
 
   signals.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || KIND_RANK[a.locationKind] - KIND_RANK[b.locationKind] || a.locationName.localeCompare(b.locationName) || a.code.localeCompare(b.code));
 

@@ -11,8 +11,8 @@ const HOME_ID = 'home';
 // Explicit shapes for what comes back from the database. Prisma's generated
 // types are not available in every environment this code is checked in, so the
 // service states exactly what it relies on instead of inferring it.
-interface StoredRow { data: unknown; version: number; updatedAt: Date; updatedById: string | null }
-interface MediaMeta { id: string; kind: string; mimeType: string; fileName: string; sizeBytes: number; createdAt: Date }
+export interface StoredRow { data: unknown; version: number; updatedAt: Date; updatedById: string | null }
+export interface MediaMeta { id: string; kind: string; mimeType: string; fileName: string; sizeBytes: number; createdAt: Date }
 const mb = (bytes: number) => `${Math.round(bytes / (1024 * 1024))} MB`;
 
 @Injectable()
@@ -137,7 +137,7 @@ export class SiteService {
     if (!file) throw new NotFoundException('That file was not found.');
     const { content } = await this.getContent();
     if (content && collectMediaRefs(content).some((r) => r.id === id)) {
-      throw new BadRequestException('This file is used in the slideshow. Remove it from the slideshow and save first.');
+      throw new BadRequestException('This file is in use on the homepage (the slideshow or the logo). Remove it there and save first.');
     }
     await this.prisma.siteMedia.delete({ where: { id } });
     await this.audit.record({ userId: actor.id, action: 'site.media.delete', entity: 'SiteMedia', entityId: id, afterValue: { fileName: file.fileName } });

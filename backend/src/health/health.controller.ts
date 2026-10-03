@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Public } from '../common/decorators/public.decorator';
+import { buildInfo } from '../common/build-info';
 
 @Controller('health')
 export class HealthController {
@@ -27,7 +28,7 @@ export class HealthController {
       success: healthy,
       message: healthy ? 'All checked systems healthy.' : 'One or more systems degraded.',
       errorCode: healthy ? null : 'SYSTEM_DEGRADED',
-      data: { status: healthy ? 'healthy' : 'degraded', checks, timestamp: new Date().toISOString() },
+      data: { status: healthy ? 'healthy' : 'degraded', checks, timestamp: new Date().toISOString(), ...buildInfo() },
     };
   }
 }

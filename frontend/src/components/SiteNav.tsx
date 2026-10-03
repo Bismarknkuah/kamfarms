@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { User, Wheat } from 'lucide-react';
+import { siteMediaUrl } from '@/lib/api-client';
 
 const LINKS = [
   { id: 'home', label: 'Home' },
@@ -16,7 +17,7 @@ const LINKS = [
 // content. The link for whichever section is currently on screen is marked,
 // so the bar doubles as a "you are here" indicator. Below the md breakpoint
 // the links collapse into a slide-down menu rather than disappearing.
-export function SiteNav() {
+export function SiteNav({ brand = { name: 'KAM', subtitle: 'TRADING & FARMS LTD.', logoMediaId: null } }: { brand?: { name: string; subtitle: string; logoMediaId: string | null } }) {
   const [solid, setSolid] = useState(false);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState('home');
@@ -44,11 +45,16 @@ export function SiteNav() {
   return (
     <header className={`fixed inset-x-0 top-0 z-40 transition-all duration-500 ${light ? 'border-b border-paddy-100 bg-white/95 py-3 shadow-sm backdrop-blur' : 'bg-transparent py-5'}`}>
       <div className="mx-auto flex w-full max-w-[1760px] items-center justify-between gap-4 px-5 sm:px-8 lg:px-14 2xl:px-20">
-        <a href="#home" className={`flex items-center gap-2.5 ${light ? 'text-paddy-900' : 'text-white'}`} aria-label="KAM Trading and Farms, home">
-          <span className="grid h-10 w-10 place-items-center rounded-full bg-husk-500 text-paddy-900"><Wheat className="h-5 w-5" /></span>
+        <a href="#home" className={`flex items-center gap-2.5 ${light ? 'text-paddy-900' : 'text-white'}`} aria-label={`${brand.name}, home`}>
+          {brand.logoMediaId ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={siteMediaUrl(brand.logoMediaId)} alt="" className="h-10 w-10 rounded-full bg-white object-cover" />
+          ) : (
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-husk-500 text-paddy-900"><Wheat className="h-5 w-5" /></span>
+          )}
           <span className="leading-none">
-            <span className="block text-xl font-bold tracking-tight">KAM</span>
-            <span className="mt-0.5 block text-[9px] font-semibold tracking-[0.18em] opacity-80">TRADING &amp; FARMS LTD.</span>
+            <span className="block text-xl font-bold tracking-tight">{brand.name}</span>
+            {brand.subtitle && <span className="mt-0.5 block text-[9px] font-semibold tracking-[0.18em] opacity-80">{brand.subtitle}</span>}
           </span>
         </a>
 

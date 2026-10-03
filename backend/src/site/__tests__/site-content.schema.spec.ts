@@ -135,3 +135,44 @@ describe('collectMediaRefs', () => {
     expect(collectMediaRefs(out)).toEqual([{ id: MEDIA_ID, type: 'IMAGE' }, { id: HAND_WRITTEN_ID, type: 'VIDEO' }]);
   });
 });
+
+describe('brand, company contact details and sign-in options', () => {
+  it('fills in the brand and sign-in options for a page saved before they existed', () => {
+    const out = sanitizeSiteContent(valid());
+    expect(out.brand).toEqual({ name: 'KAM', subtitle: 'TRADING & FARMS LTD.', logoMediaId: null });
+    expect(out.signin).toEqual({ showDemoAccounts: false, notice: '' });
+    expect(out.contact.details).toEqual([]);
+  });
+  it('accepts a brand name, a subtitle and an uploaded logo, and lets the subtitle be emptied on purpose', () => {
+    const out = sanitizeSiteContent(valid({ brand: { name: 'Pectra', subtitle: '', logoMediaId: MEDIA_ID } }));
+    expect(out.brand).toEqual({ name: 'Pectra', subtitle: '', logoMediaId: MEDIA_ID });
+  });
+  it.each([
+    [{ name: '' }, /brand.name: cannot be empty/], [{ name: 'x'.repeat(31) }, /brand.name: is too long/], [{ name: 'KAM', logoMediaId: 'not-an-id' }, /brand.logoMediaId: is not a valid uploaded file/],
+  ])('rejects the brand %j', (brand, message) => invalid(valid({ brand }), message as RegExp));
+
+  it('accepts one contact line of each kind', () => {
+    const out = sanitizeSiteContent(valid({ contact: { heading: 'x', details: [
+      { label: 'Head office', value: 'Adenta, Accra', kind: 'text' }, { label: 'Office', value: '+233 24 173 0440', kind: 'phone' }, { label: 'Sales WhatsApp', value: '0241730440', kind: 'whatsapp' },
+      { label: 'Email', value: 'sales@kam.example', kind: 'email' }, { label: 'Facebook', value: 'https://facebook.com/kam', kind: 'link' }, { label: 'No kind given', value: 'Open 8am to 5pm' },
+    ], locations: [] } }));
+    expect(out.contact.details.map((d) => d.kind)).toEqual(['text', 'phone', 'whatsapp', 'email', 'link', 'text']);
+  });
+  it.each([
+    [{ label: 'x', value: 'abc', kind: 'phone' }, /is not a valid phone number/], [{ label: 'x', value: 'nobody@', kind: 'email' }, /is not a valid email address/],
+    [{ label: 'x', value: 'http://insecure.example', kind: 'link' }, /must be an https:\/\/ link/], [{ label: 'x', value: 'javascript:alert(1)', kind: 'link' }, /must be an https:\/\/ link/],
+    [{ label: 'x', value: 'v', kind: 'fax' }, /kind: must be text, phone, email, whatsapp or link/], [{ label: '', value: 'v' }, /label: cannot be empty/], [{ label: 'x', value: '' }, /value: cannot be empty/],
+  ])('rejects the contact line %j', (line, message) => invalid(valid({ contact: { heading: 'x', details: [line], locations: [] } }), message as RegExp));
+  it('limits the contact lines to twelve', () => {
+    invalid(valid({ contact: { heading: 'x', details: Array.from({ length: 13 }, (_, i) => ({ label: `L${i}`, value: 'v' })), locations: [] } }), /too many entries \(at most 12\)/);
+  });
+  it('shows the demo accounts only when explicitly told to, never by accident', () => {
+    for (const v of [undefined, false, 'true', 1, null]) expect(sanitizeSiteContent(valid({ signin: { showDemoAccounts: v } })).signin.showDemoAccounts).toBe(false);
+    expect(sanitizeSiteContent(valid({ signin: { showDemoAccounts: true, notice: ' Maintenance tonight ' } })).signin).toEqual({ showDemoAccounts: true, notice: 'Maintenance tonight' });
+    invalid(valid({ signin: { notice: 'x'.repeat(301) } }), /signin.notice: is too long/);
+  });
+  it('counts the logo among the uploaded files in use, as a picture', () => {
+    const out = sanitizeSiteContent(valid({ brand: { name: 'KAM', logoMediaId: MEDIA_ID } }));
+    expect(collectMediaRefs(out)).toEqual([{ id: MEDIA_ID, type: 'IMAGE' }]);
+  });
+});

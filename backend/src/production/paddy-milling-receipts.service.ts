@@ -1,16 +1,17 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreatePaddyMillingReceiptDto } from './dto/create-paddy-milling-receipt.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { SettingsService, settingNumber } from '../settings/settings.service';
 
-const STANDARD_PADDY_BAG_WEIGHT_KG = 50;
 
 @Injectable()
 export class PaddyMillingReceiptsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   list(millingCenterId?: string) {
@@ -27,6 +28,7 @@ export class PaddyMillingReceiptsService {
 
     const created = await this.prisma.$transaction(async (tx) => {
       const year = new Date().getFullYear();
+      const standardBagKg = await settingNumber(this.settings, 'paddy.standard_bag_kg');
       const prefix = `PMR-${year}-`;
       const count = await tx.paddyMillingReceipt.count({ where: { receiptNumber: { startsWith: prefix } } });
       const receiptNumber = `${prefix}${String(count + 1).padStart(6, '0')}`;
@@ -42,7 +44,7 @@ export class PaddyMillingReceiptsService {
             create: dto.lines.map((line) => ({
               paddyGradeId: line.paddyGradeId,
               bagCount: line.bagCount,
-              kg: line.kg ?? line.bagCount * STANDARD_PADDY_BAG_WEIGHT_KG,
+              kg: line.kg ?? line.bagCount * standardBagKg,
             })),
           },
         },

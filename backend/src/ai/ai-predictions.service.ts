@@ -7,6 +7,8 @@ import { ForecastStockDto } from './dto/forecast-stock.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 
 const MIN_RECORDS_FOR_STATS = 5;
+/** Kilograms to the nearest gram, so 20000 x 68% shows as 13600 and not 13600.000000000002. */
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
 const MIN_SALES_DAYS_FOR_FORECAST = 3;
 
 // Documented industry-typical benchmarks used ONLY when there isn't
@@ -97,11 +99,11 @@ export class AiPredictionsService {
       modelType = 'cold_start_benchmark';
     }
 
-    const predictedRecoveredKg = dto.paddyKg * (recoveryPercent / 100);
-    const predictedBrokenKg = dto.paddyKg * (brokenPercent / 100);
-    const predictedHullKg = dto.paddyKg * (hullPercent / 100);
-    const rangeLow = predictedRecoveredKg - dto.paddyKg * (recoveryStdDev / 100);
-    const rangeHigh = predictedRecoveredKg + dto.paddyKg * (recoveryStdDev / 100);
+    const predictedRecoveredKg = round3(dto.paddyKg * (recoveryPercent / 100));
+    const predictedBrokenKg = round3(dto.paddyKg * (brokenPercent / 100));
+    const predictedHullKg = round3(dto.paddyKg * (hullPercent / 100));
+    const rangeLow = round3(predictedRecoveredKg - dto.paddyKg * (recoveryStdDev / 100));
+    const rangeHigh = round3(predictedRecoveredKg + dto.paddyKg * (recoveryStdDev / 100));
 
     const model = await this.getOrCreateModel('production_yield', modelType, records.length, { recoveryStdDev });
 

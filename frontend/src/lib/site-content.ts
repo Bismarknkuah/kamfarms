@@ -23,6 +23,8 @@ export interface SiteStat { id: string; label: string; value: string; sub: strin
 export interface SiteLabelled { id: string; label: string; detail: string }
 export interface SiteCard { id: string; title: string; body: string }
 export interface SiteLocation { id: string; name: string; phones: string[] }
+export type ContactKind = 'text' | 'phone' | 'email' | 'whatsapp' | 'link';
+export interface SiteContactDetail { id: string; label: string; value: string; kind: ContactKind }
 
 export interface SiteContent {
   hero: {
@@ -34,8 +36,10 @@ export interface SiteContent {
   about: { eyebrow: string; heading: string; paragraphs: string[]; highlights: string[]; workHeading: string; work: SiteLabelled[] };
   operations: { eyebrow: string; heading: string; intro: string; items: SiteCard[] };
   products: { eyebrow: string; name: string; tagline: string; description: string; sizesHeading: string; sizes: string[]; highlights: string[]; ctaLabel: string };
-  contact: { eyebrow: string; heading: string; intro: string; locations: SiteLocation[] };
+  contact: { eyebrow: string; heading: string; intro: string; details: SiteContactDetail[]; locations: SiteLocation[] };
   footer: { company: string; tagline: string; signInLabel: string };
+  brand: { name: string; subtitle: string; logoMediaId: string | null };
+  signin: { showDemoAccounts: boolean; notice: string };
 }
 
 export const DEFAULT_SITE_CONTENT: SiteContent = {
@@ -101,6 +105,7 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
     eyebrow: 'Contact',
     heading: 'Where to buy Pectra Rice',
     intro: 'Visit or call a Pectra Rice sales point near you.',
+    details: [],
     // Sales points exactly as printed on the Pectra Rice sales poster.
     locations: [
       { id: 'loc-lapaz', name: 'Lapaz, Awoshie', phones: ['0541589964'] },
@@ -118,6 +123,9 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
     tagline: 'Pectra Rice · Adenta, Accra · Milling at Sefwi Kanchabio',
     signInLabel: 'KAM team and partners: sign in',
   },
+  brand: { name: 'KAM', subtitle: 'TRADING & FARMS LTD.', logoMediaId: null },
+  // Off until the System Administrator turns it on: the demo buttons use a published password.
+  signin: { showDemoAccounts: false, notice: '' },
 };
 
 /** Saved content laid over the defaults, section by section, so a field added later never leaves a hole. */
@@ -137,6 +145,8 @@ export function mergeSiteContent(stored: unknown): SiteContent {
     products: { ...d.products, ...(s.products ?? {}) },
     contact: { ...d.contact, ...(s.contact ?? {}) },
     footer: { ...d.footer, ...(s.footer ?? {}) },
+    brand: { ...d.brand, ...(s.brand ?? {}) },
+    signin: { ...d.signin, ...(s.signin ?? {}) },
   };
 }
 
@@ -149,6 +159,16 @@ export function slideSrc(slide: SiteSlide): string | null {
 /** 0541589964 -> 054 158 9964. Anything else is shown as typed. */
 export function formatPhone(n: string): string {
   return /^\d{10}$/.test(n) ? `${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6)}` : n;
+}
+
+/** Where a contact line goes when tapped (nowhere for plain text). */
+export function contactHref(d: SiteContactDetail): string | null {
+  const digits = d.value.replace(/[^\d]/g, '');
+  if (d.kind === 'phone') return `tel:${dialable(d.value)}`;
+  if (d.kind === 'whatsapp') return `https://wa.me/${digits.length === 10 && digits.startsWith('0') ? '233' + digits.slice(1) : digits}`;
+  if (d.kind === 'email') return `mailto:${d.value}`;
+  if (d.kind === 'link') return d.value;
+  return null;
 }
 
 /** The dial string for a tel: link. */

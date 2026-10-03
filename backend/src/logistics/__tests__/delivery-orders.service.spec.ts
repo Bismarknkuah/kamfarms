@@ -5,6 +5,8 @@ function buildService(farmBalance: { paddyGradeId: string; bagCount: number; qua
   const prisma = {
     farm: { findUnique: jest.fn().mockResolvedValue({ id: 'farm-1', isActive: true }) },
     warehouse: { findUnique: jest.fn().mockResolvedValue({ id: 'wh-1', isActive: true }) },
+    deliveryOrder: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue({ id: 'order-1', farmId: 'farm-1' }) },
+    farmManager: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn(async (fn: any) =>
       fn({
         deliveryOrder: { create: jest.fn().mockResolvedValue({ id: 'order-1' }) },

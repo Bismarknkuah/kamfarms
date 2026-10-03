@@ -13,7 +13,10 @@ import {
   Factory,
   Gauge,
   Leaf,
+  Link2,
+  Mail,
   MapPin,
+  MessageCircle,
   Phone,
   ShieldCheck,
   Sprout,
@@ -24,12 +27,13 @@ import {
 import { SiteNav } from '@/components/SiteNav';
 import { Reveal } from '@/components/Reveal';
 import { SlideshowCaption, SlideshowControls, SlideshowStage, useSlideshow } from '@/components/SiteSlideshow';
-import { dialable, formatPhone, useSiteContent } from '@/lib/site-content';
+import { contactHref, dialable, formatPhone, useSiteContent } from '@/lib/site-content';
 
 // Everything the System Administrator can edit comes from useSiteContent(). What stays here is the
 // description of the software itself (features and the six handoffs), which is not company content.
 
 const STAT_ICONS = [Sprout, Warehouse, Factory, ShieldCheck];
+const CONTACT_ICONS = { text: MapPin, phone: Phone, whatsapp: MessageCircle, email: Mail, link: Link2 } as const;
 const OPERATION_ICONS = [Sprout, Factory, Warehouse, Truck, BarChart3, Leaf];
 
 const FEATURES = [
@@ -85,7 +89,7 @@ export default function HomePage() {
 
   return (
     <main className="bg-rice-50 font-sans">
-      <SiteNav />
+      <SiteNav brand={c.brand} />
 
       {/* HERO: fills the whole screen. The slideshow, when there is one, is its background. */}
       <section id="home" className="relative isolate flex min-h-[100svh] flex-col justify-center overflow-hidden bg-paddy-900 pb-40 pt-28 sm:pt-32 lg:pb-52">
@@ -331,6 +335,26 @@ export default function HomePage() {
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl xl:text-5xl">{c.contact.heading}</h2>
             {c.contact.intro && <p className="mt-4 text-paddy-100">{c.contact.intro}</p>}
           </Reveal>
+          {c.contact.details.length > 0 && (
+            <Reveal className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" >
+              {c.contact.details.map((d) => {
+                const href = contactHref(d);
+                const Icon = CONTACT_ICONS[d.kind];
+                const body = (
+                  <>
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-husk-500/20 text-husk-300"><Icon className="h-5 w-5" /></span>
+                    <span className="min-w-0"><span className="block text-xs font-semibold uppercase tracking-wider text-paddy-200">{d.label}</span><span className="block break-words text-sm font-medium text-white">{d.value}</span></span>
+                  </>
+                );
+                const cls = 'flex items-center gap-3 rounded-2xl border border-white/15 bg-white/5 p-4 backdrop-blur';
+                return href ? (
+                  <a key={d.id} href={href} data-testid="contact-detail" {...(d.kind === 'link' || d.kind === 'whatsapp' ? { target: '_blank', rel: 'noopener noreferrer' } : {})} className={`${cls} transition hover:border-husk-300/60 hover:bg-white/10`}>{body}</a>
+                ) : (
+                  <div key={d.id} data-testid="contact-detail" className={cls}>{body}</div>
+                );
+              })}
+            </Reveal>
+          )}
           <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
             {c.contact.locations.map((p, i) => (
               <Reveal key={p.id} delay={(i % 8) * 50} className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur transition hover:border-husk-300/50 hover:bg-white/10">

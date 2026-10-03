@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { LocationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -6,12 +6,12 @@ import { InventoryLedgerService } from '../inventory-ledger/inventory-ledger.ser
 import { scopedLocationIds } from '../common/utils/scope.util';
 import { ReceiveShipmentDto } from './dto/receive-shipment.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { SettingsService, settingNumber } from '../settings/settings.service';
 
 /** Anything beyond this many KG of variance is flagged for supervisor
  * attention rather than silently accepted - spec section 13: "Variance may
  * require approval." Configurable later via system_settings (Phase 12);
  * a fixed constant for now, documented rather than hidden. */
-const VARIANCE_TOLERANCE_KG = 5;
 
 @Injectable()
 export class ShipmentsService {
@@ -19,6 +19,7 @@ export class ShipmentsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly ledger: InventoryLedgerService,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   /** "On the Way" list for the Warehouse Supervisor / destination Warehouse
@@ -114,7 +115,8 @@ export class ShipmentsService {
     }
 
     const varianceKg = dto.receivedKg - Number(shipment.expectedKg);
-    const requiresApproval = Math.abs(varianceKg) > VARIANCE_TOLERANCE_KG;
+    const toleranceKg = await settingNumber(this.settings, 'logistics.variance_tolerance_kg');
+    const requiresApproval = Math.abs(varianceKg) > toleranceKg;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.shipment.update({

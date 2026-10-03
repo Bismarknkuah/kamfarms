@@ -1,10 +1,11 @@
 import { InsightsService, clampDays } from '../insights.service';
+import { defaultOf } from '../../settings/settings.registry';
 
 const NOW = new Date('2026-10-03T12:00:00Z');
 const DAY = 86_400_000;
 const ago = (n: number) => new Date(NOW.getTime() - n * DAY);
 
-function build(over: Record<string, unknown[]> = {}) {
+function build(over: Record<string, unknown[]> = {}, settings?: unknown) {
   const runs = [
     ...Array.from({ length: 10 }, (_, i) => ({ id: `h${i}`, recordNumber: `PR-${i}`, millingCenterId: 'c1', date: ago(40 + i * 5), paddyProcessedKg: '10000.000', recoveredRiceKg: '6800.000', energyConsumptionKwh: null, status: 'APPROVED' })),
     { id: 'n1', recordNumber: 'PR-900', millingCenterId: 'c1', date: ago(3), paddyProcessedKg: '10000.000', recoveredRiceKg: '6000.000', energyConsumptionKwh: '400.000', status: 'SUBMITTED' },
@@ -23,7 +24,7 @@ function build(over: Record<string, unknown[]> = {}) {
     paddyEntry: delegate('paddyEntry', over.intake ?? []),
     expense: { findMany: jest.fn(async (args: any) => { (calls.expense ??= []).push(args); return args.where.attachmentUrl ? over.receipted ?? [] : over.expenses ?? []; }) },
   };
-  return { service: new InsightsService(prisma as any), prisma, calls };
+  return { service: new InsightsService(prisma as any, settings as any), prisma, calls };
 }
 
 describe('clampDays', () => {
@@ -86,5 +87,30 @@ describe('InsightsService.watchlist', () => {
     const { service } = build({ expenses: [1, 2, 3, 4, 5, 6].map(mk), receipted: [{ id: 'e1' }] });
     const s = (await service.watchlist(30, NOW)).signals.find((x) => x.code === 'MISSING_RECEIPTS');
     expect(s?.detail).toContain('5 of 6');
+  });
+});
+
+describe('InsightsService with the administrator\'s settings', () => {
+  const quiet = [
+    ...Array.from({ length: 10 }, (_, i) => ({ id: `h${i}`, recordNumber: `PR-${i}`, millingCenterId: 'c1', date: ago(40 + i * 5), paddyProcessedKg: '10000', recoveredRiceKg: '6800', energyConsumptionKwh: null, status: 'APPROVED' })),
+    { id: 'n1', recordNumber: 'PR-900', millingCenterId: 'c1', date: ago(3), paddyProcessedKg: '10000', recoveredRiceKg: '6400', energyConsumptionKwh: null, status: 'SUBMITTED' }, // 4 points under usual
+  ];
+  const settingsWith = (overrides: Record<string, number>) => ({ getNumber: jest.fn(async (key: string) => overrides[key] ?? defaultOf<number>(key)) });
+
+  it('flags a smaller drop once the administrator lowers the limit, and not before', async () => {
+    const without = await build({ runs: quiet }, settingsWith({})).service.watchlist(undefined, NOW);
+    expect(without.signals.find((s) => s.code === 'LOW_RECOVERY')).toBeUndefined();
+    const stricter = await build({ runs: quiet }, settingsWith({ 'watchlist.recovery_drop_points': 2 })).service.watchlist(undefined, NOW);
+    expect(stricter.signals.find((s) => s.code === 'LOW_RECOVERY')).toBeDefined();
+  });
+  it('looks at the number of days the administrator chose, unless a number is asked for', async () => {
+    const settings = settingsWith({ 'watchlist.default_days': 45 });
+    expect((await build({ runs: quiet }, settings).service.watchlist(undefined, NOW)).windowDays).toBe(45);
+    expect((await build({ runs: quiet }, settings).service.watchlist('14', NOW)).windowDays).toBe(14);
+  });
+  it('gives exactly the same answer as having no settings when the settings are all at their defaults', async () => {
+    const a = await build({ runs: quiet }, settingsWith({})).service.watchlist(undefined, NOW);
+    const b = await build({ runs: quiet }).service.watchlist(undefined, NOW);
+    expect(a).toEqual(b);
   });
 });

@@ -17,7 +17,7 @@ const mb = (n: number) => `${(n / (1024 * 1024)).toFixed(1)} MB`;
  * A big phone photo is often 5 MB or more: slow for every visitor and heavy for the database. Anything over
  * about 900 KB is shrunk in the browser (longest side 2200 px, JPEG) before it is sent. Small files go as they are.
  */
-async function prepareImage(file: File): Promise<{ blob: Blob; name: string }> {
+export async function prepareImage(file: File): Promise<{ blob: Blob; name: string }> {
   if (file.size <= 900 * 1024) return { blob: file, name: file.name };
   try {
     const bitmap = await createImageBitmap(file);
@@ -46,7 +46,7 @@ function Thumb({ slide }: { slide: Pick<SiteSlide, 'type' | 'mediaId' | 'url' | 
   );
 }
 
-export function SlideshowEditor({ value, onChange, media, accessToken, onMediaChanged }: { value: Slideshow; onChange: (next: Slideshow) => void; media: SiteMediaItem[]; accessToken: string; onMediaChanged: () => Promise<void> }) {
+export function SlideshowEditor({ value, onChange, media, accessToken, onMediaChanged, alsoUsed = [] }: { value: Slideshow; onChange: (next: Slideshow) => void; media: SiteMediaItem[]; accessToken: string; onMediaChanged: () => Promise<void>; alsoUsed?: string[] }) {
   const fileId = useId();
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -56,7 +56,7 @@ export function SlideshowEditor({ value, onChange, media, accessToken, onMediaCh
   const slides = value.slides;
   const setSlides = (next: SiteSlide[]) => onChange({ ...value, slides: next });
   const patch = (i: number, p: Partial<SiteSlide>) => setSlides(slides.map((s, j) => (j === i ? { ...s, ...p } : s)));
-  const usedInDraft = new Set(slides.map((s) => s.mediaId).filter((x): x is string => !!x));
+  const usedInDraft = new Set([...slides.map((s) => s.mediaId).filter((x): x is string => !!x), ...alsoUsed]);
   const fileOf = (id: string | null) => (id ? media.find((m) => m.id === id) : undefined);
 
   const addUploaded = (m: SiteMediaItem) => setSlides([...slides, { id: newEntryId(), type: m.kind, mediaId: m.id, url: null, alt: '', caption: '', enabled: true }]);
@@ -196,9 +196,9 @@ export function SlideshowEditor({ value, onChange, media, accessToken, onMediaCh
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={siteMediaUrl(m.id)} alt="" className="h-10 w-16 shrink-0 rounded bg-ink-500/10 object-cover" />
                   )}
-                  <span className="min-w-0 flex-1 text-sm"><span className="block truncate font-medium text-ink-900">{m.fileName}</span><span className="text-xs text-ink-500">{m.kind === 'VIDEO' ? 'Video' : 'Picture'}, {mb(m.sizeBytes)}{inDraft || m.inUse ? ', in the slideshow' : ''}</span></span>
+                  <span className="min-w-0 flex-1 text-sm"><span className="block truncate font-medium text-ink-900">{m.fileName}</span><span className="text-xs text-ink-500">{m.kind === 'VIDEO' ? 'Video' : 'Picture'}, {mb(m.sizeBytes)}{inDraft || m.inUse ? ', in use' : ''}</span></span>
                   {!inDraft && <button type="button" className={smallButton} onClick={() => addUploaded(m)}>Add to slideshow</button>}
-                  <button type="button" className={`${smallButton} text-red-700`} disabled={inDraft || m.inUse} title={inDraft || m.inUse ? 'Remove it from the slideshow (and save) first' : undefined} onClick={() => void removeFile(m)}>Delete</button>
+                  <button type="button" className={`${smallButton} text-red-700`} disabled={inDraft || m.inUse} title={inDraft || m.inUse ? 'Stop using it on the homepage (and save) first' : undefined} onClick={() => void removeFile(m)}>Delete</button>
                 </li>
               );
             })}

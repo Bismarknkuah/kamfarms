@@ -8,10 +8,11 @@ import { ApiError, type SiteMediaItem, siteApi } from '@/lib/api-client';
 import { type SiteContent, mergeSiteContent, newEntryId } from '@/lib/site-content';
 import { AddButton, Panel, RowButtons, StringList, TextField, move, smallButton } from '@/components/site-editor/fields';
 import { SlideshowEditor } from '@/components/site-editor/SlideshowEditor';
+import { LogoPicker } from '@/components/site-editor/LogoPicker';
 
 const SECTIONS = [
-  ['slideshow', 'Slideshow'], ['hero', 'Top of the page'], ['numbers', 'Numbers'], ['about', 'About us'],
-  ['operations', 'What we do'], ['product', 'Product'], ['locations', 'Sales points'], ['footer', 'Footer'],
+  ['slideshow', 'Slideshow'], ['brand', 'Brand and logo'], ['hero', 'Top of the page'], ['numbers', 'Numbers'], ['about', 'About us'],
+  ['operations', 'What we do'], ['product', 'Product'], ['contact-details', 'Contact details'], ['locations', 'Sales points'], ['signin', 'Sign-in page'], ['footer', 'Footer'],
 ] as const;
 
 /** Blank rows are dropped rather than rejected, so an unused "Add" never blocks saving. */
@@ -24,7 +25,7 @@ function cleanForSave(d: SiteContent): SiteContent {
     about: { ...d.about, paragraphs: lines(d.about.paragraphs), highlights: lines(d.about.highlights), work: d.about.work.filter((w) => w.label.trim() || w.detail.trim()) },
     operations: { ...d.operations, items: d.operations.items.filter((i) => i.title.trim() || i.body.trim()) },
     products: { ...d.products, sizes: lines(d.products.sizes), highlights: lines(d.products.highlights) },
-    contact: { ...d.contact, locations: d.contact.locations.map((l) => ({ ...l, phones: lines(l.phones) })).filter((l) => l.name.trim() || l.phones.length > 0) },
+    contact: { ...d.contact, details: d.contact.details.filter((x) => x.label.trim() || x.value.trim()), locations: d.contact.locations.map((l) => ({ ...l, phones: lines(l.phones) })).filter((l) => l.name.trim() || l.phones.length > 0) },
   };
 }
 
@@ -61,7 +62,7 @@ export default function SiteEditorPage() {
         applySaved(res);
         setMedia(files);
       })
-      .catch((err: unknown) => setLoadError(err instanceof ApiError ? err.message : 'Could not load the homepage content.'));
+      .catch((err: unknown) => setLoadError(err instanceof ApiError && err.status === 404 ? 'Your server does not have the homepage editor yet. Update the server (API) first: the Overview page explains how.' : err instanceof ApiError ? err.message : 'Could not load the homepage content.'));
   }, [accessToken, canEdit, applySaved]);
 
   const dirty = draft !== null && JSON.stringify(draft) !== saved;
@@ -84,12 +85,17 @@ export default function SiteEditorPage() {
     );
   }
 
-  const update = (fn: (d: SiteContent) => SiteContent) => setDraft((d) => (d ? fn(d) : d));
+  const update = (fn: (d: SiteContent) => SiteContent) => {
+    setStatus(null); // an edit makes the last message ("Saved", or an error) stale
+    setDraft((d) => (d ? fn(d) : d));
+  };
   const setHero = (p: Partial<SiteContent['hero']>) => update((d) => ({ ...d, hero: { ...d.hero, ...p } }));
   const setAbout = (p: Partial<SiteContent['about']>) => update((d) => ({ ...d, about: { ...d.about, ...p } }));
   const setOperations = (p: Partial<SiteContent['operations']>) => update((d) => ({ ...d, operations: { ...d.operations, ...p } }));
   const setProducts = (p: Partial<SiteContent['products']>) => update((d) => ({ ...d, products: { ...d.products, ...p } }));
   const setContact = (p: Partial<SiteContent['contact']>) => update((d) => ({ ...d, contact: { ...d.contact, ...p } }));
+  const setBrand = (p: Partial<SiteContent['brand']>) => update((d) => ({ ...d, brand: { ...d.brand, ...p } }));
+  const setSignin = (p: Partial<SiteContent['signin']>) => update((d) => ({ ...d, signin: { ...d.signin, ...p } }));
   const setFooter = (p: Partial<SiteContent['footer']>) => update((d) => ({ ...d, footer: { ...d.footer, ...p } }));
 
   const save = async () => {
@@ -150,7 +156,15 @@ export default function SiteEditorPage() {
 
           <div className="mt-6 max-w-5xl space-y-6">
             <Panel id="slideshow" title="Slideshow" hint="Pictures and short videos that rotate full-screen behind the top of the homepage, and behind the sign-in page (pictures only).">
-              <SlideshowEditor value={draft.slideshow} onChange={(slideshow) => update((d) => ({ ...d, slideshow }))} media={media} accessToken={accessToken as string} onMediaChanged={refreshMedia} />
+              <SlideshowEditor value={draft.slideshow} onChange={(slideshow) => update((d) => ({ ...d, slideshow }))} media={media} accessToken={accessToken as string} onMediaChanged={refreshMedia} alsoUsed={draft.brand.logoMediaId ? [draft.brand.logoMediaId] : []} />
+            </Panel>
+
+            <Panel id="brand" title="Brand and logo" hint="The name and logo in the website's top bar and on the sign-in page.">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField label="Name" value={draft.brand.name} max={30} onChange={(v) => setBrand({ name: v })} />
+                <TextField label="Line under the name" value={draft.brand.subtitle} max={60} onChange={(v) => setBrand({ subtitle: v })} />
+              </div>
+              <LogoPicker logoMediaId={draft.brand.logoMediaId} onChange={(id) => setBrand({ logoMediaId: id })} media={media} accessToken={accessToken as string} onMediaChanged={refreshMedia} />
             </Panel>
 
             <Panel id="hero" title="Top of the page">
@@ -237,6 +251,31 @@ export default function SiteEditorPage() {
               <p className="text-xs text-ink-500">The product poster picture itself is a fixed image. Ask your developer to replace it if the packaging changes.</p>
             </Panel>
 
+            <Panel id="contact-details" title="Contact details" hint="The company's own address, phone numbers, email, WhatsApp and links, shown as tap-to-use cards above the sales points.">
+              {draft.contact.details.map((d, i) => (
+                <div key={d.id} className={card} data-testid="detail-row">
+                  <div className="flex items-start gap-3">
+                    <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-[10rem_1fr_1fr]">
+                      <div>
+                        <label className="text-sm font-medium text-ink-700" htmlFor={`kind-${d.id}`}>Kind</label>
+                        <select id={`kind-${d.id}`} value={d.kind} onChange={(e) => setContact({ details: draft.contact.details.map((x, j) => (j === i ? { ...x, kind: e.target.value as typeof d.kind } : x)) })} className="mt-1 w-full rounded-lg border border-paddy-100 bg-white px-3 py-2 text-sm">
+                          <option value="text">Text (an address)</option>
+                          <option value="phone">Phone number</option>
+                          <option value="whatsapp">WhatsApp number</option>
+                          <option value="email">Email address</option>
+                          <option value="link">Web link</option>
+                        </select>
+                      </div>
+                      <TextField label="Label" value={d.label} max={40} placeholder="Head office" onChange={(v) => setContact({ details: draft.contact.details.map((x, j) => (j === i ? { ...x, label: v } : x)) })} />
+                      <TextField label="Value" value={d.value} max={200} placeholder={d.kind === 'email' ? 'sales@example.com' : d.kind === 'link' ? 'https://facebook.com/...' : d.kind === 'text' ? 'Adenta, Accra' : '0241234567'} onChange={(v) => setContact({ details: draft.contact.details.map((x, j) => (j === i ? { ...x, value: v } : x)) })} />
+                    </div>
+                    <RowButtons what={`contact line ${i + 1}`} first={i === 0} last={i === draft.contact.details.length - 1} onUp={() => setContact({ details: move(draft.contact.details, i, -1) })} onDown={() => setContact({ details: move(draft.contact.details, i, 1) })} onRemove={() => setContact({ details: draft.contact.details.filter((_, j) => j !== i) })} />
+                  </div>
+                </div>
+              ))}
+              {draft.contact.details.length < 12 && <AddButton onClick={() => setContact({ details: [...draft.contact.details, { id: newEntryId(), label: '', value: '', kind: 'text' }] })}>Add a contact line</AddButton>}
+            </Panel>
+
             <Panel id="locations" title="Sales points" hint="The places customers can buy from, shown as cards with tap-to-call phone numbers. Add a new place, or change a number, here.">
               <TextField label="Small line above the heading" value={draft.contact.eyebrow} max={60} onChange={(v) => setContact({ eyebrow: v })} />
               <TextField label="Heading" value={draft.contact.heading} max={120} onChange={(v) => setContact({ heading: v })} />
@@ -255,6 +294,14 @@ export default function SiteEditorPage() {
                 ))}
               </ul>
               {draft.contact.locations.length < 40 && <AddButton onClick={() => setContact({ locations: [...draft.contact.locations, { id: newEntryId(), name: '', phones: [''] }] })}>Add a sales point</AddButton>}
+            </Panel>
+
+            <Panel id="signin" title="Sign-in page" hint="What people see when they sign in to the system.">
+              <TextField label="Notice above the form (optional)" value={draft.signin.notice} max={300} rows={2} onChange={(v) => setSignin({ notice: v })} help="For example: the system will be unavailable on Sunday from 6 to 8 pm. Leave empty to show nothing." />
+              <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-sm text-ink-700">
+                <input type="checkbox" checked={draft.signin.showDemoAccounts} onChange={(e) => setSignin({ showDemoAccounts: e.target.checked })} className="mt-1 h-4 w-4 rounded border-paddy-100" />
+                <span><span className="font-medium text-ink-900">Show the demo account buttons</span><span className="mt-0.5 block text-ink-500">Lets anyone who opens the sign-in page sign in as a demo user without a password. Keep this OFF on the live system unless you are giving a demonstration.</span></span>
+              </label>
             </Panel>
 
             <Panel id="footer" title="Footer">

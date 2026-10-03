@@ -14,6 +14,10 @@ const mp4Header = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftyp
 const sized = (header: Buffer, bytes: number) => Buffer.concat([header, Buffer.alloc(Math.max(bytes - header.length, 16))]);
 const file = (buffer: Buffer, name = 'photo.jpg') => ({ buffer, originalname: name, size: buffer.length });
 
+function baseContent(): any {
+  return { hero: { headline: 'Hello' }, slideshow: { intervalSeconds: 6, slides: [] } };
+}
+
 function content(slides: unknown[] = []): any {
   return {
     hero: { headline: 'Hello' }, slideshow: { intervalSeconds: 6, slides }, about: { heading: 'A' }, operations: { heading: 'O' },
@@ -159,7 +163,13 @@ describe('SiteService: the editable homepage', () => {
     });
     it('will not delete a file the slideshow is using', async () => {
       const { service, prisma } = build({ stored: { data: content([{ type: 'IMAGE', mediaId: IMG_ID }]), version: 1, updatedAt: new Date(), updatedById: null }, media: [{ id: IMG_ID, kind: 'IMAGE' }] });
-      await expect(service.deleteMedia(IMG_ID, admin)).rejects.toThrow(/used in the slideshow/);
+      await expect(service.deleteMedia(IMG_ID, admin)).rejects.toThrow(/in use on the homepage/);
+      expect(prisma.siteMedia.delete).not.toHaveBeenCalled();
+    });
+    it('will not delete the picture the homepage is using as its logo', async () => {
+      const content: any = { ...baseContent(), brand: { name: 'KAM', subtitle: '', logoMediaId: IMG_ID } };
+      const { service, prisma } = build({ stored: { data: content, version: 1, updatedAt: new Date(), updatedById: null }, media: [{ id: IMG_ID, kind: 'IMAGE' }] });
+      await expect(service.deleteMedia(IMG_ID, admin)).rejects.toThrow(/in use on the homepage/);
       expect(prisma.siteMedia.delete).not.toHaveBeenCalled();
     });
     it('deletes an unused file and records it', async () => {

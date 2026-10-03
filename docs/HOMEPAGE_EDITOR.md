@@ -9,13 +9,16 @@ The public homepage (the page visitors see at the website's address) can be chan
 
 | Section | What you can do |
 |---|---|
+| Brand and logo | The name and the line under it in the website's top bar, and an uploaded logo (shown as a circle) in the top bar and on the sign-in page. |
 | Slideshow | Upload pictures and short videos, put them in order, switch a slide off, give each a description and an optional caption, and choose how many seconds a picture is shown (3 to 30). |
 | Top of the page | The small line, the heading (with a gold highlighted part), the introduction, two buttons and where they go, and the tick-list. |
 | Numbers | Up to four figures (for example "6 Farms"). |
 | About us | Heading, paragraphs, tick-list, and the "Where we work" box. Add, remove and reorder places. |
 | What we do | Up to six cards. |
 | Product | Name, tagline, description, bag sizes, selling points and button text. |
+| Contact details | The company's own address, phone numbers, WhatsApp, email and links, shown as tap-to-use cards above the sales points. |
 | Sales points | Add a new place with up to four phone numbers (each becomes a tap-to-call link), edit or remove existing ones. |
+| Sign-in page | A notice shown above the sign-in form, and whether the demo account buttons are offered. **They are off by default**: they sign in without a password and must not be offered on the live system. |
 | Footer | Company name, the line under it, and the sign-in button text. |
 
 **Start again** puts the homepage back to its original text and removes the slideshow. Uploaded files are kept.

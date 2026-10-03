@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
+  SlidersHorizontal,
   LayoutTemplate,
   LayoutDashboard,
   Sprout,
@@ -56,6 +57,7 @@ import { TopBar } from './TopBar';
 // remounts; a plain lookup object doesn't have that problem).
 const ICON_MAP: Record<string, LucideIcon> = {
   'layout-template': LayoutTemplate,
+  'sliders-horizontal': SlidersHorizontal,
   'layout-dashboard': LayoutDashboard,
   sprout: Sprout,
   wheat: Wheat,

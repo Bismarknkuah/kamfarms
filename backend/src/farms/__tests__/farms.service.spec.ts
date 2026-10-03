@@ -7,6 +7,7 @@ import { AuthenticatedUser } from '../../auth/types/authenticated-user';
 describe('FarmsService', () => {
   const basePrisma = () => ({
     farm: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
+    deliveryOrder: { findMany: jest.fn().mockResolvedValue([]) },
     user: { findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn() },
     farmManager: { upsert: jest.fn(), deleteMany: jest.fn(), create: jest.fn() },
     role: { findUnique: jest.fn() },

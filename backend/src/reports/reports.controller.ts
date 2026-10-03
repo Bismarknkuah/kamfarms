@@ -1,4 +1,4 @@
-import { Controller, ForbiddenException, Get, Query, Res } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Query, Res, Param, Optional } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { ReportsService } from './reports.service';
@@ -7,6 +7,7 @@ import { RequirePermission } from '../common/decorators/require-permission.decor
 import { PERMISSIONS } from '../common/constants/permissions';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { ReportCatalogService } from './report-catalog.service';
 
 type ExportFormat = 'csv' | 'xlsx' | 'pdf' | undefined;
 
@@ -17,6 +18,7 @@ export class ReportsController {
   constructor(
     private readonly reportsService: ReportsService,
     private readonly exportService: ExportService,
+    @Optional() private readonly catalog?: ReportCatalogService,
   ) {}
 
   /** Shared export handling: no format -> JSON envelope; format=csv/
@@ -56,6 +58,26 @@ export class ReportsController {
       return;
     }
     res.json({ success: true, message: null, errorCode: null, data: rows });
+  }
+
+  /** The reports this person may download, each cut down to their own jurisdiction. */
+  @Get('catalog')
+  @RequirePermission(PERMISSIONS.REPORTS_EXPORT)
+  catalogList(@CurrentUser() actor: AuthenticatedUser) {
+    return this.catalog!.list(actor);
+  }
+
+  @Get('catalog/:id/download')
+  @RequirePermission(PERMISSIONS.REPORTS_EXPORT)
+  async catalogDownload(
+    @Param('id') id: string,
+    @Query() query: { from?: string; to?: string; format?: string },
+    @CurrentUser() actor: AuthenticatedUser,
+    @Res() res: Response,
+  ) {
+    const format = (['csv', 'xlsx', 'pdf'] as const).find((f) => f === query.format);
+    const built = await this.catalog!.build(id, actor, { from: query.from, to: query.to, format });
+    await this.respondWithFormat(res, actor, built.rows, built.filenameBase, built.title, format ?? 'csv');
   }
 
   @Get('executive-summary')

@@ -1664,3 +1664,83 @@ export const insightsApi = {
   watchlist: (accessToken: string, days = 30) =>
     request<Watchlist>(`/insights/watchlist?days=${days}`, { method: 'GET', cache: 'no-store' }, accessToken),
 };
+
+// ---------------------------------------------------------------------------
+// The System Administrator's tools
+// ---------------------------------------------------------------------------
+
+export interface SettingItem {
+  key: string;
+  group: string;
+  label: string;
+  help: string;
+  type: 'number' | 'roles';
+  unit?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  default: number | string[];
+  value: number | string[];
+  isDefault: boolean;
+}
+export interface SettingGroupInfo { id: string; title: string; intro: string }
+export interface SettingsRegistry { groups: SettingGroupInfo[]; items: SettingItem[] }
+
+export const settingsRegistryApi = {
+  list: (accessToken: string) => request<SettingsRegistry>('/settings/registry', { method: 'GET', cache: 'no-store' }, accessToken),
+  update: (accessToken: string, values: Record<string, number | string[]>) =>
+    request<SettingsRegistry>('/settings/registry', { method: 'PATCH', body: JSON.stringify({ values }) }, accessToken),
+  reset: (accessToken: string, key: string) => request<SettingsRegistry>(`/settings/registry/${encodeURIComponent(key)}`, { method: 'DELETE' }, accessToken),
+};
+
+export interface SystemOverview {
+  generatedAt: string;
+  api: { version: string; commit: string | null; startedAt: string; features: string[]; databaseOk: boolean; databaseMs: number };
+  people: { total: number | null; active: number | null; disabled: number | null; lockedNow: number | null; mustChangePassword: number | null; neverSignedIn: number | null; roles: { code: string; name: string; isSystemRole: boolean; members: number }[] | null };
+  organization: { farms: number | null; warehouses: number | null; millingCenters: number | null; machines: number | null; customers: number | null };
+  access: { roles: number | null; permissions: number | null };
+  pending: { resetRequests: number | null };
+  activity: { last24h: number | null; last7d: number | null; recent: { at: string; who: string; action: string; entity: string }[] | null };
+  homepage: { saved: boolean; version: number; updatedAt: string | null; files: number | null };
+  settings: { total: number | null; changedFromDefault: number | null };
+}
+export const systemApi = {
+  overview: (accessToken: string) => request<SystemOverview>('/system/overview', { method: 'GET', cache: 'no-store' }, accessToken),
+};
+
+/** What the running server says about itself. A server older than this website has no `features` at all. */
+export interface ApiInfo { status: string; version?: string; commit?: string | null; startedAt?: string; features?: string[] }
+export const healthApi = {
+  /** Public, and read even when the server reports itself degraded. */
+  info: async (): Promise<ApiInfo> => {
+    const res = await fetch(`${API_URL}/health`, { cache: 'no-store' });
+    const body = (await res.json().catch(() => null)) as { data?: ApiInfo } | null;
+    if (!body?.data) throw new ApiError('The server did not answer.', null, res.status);
+    return body.data;
+  },
+};
+
+export interface CatalogReport { id: string; title: string; description: string; group: string; dated: boolean; jurisdiction: string }
+export const reportCatalogApi = {
+  list: (accessToken: string) => request<CatalogReport[]>('/reports/catalog', { method: 'GET', cache: 'no-store' }, accessToken),
+  /** Streams the file and saves it, the same way the other report downloads do. */
+  download: async (accessToken: string, id: string, params: { format: 'csv' | 'xlsx' | 'pdf'; from?: string; to?: string }) => {
+    const qs = new URLSearchParams({ format: params.format });
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    const res = await fetch(`${API_URL}/reports/catalog/${encodeURIComponent(id)}/download?${qs.toString()}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { message?: string; errorCode?: string } | null;
+      throw new ApiError(body?.message ?? 'Failed to download.', body?.errorCode ?? null, res.status);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${id}-${new Date().toISOString().slice(0, 10)}.${params.format}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+};

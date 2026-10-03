@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { humanizeValidationMessages } from './humanize-validation';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -28,7 +29,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = body;
       } else if (typeof body === 'object' && body !== null) {
         const b = body as Record<string, unknown>;
-        message = Array.isArray(b.message) ? b.message.join('; ') : ((b.message as string) ?? message);
+        message = Array.isArray(b.message) ? humanizeValidationMessages(b.message).join('; ') : ((b.message as string) ?? message);
         errorCode = (b.errorCode as string) ?? this.codeFromStatus(status);
       }
     } else {

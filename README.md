@@ -4436,4 +4436,7 @@ these docs as a punch list, not a footnote.
 
 - **Homepage editor** (System Administrator, `site.manage`): change the public homepage's text, sales points and the rotating pictures and videos from the sidebar, **Homepage**. See `docs/HOMEPAGE_EDITOR.md`.
 - **Watchlist** (MD and CEO, `insights.view`): where records look unusual against each milling center's, warehouse's and farm's own history, on the Oversight page and the dashboard. See `docs/WATCHLIST.md`.
-- Deploying this adds two tables (`site_content`, `site_media`) through the existing `prisma db push` step. No new environment variables.
+- **System settings** (System Administrator, `settings.manage`): the rules and limits the system works by (lockout policy, delivery tolerance, bag weight, milling and machine checks, who is alerted, the Watchlist limits) are edited from the screen instead of the code. See `docs/SYSTEM_SETTINGS.md`.
+- **Control center** (the System Administrator's dashboard): people, places, roles, resets and activity at a glance, a way into everything the Administrator manages, and a plain warning when the server is older than the website.
+- **Report downloads by role** (everyone with `reports.export`): each role is offered the reports its permissions cover, limited to its own farms, warehouses and milling centers. See `docs/REPORT_DOWNLOADS.md`.
+- Deploying adds two tables (`site_content`, `site_media`) through the existing `prisma db push` step. No new environment variables.

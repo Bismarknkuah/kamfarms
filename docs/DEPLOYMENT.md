@@ -486,3 +486,13 @@ and reaches real runtime logic, instead of failing on `TS5109`.
       service (Railway does this by default within a project)
 - [ ] Reviewed `docs/SECURITY.md` for the full picture of what's
       hardened and what's explicitly still a gap
+
+
+## Is the server as new as the website?
+
+The website (Vercel) and the server, also called the API (Railway), are deployed separately, so one can end up newer than the other. When that happens some pages quietly fail (a "404" in the browser console is the usual sign).
+
+- `GET /api/health` reports `version`, `commit` and the list of `features` the running server has. An older server reports no features at all.
+- The System Administrator's dashboard (**Control center**) compares that list with what the website needs, and when the server is behind it says so in plain words and names each part that will not work yet.
+- If the server is behind, open Railway, then the API service, then **Deployments**. A newest deployment marked *Failed* has a build log that says why (a compile error is the usual reason); one that is old means Railway is not building new commits: check **Settings, Source** (the `main` branch of the repository, automatic deploys on).
+- Build the API locally the way Railway does before pushing: `npx prisma generate`, then `npm run build -w backend`. This catches type errors that a quick check can miss.

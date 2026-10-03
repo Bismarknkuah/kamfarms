@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import { reportsApi, ApiError } from '@/lib/api-client';
+import { CatalogDownloads } from '@/components/reports/CatalogDownloads';
 
 type Period = 'daily' | 'weekly' | 'monthly' | 'yearly';
 type Format = 'csv' | 'xlsx' | 'pdf';
@@ -169,6 +170,8 @@ export default function ReportsPage() {
           />
         )}
       </div>
+
+      <CatalogDownloads accessToken={accessToken} from={from} to={to} />
     </DashboardShell>
   );
 }

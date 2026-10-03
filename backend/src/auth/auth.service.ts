@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
@@ -10,9 +10,8 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { AuthenticatedUser } from './types/authenticated-user';
 import { EmailService } from '../email/email.service';
+import { SettingsService, settingNumber } from '../settings/settings.service';
 
-const MAX_FAILED_ATTEMPTS = 5;
-const LOCKOUT_MINUTES = 15;
 
 export interface RequestMeta {
   ipAddress?: string;
@@ -27,6 +26,7 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly audit: AuditService,
     private readonly email: EmailService,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   private hashToken(token: string): string {
@@ -84,18 +84,20 @@ export class AuthService {
     const passwordOk = await argon2.verify(user.passwordHash, dto.password);
     if (!passwordOk) {
       const failedCount = user.failedLoginCount + 1;
-      const shouldLock = failedCount >= MAX_FAILED_ATTEMPTS;
+      const maxAttempts = await settingNumber(this.settings, 'auth.max_failed_attempts');
+      const lockoutMinutes = await settingNumber(this.settings, 'auth.lockout_minutes');
+      const shouldLock = failedCount >= maxAttempts;
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
           failedLoginCount: shouldLock ? 0 : failedCount,
-          lockedUntil: shouldLock ? new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000) : user.lockedUntil,
+          lockedUntil: shouldLock ? new Date(Date.now() + lockoutMinutes * 60 * 1000) : user.lockedUntil,
         },
       });
       await this.recordAttempt(user.id, dto.email, false, meta, 'BAD_PASSWORD');
       if (shouldLock) {
         throw new ForbiddenException({
-          message: `Too many failed attempts. Account locked for ${LOCKOUT_MINUTES} minutes.`,
+          message: `Too many failed attempts. Account locked for ${lockoutMinutes} minutes.`,
           errorCode: 'ACCOUNT_LOCKED',
         });
       }

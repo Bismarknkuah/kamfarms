@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AdjustmentRow, ExpenseRow, IntakeRow, LocationKind, MeterDay, Place, ReservedRow, Run, ShipmentRow, Watchlist, buildWatchlist } from './watchlist.engine';
+import { SettingsService } from '../settings/settings.service';
+import { AdjustmentRow, ExpenseRow, IntakeRow, LocationKind, MeterDay, Place, ReservedRow, Run, ShipmentRow, Thresholds, WATCH, Watchlist, buildWatchlist } from './watchlist.engine';
 
 export const DEFAULT_WATCH_DAYS = 30;
 const DAY = 86_400_000;
@@ -12,6 +13,22 @@ export function clampDays(value: unknown): number {
   return Number.isFinite(n) ? Math.min(90, Math.max(7, n)) : DEFAULT_WATCH_DAYS;
 }
 
+/** Which setting sets which limit of the engine, and how to convert it (the screen uses percentages; the engine uses fractions). */
+const THRESHOLD_MAP: [string, keyof Thresholds, number][] = [
+  ['watchlist.recovery_drop_points', 'recoveryDropPoints', 1],
+  ['watchlist.power_over_percent', 'powerMedium', 100],
+  ['watchlist.power_high_percent', 'powerHigh', 100],
+  ['watchlist.shortfall_percent', 'shortfallMediumPct', 1],
+  ['watchlist.shortfall_high_percent', 'shortfallHighPct', 1],
+  ['watchlist.write_down_bags', 'writeDownMediumBags', 1],
+  ['watchlist.write_down_high_bags', 'writeDownHighBags', 1],
+  ['watchlist.reserved_days', 'reservedDays', 1],
+  ['watchlist.reserved_high_days', 'reservedHighDays', 1],
+  ['watchlist.intake_drop_percent', 'intakeDropRatio', 100],
+  ['watchlist.rejection_percent', 'rejectMedium', 100],
+  ['watchlist.spend_factor', 'spikeMediumFactor', 1],
+];
+
 const LOCATION_KINDS: Record<string, LocationKind> = { FARM: 'FARM', WAREHOUSE: 'WAREHOUSE', MILLING_CENTER: 'MILLING_CENTER' };
 
 /**
@@ -22,10 +39,22 @@ const LOCATION_KINDS: Record<string, LocationKind> = { FARM: 'FARM', WAREHOUSE: 
  */
 @Injectable()
 export class InsightsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly settings?: SettingsService,
+  ) {}
+
+  private async thresholds(): Promise<Thresholds> {
+    const cfg: Thresholds = { ...WATCH };
+    if (!this.settings) return cfg;
+    for (const [key, field, divisor] of THRESHOLD_MAP) cfg[field] = (await this.settings.getNumber(key)) / divisor;
+    return cfg;
+  }
 
   async watchlist(days?: unknown, now: Date = new Date()): Promise<Watchlist> {
-    const windowDays = clampDays(days);
+    const cfg = await this.thresholds();
+    const defaultDays = this.settings ? await this.settings.getNumber('watchlist.default_days') : DEFAULT_WATCH_DAYS;
+    const windowDays = clampDays(days === undefined || days === null || days === '' ? defaultDays : days);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = this.prisma as any;
     const since = (n: number) => new Date(now.getTime() - n * DAY);
@@ -70,7 +99,8 @@ export class InsightsService {
     const places = (rows: { id: string; name: string }[]): Place[] => rows.map((r) => ({ id: r.id, name: r.name }));
     const receiptIds = new Set<string>((receipted as { id: string }[]).map((r) => r.id));
 
-    return buildWatchlist({
+    return buildWatchlist(
+      {
       now,
       windowDays,
       centers: places(centers),
@@ -98,6 +128,8 @@ export class InsightsService {
       expenses: (expenses as any[]).map((e): ExpenseRow => ({
         id: e.id, number: e.expenseNumber, farmId: e.farmId ?? null, warehouseId: e.warehouseId ?? null, amount: Number(e.amount), date: new Date(e.date), hasReceipt: receiptIds.has(e.id),
       })),
-    });
+      },
+      cfg,
+    );
   }
 }

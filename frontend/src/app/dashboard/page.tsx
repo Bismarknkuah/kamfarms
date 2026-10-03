@@ -12,6 +12,7 @@ import { FinanceDesk, ReleaseDesk, DeliveryDesk, MyOrdersDesk } from '@/componen
 import { roleLabel } from '@/lib/role-labels';
 import { Wheat, Truck, Factory, Package, DollarSign } from 'lucide-react';
 import { WatchlistCard } from '@/components/WatchlistCard';
+import { AdminControlCenter } from '@/components/AdminControlCenter';
 import {
   reportsApi,
   ExecutiveSummary,
@@ -439,7 +440,7 @@ export default function DashboardPage() {
     // would silently blank this entire section with no explanation.
     // farmsApi.list() is already correctly scoped server-side and
     // handles any count gracefully.
-    farmsApi.list(accessToken).then((list) => {
+    (hasPermission('farm.view') ? farmsApi.list(accessToken) : Promise.resolve([] as Awaited<ReturnType<typeof farmsApi.list>>)).then((list) => {
       if (list.length === 1) {
         const farmId = list[0].id;
         setMyFarmIdRobust(farmId);
@@ -1875,14 +1876,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-          {isAdmin && (
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-              <IconStatCard icon={Wheat} tone="green" label="Total users" value={String(adminUsers.length)} />
-              <IconStatCard icon={Package} tone="blue" label="Active users" value={String(adminUsers.filter((u) => u.status === 'ACTIVE').length)} />
-              <IconStatCard icon={Truck} tone="orange" label="Suspended or inactive" value={String(adminUsers.filter((u) => u.status !== 'ACTIVE').length)} />
-              <IconStatCard icon={Factory} tone="purple" label="Distinct roles in use" value={String(new Set(adminUsers.flatMap((u) => u.roles.map((r) => r.role.code))).size)} />
-            </div>
-          )}
+          {isAdmin && accessToken && <AdminControlCenter accessToken={accessToken} />}
 
           {isAdmin && (
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

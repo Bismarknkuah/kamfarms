@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -8,19 +8,17 @@ import { UpdateMachineStatusDto } from './dto/update-machine-status.dto';
 import { CreateMaintenanceDto } from './dto/create-maintenance.dto';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { SettingsService, settingNumber, settingRoles } from '../settings/settings.service';
 
 /** A reading whose consumption deviates from the machine's own trailing
  * average by more than this fraction is flagged (spec section 20: detect
  * unusually high/low consumption, sudden changes). Needs at least 3 prior
  * readings before a baseline is trusted - cold-start, same principle as
  * the AI module's cold-start rule in section 21. */
-const ANOMALY_DEVIATION_THRESHOLD = 0.5; // 50%
-const MIN_READINGS_FOR_BASELINE = 3;
 
 /** Who actually supervises an Operations Officer, plus the top
  * executives - the exact people who should hear about a suspicious
  * meter reading, not just whoever happens to hold machine.view. */
-const ANOMALY_ALERT_ROLE_CODES = ['OPERATIONS_MANAGER', 'MD', 'CEO'];
 
 @Injectable()
 export class MachinesService {
@@ -28,6 +26,7 @@ export class MachinesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   /** Was returning machines from every milling center, company-wide, to
@@ -200,11 +199,13 @@ export class MachinesService {
     let isAnomalous = false;
     let anomalyReason: string | null = null;
 
-    if (recentReadings.length >= MIN_READINGS_FOR_BASELINE) {
+    const minReadings = await settingNumber(this.settings, 'machines.min_readings_baseline');
+    const deviationLimit = (await settingNumber(this.settings, 'machines.anomaly_deviation_percent')) / 100;
+    if (recentReadings.length >= minReadings) {
       const avg = recentReadings.reduce((sum, r) => sum + Number(r.consumption), 0) / recentReadings.length;
       if (avg > 0) {
         const deviation = Math.abs(consumption - avg) / avg;
-        if (deviation > ANOMALY_DEVIATION_THRESHOLD) {
+        if (deviation > deviationLimit) {
           isAnomalous = true;
           anomalyReason = `Consumption ${consumption.toFixed(2)} ${dto.unit ?? 'kWh'} deviates ${(deviation * 100).toFixed(0)}% from this machine's recent average of ${avg.toFixed(2)}.`;
         }
@@ -252,11 +253,12 @@ export class MachinesService {
     // the operator who logged it, and other roles with no supervisory
     // stake in this specific anomaly).
     if (isAnomalous) {
+      const alertRoles = await settingRoles(this.settings, 'alerts.machine_anomaly_roles');
       const supervisors = await this.prisma.user.findMany({
         where: {
           deletedAt: null,
           status: 'ACTIVE',
-          roles: { some: { role: { code: { in: ANOMALY_ALERT_ROLE_CODES } } } },
+          roles: { some: { role: { code: { in: alertRoles } } } },
         },
         select: { id: true },
       });

@@ -337,3 +337,15 @@ describe('the watchlist as a whole', () => {
     expect(Object.keys(WATCH).length).toBeGreaterThan(25);
   });
 });
+
+describe('limits set by the administrator', () => {
+  it('uses the limits it is given instead of the built-in ones', () => {
+    const runs = [...history(), run(101, 3, 6340)]; // 4.6 points under the usual 68%
+    expect(find(buildWatchlist(input({ runs })).signals, 'LOW_RECOVERY')).toBeUndefined();
+    expect(find(buildWatchlist(input({ runs }), { ...WATCH, recoveryDropPoints: 2 }).signals, 'LOW_RECOVERY')).toBeDefined();
+  });
+  it('changes nothing at all when given the built-in limits explicitly', () => {
+    const data = input({ runs: [...history(), run(101, 3, 5700)], reserved: [{ id: 'o1', number: 'SO-1', warehouseId: 'w1', since: ago(4) }] });
+    expect(buildWatchlist(data, { ...WATCH })).toEqual(buildWatchlist(data));
+  });
+});

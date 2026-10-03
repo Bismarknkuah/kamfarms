@@ -30,6 +30,9 @@ export interface SiteStat { id: string; label: string; value: string; sub: strin
 export interface SiteLabelled { id: string; label: string; detail: string }
 export interface SiteCard { id: string; title: string; body: string }
 export interface SiteLocation { id: string; name: string; phones: string[] }
+export type ContactKind = 'text' | 'phone' | 'email' | 'whatsapp' | 'link';
+/** A line of company contact information (an address, a phone, an email...). */
+export interface SiteContactDetail { id: string; label: string; value: string; kind: ContactKind }
 
 export interface SiteContent {
   hero: {
@@ -41,11 +44,15 @@ export interface SiteContent {
   about: { eyebrow: string; heading: string; paragraphs: string[]; highlights: string[]; workHeading: string; work: SiteLabelled[] };
   operations: { eyebrow: string; heading: string; intro: string; items: SiteCard[] };
   products: { eyebrow: string; name: string; tagline: string; description: string; sizesHeading: string; sizes: string[]; highlights: string[]; ctaLabel: string };
-  contact: { eyebrow: string; heading: string; intro: string; locations: SiteLocation[] };
+  contact: { eyebrow: string; heading: string; intro: string; details: SiteContactDetail[]; locations: SiteLocation[] };
   footer: { company: string; tagline: string; signInLabel: string };
+  /** The name (and optionally logo) shown in the website's top bar and on the sign-in page. */
+  brand: { name: string; subtitle: string; logoMediaId: string | null };
+  /** What the sign-in page shows. */
+  signin: { showDemoAccounts: boolean; notice: string };
 }
 
-export const SITE_LIMITS = { slides: 12, stats: 4, operations: 6, locations: 40, work: 12, interval: { min: 3, max: 30 } } as const;
+export const SITE_LIMITS = { slides: 12, stats: 4, operations: 6, locations: 40, work: 12, details: 12, interval: { min: 3, max: 30 } } as const;
 
 function fail(path: string, message: string): never {
   throw new BadRequestException(`${path}: ${message}`);
@@ -117,6 +124,20 @@ function slide(raw: unknown, path: string): SiteSlide {
   };
 }
 
+const CONTACT_KINDS: ContactKind[] = ['text', 'phone', 'email', 'whatsapp', 'link'];
+const EMAIL = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/;
+
+function contactDetail(raw: unknown, path: string): SiteContactDetail {
+  const o = obj(raw, path);
+  const kind = o.kind === undefined ? 'text' : o.kind;
+  if (typeof kind !== 'string' || !CONTACT_KINDS.includes(kind as ContactKind)) fail(`${path}.kind`, 'must be text, phone, email, whatsapp or link.');
+  const value = text(o.value, `${path}.value`, 200, true);
+  if ((kind === 'phone' || kind === 'whatsapp') && !PHONE.test(value)) fail(`${path}.value`, 'is not a valid phone number (digits, spaces, + ( ) and - only).');
+  if (kind === 'email' && !EMAIL.test(value)) fail(`${path}.value`, 'is not a valid email address.');
+  if (kind === 'link' && !HTTPS_URL.test(value)) fail(`${path}.value`, 'must be an https:// link.');
+  return { id: entryId(o.id), label: text(o.label, `${path}.label`, 40, true), value, kind: kind as ContactKind };
+}
+
 function phoneNumber(v: unknown, path: string): string {
   const s = text(v, path, 24, true);
   if (!PHONE.test(s)) fail(path, 'is not a valid phone number (digits, spaces, + ( ) and - only).');
@@ -133,6 +154,10 @@ export function sanitizeSiteContent(input: unknown): SiteContent {
   const prod = obj(root.products ?? {}, 'products');
   const contact = obj(root.contact ?? {}, 'contact');
   const footer = obj(root.footer ?? {}, 'footer');
+  const brand = obj(root.brand ?? {}, 'brand');
+  const signin = obj(root.signin ?? {}, 'signin');
+  const logo = brand.logoMediaId === undefined || brand.logoMediaId === null || brand.logoMediaId === '' ? null : brand.logoMediaId;
+  if (logo !== null && (typeof logo !== 'string' || !UUID_SHAPE.test(logo))) fail('brand.logoMediaId', 'is not a valid uploaded file.');
 
   const interval = show.intervalSeconds === undefined ? 6 : show.intervalSeconds;
   if (typeof interval !== 'number' || !Number.isInteger(interval) || interval < SITE_LIMITS.interval.min || interval > SITE_LIMITS.interval.max) {
@@ -196,6 +221,7 @@ export function sanitizeSiteContent(input: unknown): SiteContent {
       eyebrow: text(contact.eyebrow, 'contact.eyebrow', 60),
       heading: text(contact.heading, 'contact.heading', 120, true),
       intro: text(contact.intro, 'contact.intro', 400),
+      details: items(contact.details, 'contact.details', SITE_LIMITS.details).map((d, i) => contactDetail(d, `contact.details[${i + 1}]`)),
       locations: items(contact.locations, 'contact.locations', SITE_LIMITS.locations).map((raw, i) => {
         const o = obj(raw, `contact.locations[${i + 1}]`);
         const phones = items(o.phones, `contact.locations[${i + 1}].phones`, 4).map((p, j) => phoneNumber(p, `contact.locations[${i + 1}].phones[${j + 1}]`));
@@ -207,10 +233,22 @@ export function sanitizeSiteContent(input: unknown): SiteContent {
       tagline: text(footer.tagline, 'footer.tagline', 200),
       signInLabel: text(footer.signInLabel, 'footer.signInLabel', 60),
     },
+    brand: {
+      name: text(brand.name === undefined ? 'KAM' : brand.name, 'brand.name', 30, true),
+      subtitle: text(brand.subtitle === undefined ? 'TRADING & FARMS LTD.' : brand.subtitle, 'brand.subtitle', 60),
+      logoMediaId: logo as string | null,
+    },
+    signin: {
+      showDemoAccounts: signin.showDemoAccounts === true,
+      notice: text(signin.notice, 'signin.notice', 300),
+    },
   };
 }
 
 /** Every uploaded file the content points at, with the type the slide expects. */
 export function collectMediaRefs(content: SiteContent): { id: string; type: SlideType }[] {
-  return content.slideshow.slides.filter((s) => s.mediaId !== null).map((s) => ({ id: s.mediaId as string, type: s.type }));
+  const refs = content.slideshow.slides.filter((s) => s.mediaId !== null).map((s) => ({ id: s.mediaId as string, type: s.type }));
+  // the logo is an uploaded picture too, and must be protected from deletion while it is in use
+  if (content.brand?.logoMediaId) refs.push({ id: content.brand.logoMediaId, type: 'IMAGE' });
+  return refs;
 }

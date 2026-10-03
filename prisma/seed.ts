@@ -23,12 +23,12 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
     // actually send anything, only ever receive - every other role
     // except Auditor already held this.
     permissionCodes: [
-      'dashboard.view', 'users.manage', 'roles.manage', 'permissions.manage', 'messages.send', 'settings.manage',
-      'audit.view', 'backup.manage', 'reset.request', 'reset.execute', 'reports.view', 'reports.export',
-      'farm.view', 'farm.create', 'farm.update', 'farm.delete',
-      'warehouse.view', 'warehouse.create', 'warehouse.update', 'warehouse.delete',
-      'milling.view', 'milling.manage', 'organization.manage', 'masterdata.manage',
-      'machine.view', 'machine.manage',
+      'dashboard.view', 'users.manage', 'roles.manage', 'permissions.manage', 'messages.send',
+      'settings.manage', 'audit.view', 'backup.manage', 'reset.request', 'reset.execute',
+      'reports.view', 'reports.export', 'farm.view', 'farm.create', 'farm.update', 'farm.delete',
+      'warehouse.view', 'warehouse.create', 'warehouse.update', 'warehouse.delete', 'milling.view',
+      'milling.manage', 'organization.manage', 'masterdata.manage', 'machine.view', 'machine.manage',
+      'site.manage',
     ],
   },
   {
@@ -53,6 +53,7 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
       'sales.view', 'expense.view', 'reports.view', 'reports.export', 'ai.view', 'ai.use',
       'messages.send', 'messages.broadcast', 'tasks.assign', 'audit.view', 'reset.approve',
       'organization.manage', 'masterdata.manage', 'sales.release', 'finance.approve.director',
+      'insights.view',
     ],
   },
   {
@@ -72,7 +73,7 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
       'warehouse.inventory.view', 'milling.view', 'machine.view', 'delivery.view', 'finance.view',
       'sales.view', 'expense.view', 'reports.view', 'reports.export', 'ai.view', 'ai.use',
       'messages.send', 'messages.broadcast', 'tasks.assign', 'audit.view', 'reset.approve',
-      'sales.release', 'finance.approve.director',
+      'sales.release', 'finance.approve.director', 'insights.view',
     ],
   },
   {

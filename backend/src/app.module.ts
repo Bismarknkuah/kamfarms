@@ -22,6 +22,8 @@ import { ProductionModule } from './production/production.module';
 import { PackagingModule } from './packaging/packaging.module';
 import { CustomersModule } from './customers/customers.module';
 import { SalesModule } from './sales/sales.module';
+import { SiteModule } from './site/site.module';
+import { InsightsModule } from './insights/insights.module';
 import { FinanceModule } from './finance/finance.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SettingsModule } from './settings/settings.module';
@@ -62,6 +64,8 @@ import { SystemResetModule } from './system-reset/system-reset.module';
     PackagingModule,
     CustomersModule,
     SalesModule,
+    SiteModule,
+    InsightsModule,
     FinanceModule,
     MessagingModule,
     CallsModule,

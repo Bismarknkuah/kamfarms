@@ -43,7 +43,7 @@ export function SiteNav() {
 
   return (
     <header className={`fixed inset-x-0 top-0 z-40 transition-all duration-500 ${light ? 'border-b border-paddy-100 bg-white/95 py-3 shadow-sm backdrop-blur' : 'bg-transparent py-5'}`}>
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6">
+      <div className="mx-auto flex w-full max-w-[1760px] items-center justify-between gap-4 px-5 sm:px-8 lg:px-14 2xl:px-20">
         <a href="#home" className={`flex items-center gap-2.5 ${light ? 'text-paddy-900' : 'text-white'}`} aria-label="KAM Trading and Farms, home">
           <span className="grid h-10 w-10 place-items-center rounded-full bg-husk-500 text-paddy-900"><Wheat className="h-5 w-5" /></span>
           <span className="leading-none">
@@ -97,7 +97,7 @@ export function SiteNav() {
       </div>
 
       <div className={`overflow-hidden transition-[max-height] duration-300 md:hidden ${open ? 'max-h-80' : 'invisible max-h-0'}`}>
-        <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-6 pb-4 pt-2 text-sm" aria-label="Sections">
+        <nav className="mx-auto flex w-full max-w-[1760px] flex-col gap-1 px-5 pb-4 pt-2 text-sm sm:px-8" aria-label="Sections">
           {LINKS.map((l) => (
             <a key={l.id} href={`#${l.id}`} onClick={() => setOpen(false)} className={`rounded-lg px-3 py-2.5 font-medium ${active === l.id ? 'bg-paddy-50 text-paddy-900' : 'text-ink-700 hover:bg-paddy-50'}`}>
               {l.label}

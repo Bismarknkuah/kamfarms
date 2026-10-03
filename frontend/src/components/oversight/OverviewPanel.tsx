@@ -7,7 +7,7 @@ import type { FarmInventory } from './types';
 import { IconStatCard } from '@/components/StatCard';
 import { buildAttention, formatGhs, formatKg, inPeriod } from '@/lib/oversight-utils';
 
-export type OversightTab = 'overview' | 'expenses' | 'milling' | 'farms' | 'warehouses' | 'sales';
+export type OversightTab = 'overview' | 'watchlist' | 'expenses' | 'milling' | 'farms' | 'warehouses' | 'sales';
 
 export function OverviewPanel({
   expenses,

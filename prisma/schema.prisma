@@ -2234,3 +2234,34 @@ model ResetRequest {
 // eight already-verified modules onto a new generic engine at this stage
 // carries real regression risk for no functional gain the spec requires.
 // ============================================================
+
+// The public homepage's editable content: one row (id = "home") holding the
+// whole page as validated JSON, so the System Administrator can change text,
+// locations and the rotating slideshow without a code change or a deploy.
+model SiteContent {
+  id          String   @id
+  data        Json
+  version     Int      @default(1)
+  updatedById String?  @map("updated_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("site_content")
+}
+
+// Pictures and short videos for the homepage slideshow. Stored in the
+// database and served by GET /site/media/:id, so they need no separate file
+// storage. kind is IMAGE or VIDEO.
+model SiteMedia {
+  id           String   @id @default(uuid())
+  kind         String
+  mimeType     String   @map("mime_type")
+  fileName     String   @map("file_name")
+  sizeBytes    Int      @map("size_bytes")
+  data         Bytes
+  uploadedById String?  @map("uploaded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("site_media")
+}

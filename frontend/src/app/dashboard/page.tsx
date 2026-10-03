@@ -11,6 +11,7 @@ import { IconStatCard, DonutChart } from '@/components/StatCard';
 import { FinanceDesk, ReleaseDesk, DeliveryDesk, MyOrdersDesk } from '@/components/SalesDesks';
 import { roleLabel } from '@/lib/role-labels';
 import { Wheat, Truck, Factory, Package, DollarSign } from 'lucide-react';
+import { WatchlistCard } from '@/components/WatchlistCard';
 import {
   reportsApi,
   ExecutiveSummary,
@@ -1420,6 +1421,8 @@ export default function DashboardPage() {
             </div>
             <span className="shrink-0 text-2xl">→</span>
           </Link>
+
+          <WatchlistCard accessToken={accessToken} />
 
           {/* The headline view, matching the new reference design -
               every figure below is real: current snapshot totals from

@@ -113,3 +113,10 @@ role from the database. Anyone who held only that role is set to DISABLED
 (nothing is deleted and nobody is moved into another role for them); an
 administrator re-enables the account and assigns the right role from the Users
 page. The script is idempotent and never blocks the API from starting.
+
+## Permissions added with the homepage editor and the watchlist
+
+| Permission | Held by | Lets the holder |
+|---|---|---|
+| `site.manage` | System Administrator | Edit the public homepage: text, sales points, and the rotating pictures and videos |
+| `insights.view` | Managing Director, CEO | See the watchlist: where records look unusual against each place's own history |

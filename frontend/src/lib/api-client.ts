@@ -1,3 +1,5 @@
+import type { SiteContent } from './site-content';
+import type { Watchlist } from './watchlist';
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
 
 export interface ApiEnvelope<T> {
@@ -1601,4 +1603,64 @@ export const paddyRequestsApi = {
     request<PaddyRequest>(`/paddy-requests/${id}/link-order`, { method: 'POST', body: JSON.stringify({ orderId }) }, accessToken),
   assignToFarm: (accessToken: string, id: string, data: { farmId: string; bagCount: number; kg?: number; note?: string }) =>
     request<{ task: { taskNumber: string }; request: PaddyRequest }>(`/paddy-requests/${id}/assign`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
+};
+
+// ---------------------------------------------------------------------------
+// The editable public homepage
+// ---------------------------------------------------------------------------
+
+/** Where an uploaded picture or video is served from. Public: no sign-in needed to view it. */
+export const siteMediaUrl = (id: string) => `${API_URL}/site/media/${id}`;
+
+export interface SiteContentResponse {
+  content: SiteContent | null;
+  version: number;
+  updatedAt: string | null;
+  updatedBy?: { firstName: string; lastName: string } | null;
+}
+
+export interface SiteMediaItem {
+  id: string;
+  kind: 'IMAGE' | 'VIDEO';
+  mimeType: string;
+  fileName: string;
+  sizeBytes: number;
+  createdAt: string;
+  inUse: boolean;
+}
+
+export const siteApi = {
+  /** Public. A plain GET with no custom headers, so the browser never needs a pre-flight check first. */
+  getContent: async (): Promise<SiteContentResponse> => {
+    const res = await fetch(`${API_URL}/site/content`, { cache: 'no-store' });
+    const body = (await res.json().catch(() => null)) as ApiEnvelope<SiteContentResponse> | null;
+    if (!res.ok || !body || body.success === false) throw new ApiError(body?.message ?? 'Request failed.', body?.errorCode ?? null, res.status);
+    return body.data;
+  },
+  getAdminContent: (accessToken: string) =>
+    request<SiteContentResponse>('/site/admin/content', { method: 'GET', cache: 'no-store' }, accessToken),
+  saveContent: (accessToken: string, content: SiteContent) =>
+    request<SiteContentResponse>('/site/admin/content', { method: 'PUT', body: JSON.stringify(content) }, accessToken),
+  resetContent: (accessToken: string) => request<SiteContentResponse>('/site/admin/content', { method: 'DELETE' }, accessToken),
+  listMedia: (accessToken: string) => request<SiteMediaItem[]>('/site/admin/media', { method: 'GET', cache: 'no-store' }, accessToken),
+  deleteMedia: (accessToken: string, id: string) => request<{ deleted: boolean }>(`/site/admin/media/${id}`, { method: 'DELETE' }, accessToken),
+  /** Multipart, so it cannot go through request() (which always sends JSON). */
+  uploadMedia: async (accessToken: string, file: Blob, fileName: string): Promise<SiteMediaItem> => {
+    const form = new FormData();
+    form.append('file', file, fileName);
+    const res = await fetch(`${API_URL}/site/admin/media`, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: form });
+    const body = (await res.json().catch(() => null)) as ApiEnvelope<SiteMediaItem> | null;
+    if (!res.ok || !body || body.success === false) throw new ApiError(body?.message ?? 'Upload failed.', body?.errorCode ?? null, res.status);
+    return body.data;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// The watchlist (MD and CEO)
+// ---------------------------------------------------------------------------
+
+export const insightsApi = {
+  /** Where recent records look unusual against each place's own history, over the last `days` days (7 to 90). */
+  watchlist: (accessToken: string, days = 30) =>
+    request<Watchlist>(`/insights/watchlist?days=${days}`, { method: 'GET', cache: 'no-store' }, accessToken),
 };

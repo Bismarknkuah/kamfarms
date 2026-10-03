@@ -43,3 +43,24 @@ html { scroll-padding-top: 5rem; }
 @media (prefers-reduced-motion: no-preference) {
   html { scroll-behavior: smooth; }
 }
+
+/* ---- Homepage slideshow and sign-in page motion ---- */
+@keyframes kam-kenburns { from { transform: scale(1); } to { transform: scale(1.08); } }
+.kam-kenburns { animation: kam-kenburns 9s ease-out forwards; }
+
+@keyframes kam-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.kam-rise { opacity: 0; animation: kam-rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards; animation-delay: var(--kam-delay, 0ms); }
+
+@keyframes kam-drift { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(-28px, -8px, 0); } }
+.kam-drift { animation: kam-drift 16s ease-in-out infinite; }
+
+@keyframes kam-pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(201, 151, 43, 0.55); }
+  70% { box-shadow: 0 0 0 12px rgba(201, 151, 43, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(201, 151, 43, 0); }
+}
+.kam-pulse-ring { animation: kam-pulse-ring 2.2s ease-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kam-kenburns, .kam-rise, .kam-drift, .kam-pulse-ring { animation: none !important; opacity: 1 !important; transform: none !important; }
+}

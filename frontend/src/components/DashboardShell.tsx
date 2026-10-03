@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
+  LayoutTemplate,
   LayoutDashboard,
   Sprout,
   Wheat,
@@ -54,6 +55,7 @@ import { TopBar } from './TopBar';
 // body creates a new component type each render, which flashes/
 // remounts; a plain lookup object doesn't have that problem).
 const ICON_MAP: Record<string, LucideIcon> = {
+  'layout-template': LayoutTemplate,
   'layout-dashboard': LayoutDashboard,
   sprout: Sprout,
   wheat: Wheat,

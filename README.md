@@ -4432,3 +4432,8 @@ this README on your machine, run the full test suite for real, walk the
 frontend by hand, and treat every "documented gap" called out across
 these docs as a punch list, not a footnote.
 
+## Homepage editor and Watchlist
+
+- **Homepage editor** (System Administrator, `site.manage`): change the public homepage's text, sales points and the rotating pictures and videos from the sidebar, **Homepage**. See `docs/HOMEPAGE_EDITOR.md`.
+- **Watchlist** (MD and CEO, `insights.view`): where records look unusual against each milling center's, warehouse's and farm's own history, on the Oversight page and the dashboard. See `docs/WATCHLIST.md`.
+- Deploying this adds two tables (`site_content`, `site_media`) through the existing `prisma db push` step. No new environment variables.

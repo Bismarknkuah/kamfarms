@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import {
@@ -36,6 +36,7 @@ import { MillingPanel } from '@/components/oversight/MillingPanel';
 import { FarmsPanel } from '@/components/oversight/FarmsPanel';
 import { WarehousesPanel } from '@/components/oversight/WarehousesPanel';
 import { SalesPanel } from '@/components/oversight/SalesPanel';
+import { WatchlistPanel } from '@/components/oversight/WatchlistPanel';
 
 const TABS: { id: OversightTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -114,6 +115,15 @@ export default function OversightPage() {
     setVisited((prev) => (prev.has(t) ? prev : new Set(prev).add(t)));
   };
 
+  // The dashboard's Watchlist card links here with ?tab=watchlist.
+  const urlHandled = useRef(false);
+  useEffect(() => {
+    if (urlHandled.current || !me) return;
+    urlHandled.current = true;
+    if (new URLSearchParams(window.location.search).get('tab') === 'watchlist' && hasPermission('insights.view')) open('watchlist');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me]);
+
   if (loading) return <main className="flex min-h-screen items-center justify-center bg-rice-50"><p className="text-sm text-ink-500">Loading…</p></main>;
   if (error || !me) return <main className="flex min-h-screen items-center justify-center bg-rice-50"><p className="text-sm text-red-600">{error}</p></main>;
 
@@ -126,6 +136,8 @@ export default function OversightPage() {
   }
 
   const show = (t: OversightTab) => (tab === t ? '' : 'hidden');
+  const canWatch = hasPermission('insights.view');
+  const tabs = canWatch ? [TABS[0], { id: 'watchlist' as OversightTab, label: 'Watchlist' }, ...TABS.slice(1)] : TABS;
 
   return (
     <DashboardShell me={me}>
@@ -142,7 +154,7 @@ export default function OversightPage() {
       )}
 
       <div className="mt-5 flex gap-1.5 overflow-x-auto border-b border-paddy-100 pb-px" role="tablist">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -175,6 +187,11 @@ export default function OversightPage() {
               goTab={open}
             />
           </div>
+          {canWatch && visited.has('watchlist') && (
+            <div className={show('watchlist')}>
+              <WatchlistPanel accessToken={accessToken ?? ''} active={tab === 'watchlist'} goTab={open} />
+            </div>
+          )}
           {visited.has('expenses') && (
             <div className={show('expenses')}>
               <ExpensesPanel expenses={expenses} farmNames={farms.map((f) => f.name)} warehouseNames={warehouses.map((w) => w.name)} />

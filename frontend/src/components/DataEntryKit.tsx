@@ -77,13 +77,14 @@ export function BagStepper({
 /** Live weight hint. When no weight is typed, shows what the system
  * will record as an estimate - so nobody is surprised later by the
  * "(estimated)" tag, and nobody feels they must find a scale. */
-export function EstimatedWeightHint({ bags, weightKg }: { bags: string; weightKg: string }) {
+export function EstimatedWeightHint({ bags, weightKg, perBagKg }: { bags: string; weightKg: string; /** A better weight per bag than the standard, when one is known (a shipment's own). */ perBagKg?: number }) {
   const n = parseInt(bags || '0', 10) || 0;
+  const perBag = perBagKg && perBagKg > 0 ? Math.round(perBagKg * 10) / 10 : STANDARD_PADDY_BAG_WEIGHT_KG;
   if (weightKg) return <p className="text-xs text-ink-500">Measured weight recorded.</p>;
-  if (n <= 0) return <p className="text-xs text-ink-500">Weight is optional - leave it blank and we estimate at {STANDARD_PADDY_BAG_WEIGHT_KG} KG per bag.</p>;
+  if (n <= 0) return <p className="text-xs text-ink-500">Weight is optional - leave it blank and we estimate at {perBag} KG per bag.</p>;
   return (
     <p className="text-xs text-ink-700">
-      ≈ <span className="font-semibold">{(n * STANDARD_PADDY_BAG_WEIGHT_KG).toLocaleString()} KG</span> estimated at {STANDARD_PADDY_BAG_WEIGHT_KG} KG/bag - type a measured weight to override.
+      ≈ <span className="font-semibold">{(n * perBag).toLocaleString()} KG</span> estimated at {perBag} KG/bag - type a measured weight to override.
     </p>
   );
 }

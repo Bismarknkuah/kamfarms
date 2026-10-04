@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { LocationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -7,6 +7,9 @@ import { scopedLocationIds } from '../common/utils/scope.util';
 import { ReceiveShipmentDto } from './dto/receive-shipment.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { SettingsService, settingNumber } from '../settings/settings.service';
+import { estimateKg } from '../common/constants/bag-weight';
+import { NotificationsService } from '../notifications/notifications.service';
+import { bagsLabel } from './dispatch-request.util';
 
 /** Anything beyond this many KG of variance is flagged for supervisor
  * attention rather than silently accepted - spec section 13: "Variance may
@@ -20,6 +23,7 @@ export class ShipmentsService {
     private readonly audit: AuditService,
     private readonly ledger: InventoryLedgerService,
     @Optional() private readonly settings?: SettingsService,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
   /** "On the Way" list for the Warehouse Supervisor / destination Warehouse
@@ -82,7 +86,7 @@ export class ShipmentsService {
         farm: true,
         warehouse: true,
         paddyGrade: true,
-        deliveryReport: { include: { vehicle: true, driver: true } },
+        deliveryReport: { include: { vehicle: true, driver: true, deliveryOrder: true } },
         events: { orderBy: { createdAt: 'asc' } },
       },
     });
@@ -103,6 +107,32 @@ export class ShipmentsService {
     return shipment;
   }
 
+  private readonly log = new Logger(ShipmentsService.name);
+
+  /** The Farm Supervisor who asked for this dispatch, and the farm's manager, are told it arrived, how many bags, and if the count differs. */
+  private async afterReceive(shipment: any, got: { bags: number; requiresApproval: boolean }, actor: AuthenticatedUser) {
+    try {
+      const order = shipment?.deliveryReport?.deliveryOrder ?? null;
+      const sent = Number(shipment?.expectedBags ?? 0);
+      const diff = got.bags - sent;
+      const warehouse = shipment?.warehouse?.name ?? 'the warehouse';
+      const farm = shipment?.farm?.name ?? 'the farm';
+      const farmManagers = await this.prisma.farmManager.findMany({ where: { farmId: shipment.farmId }, select: { userId: true } });
+      const ids = [...new Set([order?.createdById, ...farmManagers.map((m) => m.userId)].filter((u): u is string => !!u && u !== actor.id))];
+      if (ids.length === 0) return;
+      await this.notifications?.notify({
+        userIds: ids,
+        type: 'shipment.received',
+        title: `Arrived at ${warehouse}: ${order?.orderNumber ?? shipment.shipmentNumber}`,
+        body: `${bagsLabel(got.bags)} of ${shipment?.paddyGrade?.label ?? 'paddy'} from ${farm} received${diff === 0 ? ', as sent.' : `, ${Math.abs(diff)} ${Math.abs(diff) === 1 ? 'bag' : 'bags'} ${diff < 0 ? 'fewer' : 'more'} than the ${bagsLabel(sent)} that left.`}${got.requiresApproval ? ' The difference needs approval.' : ''}`,
+        entityType: 'Shipment',
+        entityId: shipment.id,
+      });
+    } catch (err) {
+      this.log.warn(`The arrival notice for ${shipment?.shipmentNumber ?? 'a shipment'} did not complete: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   /** Closes out the in-transit balance entirely and credits the destination
    * warehouse with the ACTUAL received quantity - the two need not match,
    * and the difference (spec section 13's "variance record") is captured
@@ -114,7 +144,12 @@ export class ShipmentsService {
       throw new BadRequestException('This shipment has already been received.');
     }
 
-    const varianceKg = dto.receivedKg - Number(shipment.expectedKg);
+    // No scale at the warehouse: the bags are counted, and the kilograms are worked out at the weight per bag the shipment left with, so a
+    // shipment that arrives with every bag shows no variance, and a missing bag shows up as its share of the weight.
+    const receivedKgEstimated = dto.receivedKg === undefined;
+    const expectedKgPerBag = Number(shipment.expectedBags) > 0 ? Number(shipment.expectedKg) / Number(shipment.expectedBags) : undefined;
+    const receivedKg = dto.receivedKg ?? estimateKg(dto.receivedBags, expectedKgPerBag);
+    const varianceKg = receivedKg - Number(shipment.expectedKg);
     const toleranceKg = await settingNumber(this.settings, 'logistics.variance_tolerance_kg');
     const requiresApproval = Math.abs(varianceKg) > toleranceKg;
 
@@ -122,7 +157,8 @@ export class ShipmentsService {
       const result = await tx.shipment.update({
         where: { id },
         data: {
-          receivedKg: dto.receivedKg,
+          receivedKg,
+          receivedKgEstimated,
           receivedBags: dto.receivedBags,
           varianceKg,
           varianceRequiresApproval: requiresApproval,
@@ -145,7 +181,7 @@ export class ShipmentsService {
         destLocationType: LocationType.WAREHOUSE,
         destLocationId: shipment.warehouseId,
         paddyGradeId: shipment.paddyGradeId,
-        quantityKg: dto.receivedKg,
+        quantityKg: receivedKg,
         bagCount: dto.receivedBags,
         batchNumber: shipment.shipmentNumber,
         referenceDocument: shipment.shipmentNumber,
@@ -162,7 +198,7 @@ export class ShipmentsService {
       await this.ledger.adjustBalance(
         tx,
         { locationType: LocationType.WAREHOUSE, locationId: shipment.warehouseId, paddyGradeId: shipment.paddyGradeId },
-        dto.receivedKg,
+        receivedKg,
         dto.receivedBags,
       );
 
@@ -178,7 +214,7 @@ export class ShipmentsService {
           batchNumber: shipment.shipmentNumber,
           referenceDocument: shipment.shipmentNumber,
           userId: actor.id,
-          reason: `Delivery variance: expected ${shipment.expectedKg} KG, received ${dto.receivedKg} KG.`,
+          reason: `Delivery variance: expected ${shipment.expectedKg} KG, received ${receivedKg} KG${receivedKgEstimated ? ' (worked out from the bags, not weighed)' : ''}.`,
           approvalStatus: requiresApproval ? 'PENDING' : 'APPROVED',
         });
       }
@@ -198,7 +234,7 @@ export class ShipmentsService {
           action: 'shipment.receive',
           entity: 'Shipment',
           entityId: id,
-          afterValue: { receivedKg: dto.receivedKg, receivedBags: dto.receivedBags, varianceKg },
+          afterValue: { receivedKg: receivedKg, receivedBags: dto.receivedBags, varianceKg },
         },
         tx,
       );
@@ -206,7 +242,9 @@ export class ShipmentsService {
       return result;
     });
 
-    return this.findById(updated.id, actor);
+    const fresh = await this.findById(updated.id, actor);
+    await this.afterReceive(fresh, { bags: dto.receivedBags, requiresApproval }, actor);
+    return fresh;
   }
 
   /** Section "trace the paddy rice" - a Farm Supervisor following up on

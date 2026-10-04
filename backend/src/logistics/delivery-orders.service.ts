@@ -5,7 +5,11 @@ import { InventoryLedgerService } from '../inventory-ledger/inventory-ledger.ser
 import { NotificationsService } from '../notifications/notifications.service';
 import { assertScope, scopedLocationIds } from '../common/utils/scope.util';
 import { CreateDeliveryOrderDto } from './dto/create-delivery-order.dto';
+import { CreateDispatchRequestDto } from './dto/create-dispatch-request.dto';
+import { dispatchNotificationBody, dispatchTaskDescription, dispatchTaskTitle, personName, totalBagsOf } from './dispatch-request.util';
+import { trackingOf } from './dispatch-tracking.util';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { estimateKg } from '../common/constants/bag-weight';
 
 @Injectable()
 export class DeliveryOrdersService {
@@ -35,21 +39,23 @@ export class DeliveryOrdersService {
       where.destinationWarehouseId = filters.warehouseId;
     }
 
-    return this.prisma.deliveryOrder.findMany({
+    const orders = await this.prisma.deliveryOrder.findMany({
       where,
-      include: { farm: true, destinationWarehouse: true, paddyGrade: true, createdBy: true },
+      include: { farm: true, destinationWarehouse: true, paddyGrade: true, createdBy: true, reports: { orderBy: { createdAt: 'desc' }, take: 1, include: { vehicle: true, driver: true, submittedBy: true, approvedBy: true, shipment: true } } },
       orderBy: { createdAt: 'desc' },
     });
+    // Where each order is, in words, for whoever asked for it and whoever handles it.
+    return orders.map((o) => ({ ...o, tracking: trackingOf(o as any) }));
   }
 
   async findById(id: string, actor: AuthenticatedUser) {
     const order = await this.prisma.deliveryOrder.findUnique({
       where: { id },
-      include: { farm: true, destinationWarehouse: true, paddyGrade: true, createdBy: true, reports: true },
+      include: { farm: true, destinationWarehouse: true, paddyGrade: true, createdBy: true, reports: { orderBy: { createdAt: 'desc' }, include: { vehicle: true, driver: true, submittedBy: true, approvedBy: true, shipment: true } } },
     });
     if (!order) throw new NotFoundException('Delivery order not found.');
     assertScope(actor, 'FARM', order.farmId, 'this farm');
-    return order;
+    return { ...order, tracking: trackingOf(order as any) };
   }
 
   /** Creating a delivery order does NOT move any stock - it is only a
@@ -58,80 +64,133 @@ export class DeliveryOrdersService {
    * happens when the resulting delivery report is APPROVED (spec section
    * 11: "Do NOT reduce available inventory before approval"). */
   async create(dto: CreateDeliveryOrderDto, actor: AuthenticatedUser) {
+    // One size is just a request with one line: the same checks, the same task for the farm manager, the same tracking.
+    const made = await this.createRequest(
+      { farmId: dto.farmId, destinationWarehouseId: dto.destinationWarehouseId, requestedDate: dto.requestedDate, priority: dto.priority, notes: dto.notes, lines: [{ paddyGradeId: dto.paddyGradeId, bagCount: dto.bagCount, totalKg: dto.totalKg }] },
+      actor,
+    );
+    return this.findById(made.orders[0].id, actor);
+  }
+
+  /**
+   * A Farm Supervisor's request to a farm manager: these bags (every size, in one go) from this farm to THIS warehouse, by this date.
+   * All of it is saved or none of it. It becomes one delivery order per size, tied together by one request reference, and ONE task on
+   * the farm manager's list that says exactly where it goes, what to send, by when, and who to ask. Nothing moves in stock until the
+   * dispatch report is approved: this only asks. The answer says who the task went to, so a farm with no manager is not a silent miss.
+   */
+  async createRequest(dto: CreateDispatchRequestDto, actor: AuthenticatedUser) {
     assertScope(actor, 'FARM', dto.farmId, 'this farm');
 
     const farm = await this.prisma.farm.findUnique({ where: { id: dto.farmId } });
     if (!farm || !farm.isActive) throw new BadRequestException('Farm not found or inactive.');
 
-    const warehouse = await this.prisma.warehouse.findUnique({ where: { id: dto.destinationWarehouseId } });
+    const warehouse = await this.prisma.warehouse.findUnique({ where: { id: dto.destinationWarehouseId }, include: { managers: { include: { user: true } } } });
     if (!warehouse || !warehouse.isActive) throw new BadRequestException('Destination warehouse not found or inactive.');
 
-    // Same estimation standard as PaddyEntry - bag count is always
-    // known even without a scale on hand; weight can be estimated
-    // from it rather than blocking the dispatch order entirely.
-    const STANDARD_PADDY_BAG_WEIGHT_KG = 50;
-    const totalKgEstimated = dto.totalKg === undefined;
-    const totalKg = dto.totalKg ?? dto.bagCount * STANDARD_PADDY_BAG_WEIGHT_KG;
-
-    const balances = await this.ledger.getBalancesForLocation('FARM', dto.farmId);
-    const available = balances.find((b) => b.paddyGradeId === dto.paddyGradeId);
-    // Validated against bag count, not KG - a real fix, not a cosmetic
-    // one: farms track and report paddy in bags first, with weight
-    // often only ever an estimate (STANDARD_PADDY_BAG_WEIGHT_KG above),
-    // so rejecting a real request over a KG figure nobody actually
-    // measured was the wrong check to begin with. KG stays available
-    // for anyone who does have a scale, but bags is what's actually
-    // enforced.
-    if (!available || available.bagCount < dto.bagCount) {
-      throw new BadRequestException({
-        message: `Farm only has ${available ? available.bagCount : 0} bag(s) available for this grade - cannot request ${dto.bagCount} bag(s).`,
-        errorCode: 'INSUFFICIENT_FARM_STOCK',
-      });
+    const gradeIds = dto.lines.map((l) => l.paddyGradeId);
+    let labelOf = (_id: string): string => 'this size';
+    if (dto.lines.length > 1) {
+      const grades = await this.prisma.paddyGrade.findMany({ where: { id: { in: gradeIds } } });
+      labelOf = (id: string) => grades.find((g) => g.id === id)?.label ?? 'A size';
+      const twice = gradeIds.find((id, i) => gradeIds.indexOf(id) !== i);
+      if (twice) throw new BadRequestException(`${labelOf(twice)} is on the list twice. Put all of its bags on one line.`);
+      const unusable = gradeIds.find((id) => !grades.some((g) => g.id === id && g.isActive));
+      if (unusable) throw new BadRequestException('One of the sizes was not found or is no longer in use. Choose the size again.');
     }
 
-    const order = await this.prisma.$transaction(async (tx) => {
-      const orderNumber = await this.ledger.generateNumber(tx, 'DO', 'deliveryOrder');
-      const created = await tx.deliveryOrder.create({
-        data: {
-          orderNumber,
-          farmId: dto.farmId,
-          destinationWarehouseId: dto.destinationWarehouseId,
-          requestedDate: new Date(dto.requestedDate),
-          paddyGradeId: dto.paddyGradeId,
-          bagCount: dto.bagCount,
-          totalKg,
-          totalKgEstimated,
-          priority: dto.priority,
-          notes: dto.notes,
-          createdById: actor.id,
-        },
-      });
-      await this.audit.record(
-        { userId: actor.id, action: 'delivery_order.create', entity: 'DeliveryOrder', entityId: created.id, afterValue: created },
-        tx,
-      );
-      return created;
+    // Validated against bag count, not KG: farms track paddy in bags first, with weight often only ever an estimate, so rejecting a real
+    // request over a kilogram figure nobody measured was the wrong check. Every size is checked, and ALL the shortfalls are reported.
+    const balances = await this.ledger.getBalancesForLocation('FARM', dto.farmId);
+    const short = dto.lines
+      .map((l) => ({ id: l.paddyGradeId, wanted: l.bagCount, has: balances.find((b) => b.paddyGradeId === l.paddyGradeId)?.bagCount ?? 0 }))
+      .filter((x) => x.has < x.wanted);
+    if (short.length > 0) {
+      const message = dto.lines.length === 1
+        ? `Farm only has ${short[0].has} bag(s) available for this grade - cannot request ${short[0].wanted} bag(s).`
+        : `The farm does not have enough bags: ${short.map((x) => `${labelOf(x.id)}: wanted ${x.wanted}, has ${x.has}`).join('; ')}.`;
+      throw new BadRequestException({ message, errorCode: 'INSUFFICIENT_FARM_STOCK' });
+    }
+
+    const farmManagers = await this.prisma.farmManager.findMany({ where: { farmId: dto.farmId }, include: { user: true } });
+    // A farm manager who asked for the dispatch themselves does not need a task telling them to do what they just asked for.
+    const assignees = farmManagers.filter((m) => m.userId !== actor.id);
+    const requestedByName = personName(actor as unknown as { firstName?: string; lastName?: string }) || 'the Farm Supervisor';
+
+    const made = await this.prisma.$transaction(async (tx) => {
+      const requestRef = await this.ledger.generateNumber(tx, 'RQ', 'dispatchRequest');
+      const orders: { id: string; orderNumber: string; gradeLabel: string; bagCount: number; totalKg: number; totalKgEstimated: boolean }[] = [];
+      for (const line of dto.lines) {
+        const totalKgEstimated = line.totalKg === undefined;
+        const totalKg = line.totalKg ?? estimateKg(line.bagCount);
+        const orderNumber = await this.ledger.generateNumber(tx, 'DO', 'deliveryOrder');
+        const created = await tx.deliveryOrder.create({
+          data: {
+            orderNumber, requestRef, farmId: dto.farmId, destinationWarehouseId: dto.destinationWarehouseId, requestedDate: new Date(dto.requestedDate),
+            paddyGradeId: line.paddyGradeId, bagCount: line.bagCount, totalKg, totalKgEstimated, priority: dto.priority, notes: dto.notes, createdById: actor.id,
+          },
+          include: { paddyGrade: true },
+        });
+        await this.audit.record({ userId: actor.id, action: 'delivery_order.create', entity: 'DeliveryOrder', entityId: created.id, afterValue: { ...created, requestRef } }, tx);
+        orders.push({ id: created.id, orderNumber: created.orderNumber ?? orderNumber, gradeLabel: created.paddyGrade?.label ?? labelOf(line.paddyGradeId), bagCount: line.bagCount, totalKg, totalKgEstimated });
+      }
+
+      const facts = {
+        requestRef, farmName: farm.name ?? 'the farm', warehouseName: warehouse.name ?? 'the warehouse', warehouseLocation: warehouse.location ?? null,
+        warehouseContacts: (warehouse.managers ?? []).map((m) => ({ name: personName(m.user), phone: m.user?.phone ?? null })),
+        requestedDate: dto.requestedDate, priority: dto.priority ?? null, notes: dto.notes ?? null, requestedByName,
+        lines: orders.map((o) => ({ gradeLabel: o.gradeLabel, bagCount: o.bagCount, totalKg: o.totalKg, totalKgEstimated: o.totalKgEstimated, orderNumber: o.orderNumber })),
+      };
+      const tasks: { id: string; taskNumber: string; assignedToId: string; title: string }[] = [];
+      if (assignees.length > 0) {
+        const prefix = `TASK-${new Date().getFullYear()}-`;
+        const already = await tx.task.count({ where: { taskNumber: { startsWith: prefix } } });
+        let n = 0;
+        for (const m of assignees) {
+          n += 1;
+          const task = await tx.task.create({
+            data: {
+              taskNumber: `${prefix}${String(already + n).padStart(6, '0')}`,
+              title: dispatchTaskTitle(facts),
+              description: dispatchTaskDescription(facts),
+              assignedToId: m.userId,
+              farmId: dto.farmId,
+              warehouseId: dto.destinationWarehouseId,
+              dueDate: new Date(dto.requestedDate),
+              status: 'TODO',
+              createdById: actor.id,
+              deliveryRequestRef: requestRef,
+            },
+          });
+          tasks.push({ id: task.id, taskNumber: task.taskNumber, assignedToId: m.userId, title: task.title });
+        }
+      }
+      return { requestRef, orders, tasks, facts };
     });
 
-    // Only meaningful when someone other than the farm's own manager
-    // created this - a Farm Supervisor ordering a farm to dispatch.
-    // The farm's manager(s) would otherwise have no way to know an
-    // order now exists against their farm at all, short of manually
-    // checking My Office.
-    const farmManagers = await this.prisma.farmManager.findMany({ where: { farmId: dto.farmId }, select: { userId: true } });
-    const recipientIds = farmManagers.map((m) => m.userId).filter((id) => id !== actor.id);
-    if (recipientIds.length > 0) {
-      await this.notifications.notify({
-        userIds: recipientIds,
-        type: 'delivery_order.assigned',
-        title: `Dispatch order - ${order.orderNumber}`,
-        body: `Your Farm Supervisor has ordered ${dto.bagCount} bags (${totalKg} KG) dispatched to a warehouse.`,
-        entityType: 'DeliveryOrder',
-        entityId: order.id,
-      });
+    // The farm manager is told, with the same detail the task carries (best effort: the request itself is already saved).
+    for (const t of made.tasks) {
+      try {
+        await this.notifications.notify({ userIds: [t.assignedToId], type: 'task.assigned', title: `New dispatch task - ${t.taskNumber}`, body: dispatchNotificationBody(made.facts), entityType: 'Task', entityId: t.id });
+      } catch {
+        /* a failed notification never undoes a saved request */
+      }
     }
 
-    return this.findById(order.id, actor);
+    return {
+      requestRef: made.requestRef,
+      farmName: farm.name as string,
+      warehouse: { id: warehouse.id as string, name: warehouse.name as string, location: (warehouse.location ?? null) as string | null, contacts: made.facts.warehouseContacts },
+      requestedDate: dto.requestedDate,
+      priority: dto.priority ?? 'NORMAL',
+      notes: dto.notes ?? null,
+      totalBags: totalBagsOf(made.orders),
+      orders: made.orders,
+      tasks: made.tasks.map((t) => ({ id: t.id, taskNumber: t.taskNumber, assignedTo: personName(assignees.find((m) => m.userId === t.assignedToId)?.user) })),
+      managers: farmManagers.map((m) => personName(m.user)).filter(Boolean),
+      /** True when nobody was given a task: the farm has no manager (or the only manager is the person asking). */
+      noTaskCreated: made.tasks.length === 0,
+      noManagerOnFarm: farmManagers.length === 0,
+    };
   }
 
   /** "Track to know the state of the dispatch" - a single, human-

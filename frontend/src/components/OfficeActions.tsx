@@ -9,20 +9,11 @@ import { GradeChips, BagStepper, EstimatedWeightHint, RunningTotal, ConditionChi
 // which one they came to use.
 
 import { useEffect, useState } from 'react';
-import {
-  paddyEntriesApi, farmsApi, paddyGradesApi, PaddyEntry, Farm, PaddyGrade,
-  salesOrdersApi, customersApi, masterDataApi, SalesOrder, Customer, Product, PackagingSize,
-  paymentsApi, Payment,
-  shipmentsApi, Shipment,
-  productionApi, ProductionRecord,
-  warehousesApi, Warehouse,
-  deliveryOrdersApi, deliveryReportsApi, DeliveryOrder, DeliveryReport,
-  systemResetApi, ResetRequest,
-  stockTransfersApi, StockTransfer,
-  inventoryAdjustmentsApi, InventoryAdjustment,
-  paddyRequestsApi, PaddyRequest,
-  ApiError,
-} from '@/lib/api-client';
+import { paddyEntriesApi, farmsApi, paddyGradesApi, PaddyEntry, Farm, PaddyGrade, salesOrdersApi, customersApi, masterDataApi, SalesOrder, Customer, Product, PackagingSize, paymentsApi, Payment, shipmentsApi, Shipment, productionApi, ProductionRecord, warehousesApi, Warehouse, deliveryOrdersApi, deliveryReportsApi, DeliveryOrder, DeliveryReport, systemResetApi, ResetRequest, stockTransfersApi, StockTransfer, inventoryAdjustmentsApi, InventoryAdjustment, paddyRequestsApi, PaddyRequest, ApiError, PaddyIntakeResult, DispatchRequestResult } from '@/lib/api-client';
+import { OrderBrief } from '@/components/dispatch/OrderBrief';
+import { longDate } from '@/lib/dates';
+import { RequestFailed, RequestSent } from '@/components/dispatch/DispatchFeedback';
+import { IntakeFailure, IntakeSuccess } from '@/components/intake/IntakeFeedback';
 
 export function StatusPill({ status }: { status: string }) {
   const styles: Record<string, string> = {
@@ -67,7 +58,9 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  // What the person is told about the intake they just sent: it stays until dismissed, whichever panel they are on.
+  const [intakeResult, setIntakeResult] = useState<PaddyIntakeResult | null>(null);
+  const [intakeError, setIntakeError] = useState<string | null>(null);
   const [showReview, setShowReview] = useState(false);
 
   // Editing an already-submitted, not-yet-approved entry - a genuinely
@@ -111,44 +104,36 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
 
   const onSubmit = async () => {
     if (!farmId || validRows.length === 0) return;
+    setIntakeResult(null);
+    setIntakeError(null);
+    const bad = validRows.findIndex((r) => !/^\d+$/.test(r.bagCount) || parseInt(r.bagCount, 10) < 1);
+    if (bad >= 0) {
+      setShowReview(false);
+      setIntakeError(`Line ${bad + 1}: bags must be a whole number of at least 1.`);
+      return;
+    }
     setSubmitting(true);
-    setFormError(null);
     try {
-      // Each grade becomes its own real PaddyEntry - every grade keeps
-      // its own independent approval status this way (a Farm Supervisor
-      // can approve the Size 4 bags while querying the Size 5 ones,
-      // rather than one combined record forcing an all-or-nothing
-      // decision), while the form itself presents it as one intake.
-      //
-      // A real, confirmed bug fixed here: create() only ever produces a
-      // DRAFT entry - a separate submit() call is what actually moves
-      // it to SUBMITTED, the only status a Farm Director's approval
-      // queue or the inventory ledger ever act on. This call was
-      // missing entirely, meaning every entry logged through this form
-      // stayed in DRAFT forever - never approved, never added to the
-      // farm's inventory balance, which is exactly why a dispatch
-      // request against that same farm would see 0 KG available
-      // despite paddy having genuinely been "logged."
-      for (const row of validRows) {
-        const created = await paddyEntriesApi.create(accessToken, {
-          farmId, paddyGradeId: row.paddyGradeId,
-          weightKg: row.weightKg ? parseFloat(row.weightKg) : undefined,
-          bagCount: parseInt(row.bagCount, 10),
-          moisturePercent: moisturePercent ? parseFloat(moisturePercent) : undefined,
-          qualityGrade: qualityGrade || undefined,
-          notes: notes || undefined,
-          entryDate,
-        });
-        await paddyEntriesApi.submit(accessToken, created.id);
-      }
+      // Every size goes in ONE call, saved together and sent for approval together: all of it or none of it. (It used to save one size,
+      // then the next; a failure on the second left the first behind, already submitted, and a retry then doubled it up.) Each size keeps
+      // its own approval, and the server answers with what it recorded so the person can be shown it.
+      const saved = await paddyEntriesApi.createIntake(accessToken, {
+        farmId,
+        entryDate,
+        lines: validRows.map((row) => ({ paddyGradeId: row.paddyGradeId, bagCount: parseInt(row.bagCount, 10), weightKg: row.weightKg ? parseFloat(row.weightKg) : undefined })),
+        moisturePercent: moisturePercent ? parseFloat(moisturePercent) : undefined,
+        qualityGrade: qualityGrade || undefined,
+        notes: notes || undefined,
+      });
+      setIntakeResult(saved);
       setRows([{ paddyGradeId: '', bagCount: '', weightKg: '' }]);
       setMoisturePercent(''); setQualityGrade(''); setNotes('');
-      setSuccess(validRows.length > 1 ? `${validRows.length} grade entries logged` : 'Logged');
       setShowReview(false);
-      setTimeout(() => setSuccess(null), 3000);
       load();
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : 'Failed to log entry.');
+      // Shown above BOTH panels, so a failure is never hidden behind the review step.
+      setShowReview(false);
+      setIntakeError(err instanceof ApiError ? err.message : 'The intake could not be saved. Check your connection and try again.');
     } finally {
       setSubmitting(false);
     }
@@ -186,6 +171,11 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
       <p className="font-display text-base italic text-soil-500">Farm</p>
       <h2 className="mt-0.5 font-display text-2xl font-medium text-paddy-900">Log paddy intake</h2>
       <p className="mt-1 text-sm text-ink-500">Your primary task - logged here goes straight to your Farm Supervisor for approval.</p>
+
+      <div className="mt-4 space-y-3" aria-live="polite">
+        {intakeResult && <IntakeSuccess result={intakeResult} onClose={() => setIntakeResult(null)} />}
+        {intakeError && <IntakeFailure message={intakeError} onClose={() => setIntakeError(null)} />}
+      </div>
 
       {!showReview ? (
         <div className="mt-5 space-y-5">
@@ -274,7 +264,7 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
           </div>
 
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          {success && <p className="text-sm font-medium text-paddy-700">{success}</p>}
+          {(!farmId || validRows.length === 0) && <p className="text-xs text-ink-500" data-testid="intake-hint">{!farmId ? 'Choose the farm to continue.' : 'Add at least one size and its bags to continue.'}</p>}
           <button type="button" onClick={() => setShowReview(true)} disabled={!farmId || validRows.length === 0} className="rounded-full bg-paddy-900 px-6 py-2.5 text-sm font-medium text-rice-50 disabled:opacity-50">
             Review {validRows.length > 1 ? `${validRows.length} entries` : 'entry'} →
           </button>
@@ -373,7 +363,7 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
 
 export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
   const [farms, setFarms] = useState<Farm[]>([]);
-  const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
+  const [warehouses, setWarehouses] = useState<{ id: string; name: string; location?: string | null }[]>([]);
   const [grades, setGrades] = useState<PaddyGrade[]>([]);
   const [orders, setOrders] = useState<DeliveryOrder[]>([]);
   const [reports, setReports] = useState<DeliveryReport[]>([]);
@@ -421,6 +411,11 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showOrderReview, setShowOrderReview] = useState(false);
+  // The request to the farm manager says WHEN it is needed and carries any instruction; what happened to it is shown until dismissed.
+  const [neededBy, setNeededBy] = useState(() => new Date(Date.now() + 86400000).toISOString().slice(0, 10));
+  const [orderNotes, setOrderNotes] = useState('');
+  const [requestResult, setRequestResult] = useState<DispatchRequestResult | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
   const [showReportReview, setShowReportReview] = useState(false);
 
   const load = () => {
@@ -450,41 +445,54 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
 
   const onCreateOrder = async () => {
     if (!farmId || !warehouseId || validOrderRows.length === 0) return;
-    setCreatingOrder(true);
-    setFormError(null);
-    try {
-      // Same pattern as paddy intake - each size becomes its own real
-      // DeliveryOrder, since the model itself is single-grade, while
-      // the form presents it as one dispatch covering every size.
-      for (const row of validOrderRows) {
-        await deliveryOrdersApi.create(accessToken, {
-          farmId, destinationWarehouseId: warehouseId, paddyGradeId: row.paddyGradeId,
-          bagCount: parseInt(row.bagCount, 10), totalKg: row.totalKg ? parseFloat(row.totalKg) : undefined,
-          requestedDate: new Date().toISOString().slice(0, 10),
-        });
-      }
-      setOrderRows([{ paddyGradeId: '', bagCount: '', totalKg: '' }]);
-      setSuccess(validOrderRows.length > 1 ? `${validOrderRows.length} orders created` : 'Dispatch order created');
+    setRequestResult(null);
+    setRequestError(null);
+    const bad = validOrderRows.findIndex((r) => !/^\d+$/.test(r.bagCount) || parseInt(r.bagCount, 10) < 1);
+    if (bad >= 0) {
       setShowOrderReview(false);
-      setTimeout(() => setSuccess(null), 3000);
+      setRequestError(`Line ${bad + 1}: bags must be a whole number of at least 1.`);
+      return;
+    }
+    if (!neededBy) {
+      setShowOrderReview(false);
+      setRequestError('Choose the date the bags are needed at the warehouse.');
+      return;
+    }
+    setCreatingOrder(true);
+    try {
+      // ONE request with every size, saved together (all or none). It also becomes the farm manager's task, with the warehouse, the date
+      // and any instruction spelled out. (It used to save one size at a time, always for "today", and say nothing about where it goes.)
+      const result = await deliveryOrdersApi.createRequest(accessToken, {
+        farmId,
+        destinationWarehouseId: warehouseId,
+        requestedDate: neededBy,
+        notes: orderNotes.trim() || undefined,
+        lines: validOrderRows.map((row) => ({ paddyGradeId: row.paddyGradeId, bagCount: parseInt(row.bagCount, 10), totalKg: row.totalKg ? parseFloat(row.totalKg) : undefined })),
+      });
+      setRequestResult(result);
+      setOrderRows([{ paddyGradeId: '', bagCount: '', totalKg: '' }]);
+      setOrderNotes('');
+      setShowOrderReview(false);
       load();
-      setMode('report');
+      // Someone who asked for a dispatch on their own farm carries on to log it; a supervisor asking someone else stays to see it was sent.
+      if (result.noTaskCreated && !result.noManagerOnFarm) setMode('report');
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : 'Failed to create order.');
+      setShowOrderReview(false);
+      setRequestError(err instanceof ApiError ? err.message : 'The request could not be sent. Check your connection and try again.');
     } finally {
       setCreatingOrder(false);
     }
   };
 
   const onSubmitReport = async () => {
-    if (!deliveryOrderId || !actualBagCount || !actualKg) return;
+    if (!deliveryOrderId || !actualBagCount) return;
     setSubmittingReport(true);
     setFormError(null);
     try {
       await deliveryReportsApi.create(accessToken, {
         deliveryOrderId,
         actualBagCount: parseInt(actualBagCount, 10),
-        actualKg: parseFloat(actualKg),
+        actualKg: actualKg ? parseFloat(actualKg) : undefined,
         driverName: driverName || undefined,
         driverPhone: driverPhone || undefined,
         vehiclePlateNumber: vehiclePlateNumber || undefined,
@@ -513,7 +521,8 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
   const onStartEditReport = (r: DeliveryReport) => {
     setEditingReportId(r.id);
     setEditBagCount(String(r.actualBagCount));
-    setEditKg(String(r.actualKg));
+    // A figure that was only worked out from the bags is not put in the box: left blank, it stays an estimate (and follows the bag count).
+    setEditKg(r.actualKgEstimated ? '' : String(r.actualKg));
     setEditDriverName(r.driver?.name ?? '');
     setEditVehiclePlate(r.vehicle?.plateNumber ?? '');
   };
@@ -550,6 +559,11 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
         </button>
       </div>
 
+      <div className="mt-3 space-y-3" aria-live="polite">
+        {requestResult && <RequestSent result={requestResult} onClose={() => setRequestResult(null)} />}
+        {requestError && <RequestFailed message={requestError} onClose={() => setRequestError(null)} />}
+      </div>
+
       {mode === 'order' ? (
         <div className="mt-4">
           <p className="text-sm text-ink-500">{autoSelectedFarm ? 'Request a delivery of paddy from your farm to a warehouse.' : 'Order any farm to dispatch paddy to a warehouse - pick which farm below.'}
@@ -569,8 +583,16 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
                 <label className="mb-1 block text-xs font-medium text-ink-700">Destination warehouse</label>
                 <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm">
                   <option value="">Select a warehouse…</option>
-                  {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                  {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}{w.location ? ` - ${w.location}` : ''}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-ink-700">Needed at the warehouse by</label>
+                <input type="date" value={neededBy} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setNeededBy(e.target.value)} className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-ink-700">Instructions for the farm manager (optional)</label>
+                <textarea value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} rows={2} maxLength={500} placeholder="e.g. Load the Size 4 first. The truck leaves at 6am." className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
               </div>
             </div>
 
@@ -616,7 +638,9 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
             <div className="mt-4 rounded-xl border-2 border-paddy-900 bg-white p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-soil-500">Review before submitting</p>
               <p className="mt-2 text-sm text-ink-900">From: <span className="font-medium">{farms.find((f) => f.id === farmId)?.name ?? ' - '}</span></p>
-              <p className="text-sm text-ink-900">To: <span className="font-medium">{warehouses.find((w) => w.id === warehouseId)?.name ?? ' - '}</span></p>
+              <p className="text-sm text-ink-900">To: <span className="font-medium">{warehouses.find((w) => w.id === warehouseId)?.name ?? ' - '}</span>{warehouses.find((w) => w.id === warehouseId)?.location ? ` (${warehouses.find((w) => w.id === warehouseId)?.location})` : ''}</p>
+              <p className="text-sm text-ink-900">Needed by: <span className="font-medium">{neededBy ? longDate(neededBy) : ' - '}</span></p>
+              {orderNotes.trim() && <p className="text-sm text-ink-700">Instructions: {orderNotes.trim()}</p>}
               <div className="mt-2 space-y-1">
                 {validOrderRows.map((row, i) => (
                   <p key={i} className="text-sm text-ink-700"><span className="font-medium text-ink-900">{grades.find((g) => g.id === row.paddyGradeId)?.label ?? ' - '}</span>: {row.bagCount} bags
@@ -650,16 +674,17 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
                 <label className="mb-1 block text-xs font-medium text-ink-700">Order</label>
                 <select value={deliveryOrderId} onChange={(e) => setDeliveryOrderId(e.target.value)} className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm">
                   <option value="">Which order is this for?…</option>
-                  {openOrders.map((o) => <option key={o.id} value={o.id}>{o.orderNumber} - {o.destinationWarehouse.name} ({o.bagCount} bags)</option>)}
+                  {openOrders.map((o) => <option key={o.id} value={o.id}>{o.orderNumber} - {o.paddyGrade.label}, {o.bagCount} bags to {o.destinationWarehouse.name}{o.destinationWarehouse.location ? ` (${o.destinationWarehouse.location})` : ''}</option>)}
                 </select>
+                {openOrders.find((o) => o.id === deliveryOrderId) && <div className="mt-2"><OrderBrief order={openOrders.find((o) => o.id === deliveryOrderId)!} /></div>}
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-700">Actual bags loaded</label>
                 <input type="number" value={actualBagCount} onChange={(e) => setActualBagCount(e.target.value)} placeholder="Required" className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-ink-700">Actual weight (KG)</label>
-                <input type="number" value={actualKg} onChange={(e) => setActualKg(e.target.value)} placeholder="Required" className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
+                <label className="mb-1 block text-xs font-medium text-ink-700">Actual weight (KG), optional</label>
+                <input type="number" value={actualKg} onChange={(e) => setActualKg(e.target.value)} placeholder="No scale? leave blank" className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
               </div>
             </div>
           </div>
@@ -717,7 +742,7 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
               <p className="text-xs font-medium uppercase tracking-wide text-soil-500">Review before submitting</p>
               <p className="mt-2 text-sm text-ink-900">Order: <span className="font-medium">{openOrders.find((o) => o.id === deliveryOrderId)?.orderNumber ?? ' - '}</span>
               </p>
-              <p className="text-sm text-ink-700">{actualBagCount} bags · {actualKg} KG loaded</p>
+              <p className="text-sm text-ink-700">{actualBagCount} bags {actualKg ? `· ${actualKg} KG loaded` : '· weight worked out from the bags'}</p>
               {(driverName || vehiclePlateNumber) && (
                 <p className="text-sm text-ink-700">{driverName && <>Driver: {driverName}{driverPhone ? ` (${driverPhone})` : ''} </>}
                   {vehiclePlateNumber && <>· Vehicle: {vehiclePlateNumber}{vehicleType ? ` (${vehicleType})` : ''}</>}
@@ -739,7 +764,7 @@ export function DeliveryQuickAction({ accessToken }: { accessToken: string }) {
               </div>
             </div>
           ) : (
-            <button type="button" onClick={() => setShowReportReview(true)} disabled={!deliveryOrderId || !actualBagCount || !actualKg} className="mt-4 rounded-full bg-paddy-900 px-6 py-2.5 text-sm font-medium text-rice-50 disabled:opacity-50">
+            <button type="button" onClick={() => setShowReportReview(true)} disabled={!deliveryOrderId || !actualBagCount} className="mt-4 rounded-full bg-paddy-900 px-6 py-2.5 text-sm font-medium text-rice-50 disabled:opacity-50">
               Review report
             </button>
           )}
@@ -1277,11 +1302,11 @@ export function ShipmentQuickAction({ accessToken }: { accessToken: string }) {
   const selected = inTransit.find((s) => s.id === selectedId);
 
   const onSubmit = async () => {
-    if (!selectedId || !receivedKg || !receivedBags) return;
+    if (!selectedId || !receivedBags) return;
     setSubmitting(true);
     setFormError(null);
     try {
-      await shipmentsApi.receive(accessToken, selectedId, parseFloat(receivedKg), parseInt(receivedBags, 10));
+      await shipmentsApi.receive(accessToken, selectedId, receivedKg ? parseFloat(receivedKg) : undefined, parseInt(receivedBags, 10));
       setSelectedId(''); setReceivedKg(''); setReceivedBags('');
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -1302,13 +1327,13 @@ export function ShipmentQuickAction({ accessToken }: { accessToken: string }) {
           <option value="">Select shipment…</option>
           {inTransit.map((s) => <option key={s.id} value={s.id}>{s.shipmentNumber} - {s.farm.name}</option>)}
         </select>
-        <input type="number" value={receivedKg} onChange={(e) => setReceivedKg(e.target.value)} placeholder="Received (KG)" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
+        <input type="number" value={receivedKg} onChange={(e) => setReceivedKg(e.target.value)} placeholder="Received KG (optional)" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
         <input type="number" value={receivedBags} onChange={(e) => setReceivedBags(e.target.value)} placeholder="Received (bags)" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
       </div>
       {selected && <p className="mt-2 text-xs text-ink-500">Expected: {selected.expectedKg.toLocaleString()} KG / {selected.expectedBags} bags</p>}
       {formError && <p className="mt-2 text-sm text-red-600">{formError}</p>}
       {success && <p className="mt-2 text-sm font-medium text-paddy-700">Shipment received</p>}
-      <button type="button" onClick={onSubmit} disabled={submitting || !selectedId || !receivedKg || !receivedBags} className="mt-4 rounded-full bg-paddy-900 px-6 py-2.5 text-sm font-medium text-rice-50 disabled:opacity-50">
+      <button type="button" onClick={onSubmit} disabled={submitting || !selectedId || !receivedBags} className="mt-4 rounded-full bg-paddy-900 px-6 py-2.5 text-sm font-medium text-rice-50 disabled:opacity-50">
         {submitting ? 'Receiving…' : 'Confirm receipt'}
       </button>
     </div>

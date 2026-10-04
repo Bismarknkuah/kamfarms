@@ -358,13 +358,13 @@ function StockTransferQuickAction({ accessToken }: { accessToken: string }) {
   const pendingReceipt = transfers.filter((t) => t.status === 'DISPATCHED');
 
   const onDispatch = async () => {
-    if (!sourceWarehouseId || !destWarehouseId || !productId || !packagingSizeId || !bagCount || !totalKg) return;
+    if (!sourceWarehouseId || !destWarehouseId || !productId || !packagingSizeId || !bagCount) return;
     setDispatching(true);
     setFormError(null);
     try {
       await stockTransfersApi.create(accessToken, {
         sourceWarehouseId, destWarehouseId, productId, packagingSizeId,
-        bagCount: parseInt(bagCount, 10), totalKg: parseFloat(totalKg),
+        bagCount: parseInt(bagCount, 10), totalKg: totalKg ? parseFloat(totalKg) : undefined,
         reason: reason || undefined,
       });
       setBagCount(''); setTotalKg(''); setReason('');
@@ -380,11 +380,11 @@ function StockTransferQuickAction({ accessToken }: { accessToken: string }) {
   };
 
   const onReceive = async () => {
-    if (!receivingId || !receivedBagCount || !receivedKg) return;
+    if (!receivingId || !receivedBagCount) return;
     setReceiving(true);
     setFormError(null);
     try {
-      await stockTransfersApi.receive(accessToken, receivingId, parseInt(receivedBagCount, 10), parseFloat(receivedKg));
+      await stockTransfersApi.receive(accessToken, receivingId, parseInt(receivedBagCount, 10), receivedKg ? parseFloat(receivedKg) : undefined);
       setReceivingId(''); setReceivedBagCount(''); setReceivedKg('');
       setSuccess('Transfer received ✓');
       setTimeout(() => setSuccess(null), 3000);
@@ -427,9 +427,9 @@ function StockTransferQuickAction({ accessToken }: { accessToken: string }) {
             {sizes.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
           <input type="number" value={bagCount} onChange={(e) => setBagCount(e.target.value)} placeholder="Bag count" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
-          <input type="number" value={totalKg} onChange={(e) => setTotalKg(e.target.value)} placeholder="Total KG" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
+          <input type="number" value={totalKg} onChange={(e) => setTotalKg(e.target.value)} placeholder="Total KG (optional)" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
           <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional)" className="sm:col-span-2 rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
-          <button type="button" onClick={onDispatch} disabled={dispatching || !sourceWarehouseId || !destWarehouseId || !productId || !packagingSizeId || !bagCount || !totalKg} className="sm:col-span-2 mt-1 rounded-full bg-paddy-900 px-6 py-2.5 text-sm font-medium text-rice-50 disabled:opacity-50">
+          <button type="button" onClick={onDispatch} disabled={dispatching || !sourceWarehouseId || !destWarehouseId || !productId || !packagingSizeId || !bagCount} className="sm:col-span-2 mt-1 rounded-full bg-paddy-900 px-6 py-2.5 text-sm font-medium text-rice-50 disabled:opacity-50">
             {dispatching ? 'Dispatching…' : 'Dispatch transfer'}
           </button>
         </div>
@@ -443,9 +443,9 @@ function StockTransferQuickAction({ accessToken }: { accessToken: string }) {
           </select>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input type="number" value={receivedBagCount} onChange={(e) => setReceivedBagCount(e.target.value)} placeholder="Bags actually received" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
-            <input type="number" value={receivedKg} onChange={(e) => setReceivedKg(e.target.value)} placeholder="KG actually received" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
+            <input type="number" value={receivedKg} onChange={(e) => setReceivedKg(e.target.value)} placeholder="KG received (optional)" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
           </div>
-          <button type="button" onClick={onReceive} disabled={receiving || !receivingId || !receivedBagCount || !receivedKg} className="mt-3 rounded-full bg-paddy-900 px-6 py-2.5 text-sm font-medium text-rice-50 disabled:opacity-50">
+          <button type="button" onClick={onReceive} disabled={receiving || !receivingId || !receivedBagCount} className="mt-3 rounded-full bg-paddy-900 px-6 py-2.5 text-sm font-medium text-rice-50 disabled:opacity-50">
             {receiving ? 'Recording…' : 'Confirm receipt'}
           </button>
         </div>
@@ -498,12 +498,12 @@ function PaddyRequestQuickAction({ accessToken }: { accessToken: string }) {
   useEffect(load, [accessToken]);
 
   const onSubmit = async () => {
-    if (!warehouseId || !gradeId || !bagCount || !kg) return;
+    if (!warehouseId || !gradeId || !bagCount) return;
     setSubmitting(true);
     setFormError(null);
     try {
       await paddyRequestsApi.create(accessToken, {
-        warehouseId, paddyGradeId: gradeId, requestedBagCount: parseInt(bagCount, 10), requestedKg: parseFloat(kg), notes: notes || undefined,
+        warehouseId, paddyGradeId: gradeId, requestedBagCount: parseInt(bagCount, 10), requestedKg: kg ? parseFloat(kg) : undefined, notes: notes || undefined,
       });
       setBagCount(''); setKg(''); setNotes('');
       setSuccess('Request sent to Farm Supervisors ✓');
@@ -533,13 +533,13 @@ function PaddyRequestQuickAction({ accessToken }: { accessToken: string }) {
           {grades.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
         </select>
         <input type="number" value={bagCount} onChange={(e) => setBagCount(e.target.value)} placeholder="Bags needed" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
-        <input type="number" value={kg} onChange={(e) => setKg(e.target.value)} placeholder="KG needed" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
+        <input type="number" value={kg} onChange={(e) => setKg(e.target.value)} placeholder="KG needed (optional)" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional)" rows={2} className="sm:col-span-2 rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
       </div>
 
       {formError && <p className="mt-2 text-sm text-red-600">{formError}</p>}
       {success && <p className="mt-2 text-sm font-medium text-paddy-700">{success}</p>}
-      <button type="button" onClick={onSubmit} disabled={submitting || !warehouseId || !gradeId || !bagCount || !kg} className="mt-4 rounded-full bg-paddy-900 px-6 py-2.5 text-sm font-medium text-rice-50 disabled:opacity-50">
+      <button type="button" onClick={onSubmit} disabled={submitting || !warehouseId || !gradeId || !bagCount} className="mt-4 rounded-full bg-paddy-900 px-6 py-2.5 text-sm font-medium text-rice-50 disabled:opacity-50">
         {submitting ? 'Sending…' : 'Send request'}
       </button>
 

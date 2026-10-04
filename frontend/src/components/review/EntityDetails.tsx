@@ -51,6 +51,7 @@ export function PaddyEntryDetails({ entry: e }: { entry: PaddyEntry }) {
   return (
     <List>
       <Detail label="Number">{e.entryNumber}</Detail>
+      {e.intakeRef && <Detail label="Intake">{e.intakeRef}</Detail>}
       <Detail label="Farm">{e.farm.name} ({e.farm.code})</Detail>
       <Detail label="Grade">{e.paddyGrade.label}</Detail>
       <Detail label="Weight"><span className="font-medium">{kg(e.weightKg)}</span>{e.weightEstimated ? ' (estimated)' : ''}</Detail>
@@ -100,7 +101,7 @@ export function DeliveryReportDetails({ report: r }: { report: DeliveryReport })
       <Detail label="From">{r.farm.name}</Detail>
       <Detail label="To">{r.destinationWarehouse.name}</Detail>
       <Detail label="Grade">{r.paddyGrade.label}</Detail>
-      <Detail label="Delivered"><span className="font-medium">{kg(r.actualKg)}</span>, {r.actualBagCount.toLocaleString()} bags</Detail>
+      <Detail label="Delivered"><span className="font-medium">{r.actualBagCount.toLocaleString()} bags</span>, {kg(r.actualKg)}{r.actualKgEstimated ? ' (worked out from the bags, not weighed)' : ''}</Detail>
       {r.vehicle && <Detail label="Vehicle">{r.vehicle.plateNumber}</Detail>}
       {r.driver && <Detail label="Driver">{r.driver.name}</Detail>}
       {r.departureTime && <Detail label="Left at">{new Date(r.departureTime).toLocaleString()}</Detail>}

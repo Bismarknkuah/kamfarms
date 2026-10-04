@@ -933,6 +933,8 @@ model PaddyEntry {
   // what keeps that estimate honest instead of silently indistinguishable
   // from an actual measurement.
   weightEstimated  Boolean          @default(false) @map("weight_estimated")
+  /// Sizes saved together as one intake share this reference, e.g. "17 bags of Size 4 and 3 bags of Size 5". Each size keeps its own approval.
+  intakeRef        String?          @map("intake_ref")
   moisturePercent  Decimal?         @map("moisture_percent") @db.Decimal(5, 2)
   qualityGrade     String?          @map("quality_grade")
   harvestDate      DateTime?        @map("harvest_date")
@@ -957,6 +959,7 @@ model PaddyEntry {
   @@index([farmId])
   @@index([status])
   @@index([entryDate])
+  @@index([intakeRef])
   @@map("paddy_entries")
 }
 
@@ -1052,6 +1055,8 @@ model DeliveryOrder {
   priority               DeliveryPriority    @default(NORMAL)
   notes                  String?
   status                 DeliveryOrderStatus @default(PENDING)
+  /// Orders made together (one dispatch to one warehouse, one line per size) share this reference, e.g. "RQ-2026-000012".
+  requestRef             String?             @map("request_ref")
   createdById            String              @map("created_by_id")
   createdBy              User                @relation(fields: [createdById], references: [id])
   createdAt              DateTime            @default(now()) @map("created_at")
@@ -1061,6 +1066,7 @@ model DeliveryOrder {
 
   @@index([farmId])
   @@index([destinationWarehouseId])
+  @@index([requestRef])
   @@map("delivery_orders")
 }
 
@@ -1122,6 +1128,8 @@ model DeliveryReport {
 
   actualBagCount   Int      @map("actual_bag_count")
   actualKg         Decimal  @map("actual_kg") @db.Decimal(12, 3)
+  /// True when only the bags were counted (no scale): the kg is then the bags x the order\'s weight per bag, not a measurement.
+  actualKgEstimated Boolean @default(false) @map("actual_kg_estimated")
 
   labourCost        Decimal @default(0) @map("labour_cost") @db.Decimal(12, 2)
   numberOfLabourers Int?    @map("number_of_labourers")
@@ -1177,6 +1185,8 @@ model Shipment {
   expectedBags  Int       @map("expected_bags")
   receivedKg    Decimal?  @map("received_kg") @db.Decimal(12, 3)
   receivedBags  Int?      @map("received_bags")
+  /// True when only the bags were counted on arrival: the kg is then worked out from the bags, not weighed.
+  receivedKgEstimated Boolean @default(false) @map("received_kg_estimated")
   varianceKg    Decimal?  @map("variance_kg") @db.Decimal(12, 3)
   varianceRequiresApproval Boolean @default(false) @map("variance_requires_approval")
   // Section 7's exact requirement: receiving must capture condition and
@@ -2063,6 +2073,8 @@ model Task {
   // a real, traceable link rather than a plain text task.
   salesOrderId    String?          @map("sales_order_id")
   salesOrder      SalesOrder?      @relation(fields: [salesOrderId], references: [id])
+  /// The dispatch request this task is the farm manager's instruction for (see DeliveryOrder.requestRef).
+  deliveryRequestRef String?       @map("delivery_request_ref")
   createdById     String           @map("created_by_id")
   createdBy       User             @relation("TaskCreatedBy", fields: [createdById], references: [id])
   completedById   String?          @map("completed_by_id")
@@ -2076,6 +2088,7 @@ model Task {
   @@index([assignedToId])
   @@index([status])
   @@index([dueDate])
+  @@index([deliveryRequestRef])
   @@map("tasks")
 }
 

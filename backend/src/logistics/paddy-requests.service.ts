@@ -7,6 +7,7 @@ import { CreatePaddyRequestDto } from './dto/create-paddy-request.dto';
 import { RespondPaddyRequestDto } from './dto/respond-paddy-request.dto';
 import { AssignPaddyRequestDto } from './dto/assign-paddy-request.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { estimateKg } from '../common/constants/bag-weight';
 
 const FARM_SUPERVISOR_ROLE_CODES = ['FARM_DIRECTOR', 'MD', 'CEO'];
 
@@ -54,7 +55,8 @@ export class PaddyRequestsService {
           warehouseId: dto.warehouseId,
           paddyGradeId: dto.paddyGradeId,
           requestedBagCount: dto.requestedBagCount,
-          requestedKg: dto.requestedKg,
+          // Counted in bags: with no kilograms given they are worked out from the bags.
+          requestedKg: dto.requestedKg ?? estimateKg(dto.requestedBagCount),
           notes: dto.notes,
           requestedById: actor.id,
         },
@@ -75,7 +77,7 @@ export class PaddyRequestsService {
         userIds: supervisors.map((u) => u.id),
         type: 'paddy_request.created',
         title: `Paddy request - ${request.requestNumber}`,
-        body: `A warehouse needs ${dto.requestedBagCount} bags (${dto.requestedKg} KG) - awaiting your response.`,
+        body: `A warehouse needs ${dto.requestedBagCount} bags${dto.requestedKg !== undefined ? ` (${dto.requestedKg} KG)` : ''} - awaiting your response.`,
         entityType: 'PaddyRequest',
         entityId: request.id,
       });
@@ -167,9 +169,7 @@ export class PaddyRequestsService {
     if (farmManagers.length === 0) {
       throw new BadRequestException('This farm has no manager assigned yet - assign one before sending a dispatch task.');
     }
-
-    const STANDARD_PADDY_BAG_WEIGHT_KG = 50;
-    const kg = dto.kg ?? dto.bagCount * STANDARD_PADDY_BAG_WEIGHT_KG;
+    const kg = dto.kg ?? estimateKg(dto.bagCount);
 
     const task = await this.prisma.$transaction(async (tx) => {
       if (request.status === 'PENDING') {

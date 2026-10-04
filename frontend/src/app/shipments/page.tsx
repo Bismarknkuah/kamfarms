@@ -5,7 +5,7 @@ import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import { shipmentsApi, Shipment, ApiError } from '@/lib/api-client';
 import { InventoryAdjustmentRequestAction } from '@/components/OfficeActions';
-import { BagStepper, ConditionChips, VarianceBadge, EstimatedWeightHint, STANDARD_PADDY_BAG_WEIGHT_KG } from '@/components/DataEntryKit';
+import { BagStepper, ConditionChips, VarianceBadge, EstimatedWeightHint } from '@/components/DataEntryKit';
 
 export default function ShipmentsPage() {
   const { me, accessToken, loading, error, hasPermission } = useCurrentUser();
@@ -35,11 +35,10 @@ export default function ShipmentsPage() {
     setReceiving(true);
     setPageError(null);
     try {
-      // Bags are the real count; kilos are estimated at the standard
-      // bag weight when the receiver has no scale, exactly as the farm
-      // side does - the backend needs a number either way.
+      // Bags are the real count. With no scale, no kilograms are sent: the server works them out at the weight per bag this shipment
+      // left with (so a full load shows no difference), and marks them as an estimate.
       const bags = parseInt(receivedBags, 10);
-      const kg = receivedKg ? parseFloat(receivedKg) : bags * STANDARD_PADDY_BAG_WEIGHT_KG;
+      const kg = receivedKg ? parseFloat(receivedKg) : undefined;
       await shipmentsApi.receive(
         accessToken, id, kg, bags,
         receivedCondition || undefined,
@@ -135,7 +134,7 @@ export default function ShipmentsPage() {
                         <div>
                           <label className="mb-1 block text-xs font-medium text-ink-700">Weight (KG) <span className="font-normal text-ink-500">- optional</span></label>
                           <input type="number" inputMode="decimal" value={receivedKg} onChange={(e) => setReceivedKg(e.target.value)} placeholder="Only if weighed" className="w-full rounded-xl border-2 border-paddy-100 px-3 py-2.5 text-sm" />
-                          <div className="mt-1"><EstimatedWeightHint bags={receivedBags} weightKg={receivedKg} /></div>
+                          <div className="mt-1"><EstimatedWeightHint bags={receivedBags} weightKg={receivedKg} perBagKg={s.expectedBags > 0 ? s.expectedKg / s.expectedBags : undefined} /></div>
                         </div>
                         <div>
                           <label className="mb-1 block text-xs font-medium text-ink-700">Moisture % <span className="font-normal text-ink-500">- optional</span></label>

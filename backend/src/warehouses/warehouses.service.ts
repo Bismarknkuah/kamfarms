@@ -200,7 +200,7 @@ export class WarehousesService {
   directory() {
     return this.prisma.warehouse.findMany({
       where: { isActive: true },
-      select: { id: true, name: true },
+      select: { id: true, name: true, location: true },
       orderBy: { name: 'asc' },
     });
   }

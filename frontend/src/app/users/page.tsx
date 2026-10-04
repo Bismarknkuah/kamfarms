@@ -1,20 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { MIN_PASSWORD, generateTemporaryPassword } from '@/lib/temp-password';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import { usersApi, tasksApi, rolesApi, AppUser, DirectoryUser, Role, ApiError } from '@/lib/api-client';
-
-/** A genuinely random, readable temporary password - not left to the
- * admin to think one up. Avoids visually ambiguous characters (0/O,
- * 1/l/I) since this needs to be read aloud or typed from a screenshot
- * by someone who didn't choose it themselves. */
-function generateTemporaryPassword(): string {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  let out = '';
-  for (let i = 0; i < 12; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
-}
 
 export default function UsersPage() {
   const { me, accessToken, loading, error, hasPermission } = useCurrentUser();
@@ -52,8 +42,13 @@ export default function UsersPage() {
   const [newRoleCode, setNewRoleCode] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [createdCredentials, setCreatedCredentials] = useState<{ firstName: string; email: string; password: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedMessage, setCopiedMessage] = useState(false);
+  // The temporary password is chosen up front, so the admin can see it, keep the generated one, type their own, or generate another.
+  const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(true);
+  useEffect(() => { if (showCreate && !newPassword) setNewPassword(generateTemporaryPassword()); }, [showCreate, newPassword]);
 
   const isAdmin = hasPermission('users.manage');
   const canManageTeam = hasPermission('team.manage');
@@ -98,9 +93,13 @@ export default function UsersPage() {
 
   const onCreateUser = async () => {
     if (!accessToken || !newFirstName.trim() || !newLastName.trim() || !newEmail.trim()) return;
+    const temporaryPassword = newPassword;
+    if (temporaryPassword.length < MIN_PASSWORD) {
+      setCreateError(`The temporary password must be at least ${MIN_PASSWORD} characters.`);
+      return;
+    }
     setCreating(true);
     setCreateError(null);
-    const temporaryPassword = generateTemporaryPassword();
     try {
       await usersApi.create(accessToken, {
         firstName: newFirstName.trim(),
@@ -110,8 +109,9 @@ export default function UsersPage() {
         temporaryPassword,
         roleCodes: isAdmin ? (newRoleCode ? [newRoleCode] : undefined) : fixedSubordinateRole ? [fixedSubordinateRole] : undefined,
       });
-      setCreatedCredentials({ email: newEmail.trim(), password: temporaryPassword });
+      setCreatedCredentials({ firstName: newFirstName.trim(), email: newEmail.trim(), password: temporaryPassword });
       setShowCreate(false);
+      setNewPassword('');
       setNewFirstName(''); setNewLastName(''); setNewEmail(''); setNewPhone(''); setNewRoleCode('');
       usersApi.list(accessToken).then((res) => setUsers(res.items)).catch(() => {});
     } catch (err) {
@@ -126,6 +126,18 @@ export default function UsersPage() {
     navigator.clipboard.writeText(`Email: ${createdCredentials.email}\nTemporary password: ${createdCredentials.password}`).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
+
+  const signInUrl = typeof window !== 'undefined' ? `${window.location.origin}/login` : '/login';
+  /** A message ready to paste into WhatsApp or SMS, so nothing has to be retyped. */
+  const welcomeMessage = (c: { firstName: string; email: string; password: string }) =>
+    `Hello ${c.firstName},\nYour KAM-ROMS account is ready.\nSign in: ${signInUrl}\nEmail: ${c.email}\nTemporary password: ${c.password}\nYou will be asked to choose your own password the first time you sign in.`;
+  const onCopyMessage = () => {
+    if (!createdCredentials) return;
+    navigator.clipboard.writeText(welcomeMessage(createdCredentials)).then(() => {
+      setCopiedMessage(true);
+      setTimeout(() => setCopiedMessage(false), 2000);
     }).catch(() => {});
   };
 
@@ -221,16 +233,20 @@ export default function UsersPage() {
       </div>
 
       {createdCredentials && (
-        <div className="mt-4 rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-5">
-          <h2 className="font-display text-base text-paddy-900">Account created - share these with them now</h2>
-          <p className="mt-1 text-xs text-ink-500">This password won&rsquo;t be shown again. They&rsquo;ll be required to choose their own on first login.</p>
+        <div className="mt-4 rounded-2xl border-2 border-paddy-700 bg-paddy-50 p-5" role="status" data-testid="credentials-box">
+          <h2 className="font-display text-base text-paddy-900">Account created for {createdCredentials.firstName} - share these with them now</h2>
+          <p className="mt-1 text-xs text-ink-500">This password won&rsquo;t be shown again. They&rsquo;ll be required to choose their own the first time they sign in.</p>
           <div className="mt-3 space-y-1 rounded-lg bg-white px-4 py-3 font-mono text-sm">
+            <p><span className="text-ink-500">Sign in at:</span> {signInUrl}</p>
             <p><span className="text-ink-500">Email:</span> {createdCredentials.email}</p>
-            <p><span className="text-ink-500">Temporary password:</span> {createdCredentials.password}</p>
+            <p><span className="text-ink-500">Temporary password:</span> <span data-testid="credentials-password">{createdCredentials.password}</span></p>
           </div>
-          <div className="mt-3 flex gap-2">
-            <button type="button" onClick={onCopyCredentials} className="rounded-full bg-paddy-900 px-4 py-1.5 text-xs font-medium text-rice-50">
-              {copied ? 'Copied ✓' : 'Copy to clipboard'}
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button type="button" data-testid="copy-message" onClick={onCopyMessage} className="rounded-full bg-paddy-900 px-4 py-1.5 text-xs font-medium text-rice-50">
+              {copiedMessage ? 'Copied' : 'Copy a message to send them'}
+            </button>
+            <button type="button" onClick={onCopyCredentials} className="rounded-full border border-paddy-700 px-4 py-1.5 text-xs font-medium text-paddy-700">
+              {copied ? 'Copied' : 'Copy email and password only'}
             </button>
             <button type="button" onClick={() => setCreatedCredentials(null)} className="text-xs text-ink-500">Dismiss</button>
           </div>
@@ -240,7 +256,7 @@ export default function UsersPage() {
       {showCreate && (
         <div className="mt-4 rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-5">
           <h2 className="font-display text-base text-paddy-900">New user</h2>
-          <p className="mt-1 text-xs text-ink-500">A temporary password is generated automatically - you&rsquo;ll see it once, right after creating the account.</p>
+          <p className="mt-1 text-xs text-ink-500">Give them a temporary password below. They must choose their own the first time they sign in.</p>
           {createError && <p className="mt-2 text-sm text-red-600">{createError}</p>}
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <input value={newFirstName} onChange={(e) => setNewFirstName(e.target.value)} placeholder="First name" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
@@ -257,11 +273,33 @@ export default function UsersPage() {
                 Role: <span className="ml-1 font-medium text-ink-900">{fixedSubordinateRole}</span> - the only role you can add to your team.
               </p>
             )}
+            <div className="sm:col-span-2" data-testid="temp-password-field">
+              <label htmlFor="new-user-password" className="mb-1 block text-xs font-medium text-ink-700">Temporary password</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  id="new-user-password"
+                  data-testid="new-user-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value.replace(/\s/g, ''))}
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-describedby="new-user-password-help"
+                  aria-invalid={newPassword.length < MIN_PASSWORD}
+                  className={`min-w-0 flex-1 rounded-lg border px-3 py-2 font-mono text-sm ${newPassword.length < MIN_PASSWORD ? 'border-red-400' : 'border-paddy-100'}`}
+                />
+                <button type="button" data-testid="toggle-password" onClick={() => setShowPassword((v) => !v)} className="rounded-full border border-paddy-100 px-3 py-1.5 text-xs font-medium text-ink-700">{showPassword ? 'Hide' : 'Show'}</button>
+                <button type="button" data-testid="generate-password" onClick={() => setNewPassword(generateTemporaryPassword())} className="rounded-full border border-paddy-700 px-3 py-1.5 text-xs font-medium text-paddy-700">Generate another</button>
+              </div>
+              <p id="new-user-password-help" className={`mt-1 text-xs ${newPassword.length < MIN_PASSWORD ? 'text-red-700' : 'text-ink-500'}`} data-testid="password-help">
+                {newPassword.length < MIN_PASSWORD ? `At least ${MIN_PASSWORD} characters (${newPassword.length} so far).` : 'A strong one is filled in for you: keep it, change it, or generate another. You will see it again after the account is created.'}
+              </p>
+            </div>
           </div>
           <button
             type="button"
             onClick={onCreateUser}
-            disabled={creating || !newFirstName.trim() || !newLastName.trim() || !newEmail.trim()}
+            disabled={creating || !newFirstName.trim() || !newLastName.trim() || !newEmail.trim() || newPassword.length < MIN_PASSWORD}
             className="mt-3 rounded-full bg-paddy-900 px-5 py-2 text-sm font-medium text-rice-50 disabled:opacity-50"
           >
             {creating ? 'Creating…' : 'Create user'}

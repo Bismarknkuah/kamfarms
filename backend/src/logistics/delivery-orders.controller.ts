@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { DeliveryOrdersService } from './delivery-orders.service';
 import { CreateDeliveryOrderDto } from './dto/create-delivery-order.dto';
+import { CreateDispatchRequestDto } from './dto/create-dispatch-request.dto';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { PERMISSIONS } from '../common/constants/permissions';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -41,5 +42,12 @@ export class DeliveryOrdersController {
   @RequirePermission(PERMISSIONS.DELIVERY_CREATE)
   create(@Body() dto: CreateDeliveryOrderDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.deliveryOrdersService.create(dto, actor);
+  }
+
+  /** A request to a farm manager: every size in one go, to one warehouse, with a needed-by date and instructions. It also becomes a task. */
+  @Post('request')
+  @RequirePermission(PERMISSIONS.DELIVERY_CREATE)
+  createRequest(@Body() dto: CreateDispatchRequestDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.deliveryOrdersService.createRequest(dto, actor);
   }
 }

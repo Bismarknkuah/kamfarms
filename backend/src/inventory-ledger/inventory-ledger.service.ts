@@ -72,7 +72,7 @@ export class InventoryLedgerService {
     // logic now that prefix alone is what the sequence is keyed by,
     // but kept here as documentation of which kinds of numbers this
     // is actually used for.
-    _model: 'inventoryTransaction' | 'paddyEntry' | 'paddyBatch' | 'deliveryOrder' | 'deliveryReport' | 'shipment',
+    _model: 'inventoryTransaction' | 'paddyEntry' | 'paddyBatch' | 'paddyIntake' | 'dispatchRequest' | 'deliveryOrder' | 'deliveryReport' | 'shipment',
   ): Promise<string> {
     const year = new Date().getFullYear();
     const key = `${prefix}-${year}`;

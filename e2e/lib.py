@@ -26,8 +26,8 @@ def png(w=48, h=48):
     return b'\x89PNG\r\n\x1a\n' + ch(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)) + ch(b'IDAT', zlib.compress(raw)) + ch(b'IEND', b'')
 PDF = b'%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n'
 
-def as_user(browser, key, viewport=None):
-    ctx = browser.new_context(viewport=viewport or {'width': 1400, 'height': 1000})
+def as_user(browser, key, viewport=None, permissions=None):
+    ctx = browser.new_context(viewport=viewport or {'width': 1400, 'height': 1000}, permissions=permissions or [])
     ctx.add_init_script(f"sessionStorage.setItem('kam_roms_access_token', 'tok-{key}');")
     page = ctx.new_page()
     page.set_default_timeout(15000)

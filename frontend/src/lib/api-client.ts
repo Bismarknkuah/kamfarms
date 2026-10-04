@@ -157,7 +157,7 @@ export const farmsApi = {
 export const warehousesApi = {
   list: (accessToken: string, includeInactive?: boolean) =>
     request<Warehouse[]>(`/warehouses${includeInactive ? '?includeInactive=true' : ''}`, { method: 'GET' }, accessToken),
-  directory: (accessToken: string) => request<{ id: string; name: string }[]>('/warehouses/directory', { method: 'GET' }, accessToken),
+  directory: (accessToken: string) => request<{ id: string; name: string; location?: string | null }[]>('/warehouses/directory', { method: 'GET' }, accessToken),
   create: (accessToken: string, data: { code: string; name: string; location?: string }) =>
     request<Warehouse>('/warehouses', { method: 'POST', body: JSON.stringify(data) }, accessToken),
   update: (accessToken: string, id: string, data: { name?: string; location?: string; isActive?: boolean }) =>
@@ -439,6 +439,10 @@ export interface Task {
   dueDate: string | null;
   completionEvidence: string | null;
   attachmentUrl: string | null;
+  /** Set on a dispatch task: the request the farm manager is being asked to carry out. */
+  deliveryRequestRef?: string | null;
+  farm?: { name: string } | null;
+  warehouse?: { name: string; location?: string | null } | null;
   assignedTo: { firstName: string; lastName: string } | null;
   createdBy: { firstName: string; lastName: string };
 }
@@ -1201,6 +1205,8 @@ export const paddyTypesApi = {
 export interface PaddyEntry {
   id: string;
   entryNumber: string;
+  /** Sizes saved together as one intake share this reference (e.g. 17 bags of Size 4 and 3 bags of Size 5). */
+  intakeRef?: string | null;
   status: string;
   farm: { name: string; code: string };
   paddyGradeId: string;
@@ -1219,6 +1225,29 @@ export interface PaddyEntry {
   submittedBy: { firstName: string; lastName: string };
 }
 
+/** One intake with several sizes, saved together (all or none). */
+export interface PaddyIntakeInput {
+  farmId: string;
+  entryDate: string;
+  lines: { paddyGradeId: string; bagCount: number; weightKg?: number }[];
+  moisturePercent?: number;
+  qualityGrade?: string;
+  supplierName?: string;
+  notes?: string;
+  /** Default true: send it for approval straight away. false saves a draft. */
+  submit?: boolean;
+}
+export interface PaddyIntakeResult {
+  intakeRef: string;
+  status: 'SUBMITTED' | 'DRAFT';
+  submitted: boolean;
+  farmName: string;
+  totalBags: number;
+  totalKg: number;
+  anyWeightEstimated: boolean;
+  entries: { id: string; entryNumber: string; paddyGradeId: string; gradeLabel: string; bagCount: number; weightKg: number; weightEstimated: boolean; status: string }[];
+}
+
 export const paddyEntriesApi = {
   list: (accessToken: string, farmId?: string, status?: string) => {
     const params = new URLSearchParams();
@@ -1227,6 +1256,9 @@ export const paddyEntriesApi = {
     const qs = params.toString();
     return request<PaddyEntry[]>(`/paddy-entries${qs ? `?${qs}` : ''}`, { method: 'GET' }, accessToken);
   },
+  /** Every size that arrived in one go: all of it is saved, or none of it, and the server says why if it fails. */
+  createIntake: (accessToken: string, data: PaddyIntakeInput) =>
+    request<PaddyIntakeResult>('/paddy-entries/intake', { method: 'POST', body: JSON.stringify(data) }, accessToken),
   create: (
     accessToken: string,
     data: { farmId: string; entryDate: string; paddyGradeId: string; weightKg?: number; bagCount: number; moisturePercent?: number; qualityGrade?: string; notes?: string },
@@ -1256,17 +1288,63 @@ export interface PaddyEntryComment {
 }
 
 // ── Deliveries: orders, reports, shipments ────────────────────────
+/** Where a dispatch order is, in plain words (worked out by the server from what has actually happened). */
+export interface DispatchStep { id: 'requested' | 'preparing' | 'approved' | 'road' | 'arrived'; label: string; state: 'done' | 'current' | 'upcoming'; at: string | null; by: string | null; detail: string | null }
+export interface DispatchTracking {
+  stage: 'REQUESTED' | 'PREPARING' | 'IN_REVIEW' | 'ON_THE_WAY' | 'ARRIVED' | 'CANCELLED';
+  label: string;
+  holder: string | null;
+  since: string | null;
+  sentBack: string | null;
+  steps: DispatchStep[];
+  driverName: string | null;
+  vehiclePlate: string | null;
+  bagsLoaded: number | null;
+  bagsReceived: number | null;
+  bagVariance: number | null;
+  varianceRequiresApproval: boolean;
+}
+
 export interface DeliveryOrder {
   id: string;
   orderNumber: string;
+  /** Orders made together in one request share this. */
+  requestRef?: string | null;
   status: string;
+  priority?: string;
+  notes?: string | null;
   farm: { name: string };
-  destinationWarehouse: { name: string };
+  destinationWarehouse: { name: string; location?: string | null };
   paddyGrade: { label: string };
+  createdBy?: { firstName: string; lastName: string } | null;
   bagCount: number;
   totalKg: number;
   totalKgEstimated: boolean;
   requestedDate: string;
+  tracking?: DispatchTracking;
+}
+
+export interface DispatchRequestInput {
+  farmId: string;
+  destinationWarehouseId: string;
+  requestedDate: string;
+  priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+  notes?: string;
+  lines: { paddyGradeId: string; bagCount: number; totalKg?: number }[];
+}
+export interface DispatchRequestResult {
+  requestRef: string;
+  farmName: string;
+  warehouse: { id: string; name: string; location: string | null; contacts: { name: string; phone?: string | null }[] };
+  requestedDate: string;
+  priority: string;
+  notes: string | null;
+  totalBags: number;
+  orders: { id: string; orderNumber: string; gradeLabel: string; bagCount: number; totalKg: number; totalKgEstimated: boolean }[];
+  tasks: { id: string; taskNumber: string; assignedTo: string }[];
+  managers: string[];
+  noTaskCreated: boolean;
+  noManagerOnFarm: boolean;
 }
 
 export interface DeliveryReport {
@@ -1278,6 +1356,8 @@ export interface DeliveryReport {
   paddyGrade: { label: string };
   actualBagCount: number;
   actualKg: number;
+  /** True when only the bags were counted: the kg is worked out from them, not weighed. */
+  actualKgEstimated?: boolean;
   labourCost: number;
   transportationFee: number;
   otherCosts: number;
@@ -1317,6 +1397,9 @@ export const deliveryOrdersApi = {
     accessToken: string,
     data: { farmId: string; destinationWarehouseId: string; requestedDate: string; paddyGradeId: string; bagCount: number; totalKg?: number },
   ) => request<DeliveryOrder>('/delivery-orders', { method: 'POST', body: JSON.stringify(data) }, accessToken),
+  /** A request to a farm manager: every size in one go, to one warehouse, by a date, with instructions. It also becomes the farm manager's task. */
+  createRequest: (accessToken: string, data: DispatchRequestInput) =>
+    request<DispatchRequestResult>('/delivery-orders/request', { method: 'POST', body: JSON.stringify(data) }, accessToken),
   getFullTrace: (accessToken: string, orderNumber: string) =>
     request<DispatchTrace>(`/delivery-orders/trace/${encodeURIComponent(orderNumber)}`, { method: 'GET' }, accessToken),
 };
@@ -1351,7 +1434,8 @@ export const deliveryReportsApi = {
     data: {
       deliveryOrderId: string;
       actualBagCount: number;
-      actualKg: number;
+      /** Only if it was weighed; leave out when the bags were counted. */
+      actualKg?: number;
       labourCost?: number;
       numberOfLabourers?: number;
       transportationFee?: number;
@@ -1409,7 +1493,8 @@ export const shipmentsApi = {
   receive: (
     accessToken: string,
     id: string,
-    receivedKg: number,
+    /** Only if it was weighed; pass undefined when the bags were counted. */
+    receivedKg: number | undefined,
     receivedBags: number,
     receivedCondition?: string,
     receivedMoisturePercent?: number,
@@ -1640,9 +1725,9 @@ export const stockTransfersApi = {
     request<StockTransfer[]>(`/stock-transfers${warehouseId ? `?warehouseId=${warehouseId}` : ''}`, { method: 'GET' }, accessToken),
   create: (
     accessToken: string,
-    data: { sourceWarehouseId: string; destWarehouseId: string; productId: string; packagingSizeId: string; bagCount: number; totalKg: number; reason?: string },
+    data: { sourceWarehouseId: string; destWarehouseId: string; productId: string; packagingSizeId: string; bagCount: number; /** Leave out: it is the bags times the pack size. */ totalKg?: number; reason?: string },
   ) => request<StockTransfer>('/stock-transfers', { method: 'POST', body: JSON.stringify(data) }, accessToken),
-  receive: (accessToken: string, id: string, receivedBagCount: number, receivedKg: number) =>
+  receive: (accessToken: string, id: string, receivedBagCount: number, receivedKg?: number) =>
     request<StockTransfer>(`/stock-transfers/${id}/receive`, { method: 'POST', body: JSON.stringify({ receivedBagCount, receivedKg }) }, accessToken),
 };
 
@@ -1778,7 +1863,7 @@ export interface PaddyRequest {
 export const paddyRequestsApi = {
   list: (accessToken: string, warehouseId?: string) =>
     request<PaddyRequest[]>(`/paddy-requests${warehouseId ? `?warehouseId=${warehouseId}` : ''}`, { method: 'GET' }, accessToken),
-  create: (accessToken: string, data: { warehouseId: string; paddyGradeId: string; requestedBagCount: number; requestedKg: number; notes?: string }) =>
+  create: (accessToken: string, data: { warehouseId: string; paddyGradeId: string; requestedBagCount: number; requestedKg?: number; notes?: string }) =>
     request<PaddyRequest>('/paddy-requests', { method: 'POST', body: JSON.stringify(data) }, accessToken),
   respond: (accessToken: string, id: string, decision: 'ACCEPTED' | 'DECLINED', responseNote?: string) =>
     request<PaddyRequest>(`/paddy-requests/${id}/respond`, { method: 'POST', body: JSON.stringify({ decision, responseNote }) }, accessToken),

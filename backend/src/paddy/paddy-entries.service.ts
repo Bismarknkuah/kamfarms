@@ -9,6 +9,9 @@ import { UpdatePaddyEntryDto } from './dto/update-paddy-entry.dto';
 import { RejectPaddyEntryDto } from './dto/reject-paddy-entry.dto';
 import { CreatePaddyEntryCommentDto } from './dto/create-paddy-entry-comment.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { PERMISSIONS } from '../common/constants/permissions';
+import { estimateKg } from '../common/constants/bag-weight';
+import { CreatePaddyIntakeDto } from './dto/create-paddy-intake.dto';
 
 // Only APPROVED is locked - matches the explicit requirement that a
 // Farm Manager can edit a submitted entry right up until their Farm
@@ -58,12 +61,6 @@ export class PaddyEntriesService {
     return entry;
   }
 
-  /** Standard paddy bag weight used to estimate a shipment's KG when no
-   * scale reading was taken - most farms don't have one on-site. This is
-   * a real assumption, not a precise figure, which is exactly why every
-   * entry that uses it is flagged via weightEstimated rather than
-   * silently presented as measured. */
-  private static readonly STANDARD_PADDY_BAG_WEIGHT_KG = 50;
 
   async create(dto: CreatePaddyEntryDto, actor: AuthenticatedUser) {
     assertScope(actor, 'FARM', dto.farmId, 'this farm');
@@ -75,7 +72,7 @@ export class PaddyEntriesService {
     if (!grade || !grade.isActive) throw new BadRequestException('Paddy grade not found or inactive.');
 
     const weightEstimated = dto.weightKg === undefined;
-    const weightKg = dto.weightKg ?? dto.bagCount * PaddyEntriesService.STANDARD_PADDY_BAG_WEIGHT_KG;
+    const weightKg = dto.weightKg ?? estimateKg(dto.bagCount);
     const avgBagWeightKg = weightKg / dto.bagCount;
 
     const entry = await this.prisma.$transaction(async (tx) => {
@@ -114,6 +111,92 @@ export class PaddyEntriesService {
     });
 
     return this.findById(entry.id, actor);
+  }
+
+  /**
+   * ONE intake with several sizes ("17 bags of Size 4 and 3 bags of Size 5"), saved together: either every size is saved or none is, so a
+   * failure halfway can never leave half an intake behind (and a retry can never double one up). Each size becomes its own entry, so each
+   * keeps its own approval, and they share one intake reference. By default it is also submitted for approval in the same step.
+   */
+  async createIntake(dto: CreatePaddyIntakeDto, actor: AuthenticatedUser) {
+    assertScope(actor, 'FARM', dto.farmId, 'this farm');
+    const submit = dto.submit !== false;
+    if (submit && !actor.permissionCodes?.has(PERMISSIONS.PADDY_SUBMIT)) {
+      throw new ForbiddenException('You can save an intake as a draft, but you do not have permission to submit it for approval.');
+    }
+
+    const farmRow = await this.prisma.farm.findUnique({ where: { id: dto.farmId } });
+    if (!farmRow || !farmRow.isActive) throw new BadRequestException('Farm not found or inactive.');
+
+    const gradeIds = dto.lines.map((l) => l.paddyGradeId);
+    const grades = await this.prisma.paddyGrade.findMany({ where: { id: { in: gradeIds } } });
+    const labelOf = (id: string) => grades.find((g) => g.id === id)?.label ?? 'A size';
+    const twice = gradeIds.find((id, i) => gradeIds.indexOf(id) !== i);
+    if (twice) throw new BadRequestException(`${labelOf(twice)} is on the list twice. Put all of its bags on one line.`);
+    const unusable = gradeIds.find((id) => !grades.some((g) => g.id === id && g.isActive));
+    if (unusable) throw new BadRequestException('One of the sizes was not found or is no longer in use. Choose the size again.');
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const intakeRef = await this.ledger.generateNumber(tx, 'IN', 'paddyIntake');
+      const rows: Awaited<ReturnType<typeof tx.paddyEntry.create>>[] = [];
+      for (const line of dto.lines) {
+        const weightEstimated = line.weightKg === undefined;
+        const weightKg = line.weightKg ?? estimateKg(line.bagCount);
+        const entryNumber = await this.ledger.generateNumber(tx, 'PE', 'paddyEntry');
+        const batchNumber = await this.ledger.generateNumber(tx, 'PB', 'paddyBatch');
+        const created = await tx.paddyEntry.create({
+          data: {
+            entryNumber,
+            batchNumber,
+            intakeRef,
+            farmId: dto.farmId,
+            entryDate: new Date(dto.entryDate),
+            paddyTypeId: dto.paddyTypeId,
+            paddyGradeId: line.paddyGradeId,
+            weightKg,
+            weightEstimated,
+            bagCount: line.bagCount,
+            avgBagWeightKg: weightKg / line.bagCount,
+            moisturePercent: dto.moisturePercent,
+            qualityGrade: dto.qualityGrade,
+            harvestDate: dto.harvestDate ? new Date(dto.harvestDate) : null,
+            supplierName: dto.supplierName,
+            storageLocation: dto.storageLocation,
+            notes: dto.notes,
+            status: submit ? 'SUBMITTED' : 'DRAFT',
+            submittedAt: submit ? new Date() : null,
+            submittedById: actor.id,
+          },
+        });
+        await this.audit.record(
+          { userId: actor.id, action: submit ? 'paddy.create_and_submit' : 'paddy.create', entity: 'PaddyEntry', entityId: created.id, afterValue: { ...created, intakeRef } },
+          tx,
+        );
+        rows.push(created);
+      }
+      return { intakeRef, rows };
+    });
+
+    const entries = result.rows.map((r) => ({
+      id: r.id,
+      entryNumber: r.entryNumber,
+      paddyGradeId: r.paddyGradeId,
+      gradeLabel: labelOf(r.paddyGradeId),
+      bagCount: r.bagCount,
+      weightKg: Number(r.weightKg),
+      weightEstimated: r.weightEstimated,
+      status: r.status as string,
+    }));
+    return {
+      intakeRef: result.intakeRef,
+      status: submit ? 'SUBMITTED' : 'DRAFT',
+      submitted: submit,
+      farmName: farmRow.name as string,
+      totalBags: entries.reduce((t, e) => t + e.bagCount, 0),
+      totalKg: entries.reduce((t, e) => t + e.weightKg, 0),
+      anyWeightEstimated: entries.some((e) => e.weightEstimated),
+      entries,
+    };
   }
 
   async update(id: string, dto: UpdatePaddyEntryDto, actor: AuthenticatedUser) {

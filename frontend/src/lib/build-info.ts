@@ -3,7 +3,7 @@
  * which features it has (GET /health); the website knows which it needs. When something is missing the Admin
  * dashboard says so in plain words, instead of pages quietly failing with "404".
  */
-export const REQUIRED_API_FEATURES = ['site-content', 'insights', 'settings-registry', 'system-overview', 'reports-catalog', 'admin-access', 'ai-predictions', 'sales-chain', 'ai-feedback'] as const;
+export const REQUIRED_API_FEATURES = ['site-content', 'insights', 'settings-registry', 'system-overview', 'reports-catalog', 'admin-access', 'ai-predictions', 'sales-chain', 'ai-feedback', 'multi-size-intake', 'dispatch-requests'] as const;
 
 export const FEATURE_LABELS: Record<string, string> = {
   'site-content': 'The homepage editor',
@@ -14,6 +14,8 @@ export const FEATURE_LABELS: Record<string, string> = {
   'admin-access': 'Full System Administrator access to every screen',
   'ai-feedback': 'The AI feedback on each milling center and the broader question box',
   'sales-chain': 'The new sales chain: warehouse assignment, receipt uploads and the order activity trail',
+  'multi-size-intake': 'One intake with several sizes saved together, and kilograms optional where there is no scale',
+  'dispatch-requests': 'Dispatch requests to the farm manager: the task, the tracking and the notifications',
   'ai-predictions': 'The AI predictions and answers limited to each person\'s own places',
 };
 

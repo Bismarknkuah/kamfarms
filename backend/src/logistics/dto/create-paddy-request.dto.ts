@@ -6,6 +6,7 @@ export class CreatePaddyRequestDto {
   @ApiProperty() @IsUuidLike() warehouseId: string;
   @ApiProperty() @IsUuidLike() paddyGradeId: string;
   @ApiProperty() @IsInt() @Min(1) requestedBagCount: number;
-  @ApiProperty() @IsNumber() @IsPositive() requestedKg: number;
+  @ApiProperty({ required: false, description: 'Leave out: a request is counted in bags.' })
+  @IsOptional() @IsNumber() @IsPositive() requestedKg?: number;
   @ApiProperty({ required: false }) @IsOptional() @IsString() notes?: string;
 }

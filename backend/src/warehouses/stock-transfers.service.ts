@@ -74,6 +74,14 @@ export class StockTransfersService {
     if (!destWarehouse || !destWarehouse.isActive) throw new BadRequestException('Destination warehouse not found or inactive.');
     if (dto.sourceWarehouseId === dto.destWarehouseId) throw new BadRequestException('Source and destination warehouse must be different.');
 
+    // Packaged rice comes in packs of a known size (25KG, 50KG...), so the kilograms are exactly the bags times the pack size: nobody needs a scale.
+    let totalKg = dto.totalKg;
+    if (totalKg === undefined) {
+      const size = await this.prisma.packagingSize.findUnique({ where: { id: dto.packagingSizeId } });
+      if (!size) throw new BadRequestException('Packaging size not found.');
+      totalKg = dto.bagCount * Number(size.sizeKg);
+    }
+
     const balance = await this.ledger.getBalance(this.prisma, {
       locationType: 'WAREHOUSE',
       locationId: dto.sourceWarehouseId,
@@ -105,7 +113,7 @@ export class StockTransfersService {
           productId: dto.productId,
           packagingSizeId: dto.packagingSizeId,
           bagCount: dto.bagCount,
-          totalKg: dto.totalKg,
+          totalKg,
           reason: dto.reason,
           requestedById: actor.id,
           status: 'DISPATCHED',
@@ -120,13 +128,13 @@ export class StockTransfersService {
         destLocationId: created.id,
         productId: dto.productId,
         packagingSizeId: dto.packagingSizeId,
-        quantityKg: dto.totalKg,
+        quantityKg: totalKg,
         bagCount: dto.bagCount,
         referenceDocument: transferNumber,
         userId: actor.id,
       });
-      await this.ledger.adjustBalance(tx, { locationType: 'WAREHOUSE', locationId: dto.sourceWarehouseId, productId: dto.productId, packagingSizeId: dto.packagingSizeId }, -dto.totalKg, -dto.bagCount);
-      await this.ledger.adjustBalance(tx, { locationType: 'EXTERNAL', locationId: created.id, productId: dto.productId, packagingSizeId: dto.packagingSizeId }, dto.totalKg, dto.bagCount);
+      await this.ledger.adjustBalance(tx, { locationType: 'WAREHOUSE', locationId: dto.sourceWarehouseId, productId: dto.productId, packagingSizeId: dto.packagingSizeId }, -totalKg, -dto.bagCount);
+      await this.ledger.adjustBalance(tx, { locationType: 'EXTERNAL', locationId: created.id, productId: dto.productId, packagingSizeId: dto.packagingSizeId }, totalKg, dto.bagCount);
 
       await this.audit.record(
         { userId: actor.id, action: 'stock_transfer.dispatch', entity: 'StockTransfer', entityId: created.id, afterValue: created },
@@ -149,7 +157,10 @@ export class StockTransfersService {
     }
     assertScope(actor, 'WAREHOUSE', transfer.destWarehouseId, 'the destination warehouse');
 
-    const varianceKg = dto.receivedKg - Number(transfer.totalKg);
+    // Counted in bags: the kilograms received are the bags received at the same weight per pack the transfer left with.
+    const perBagKg = Number(transfer.bagCount) > 0 ? Number(transfer.totalKg) / Number(transfer.bagCount) : 0;
+    const receivedKg = dto.receivedKg ?? dto.receivedBagCount * perBagKg;
+    const varianceKg = receivedKg - Number(transfer.totalKg);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const record = await tx.stockTransfer.update({
@@ -157,7 +168,7 @@ export class StockTransfersService {
         data: {
           status: 'RECEIVED',
           receivedBagCount: dto.receivedBagCount,
-          receivedKg: dto.receivedKg,
+          receivedKg: receivedKg,
           varianceKg,
           receivedById: actor.id,
           receivedAt: new Date(),
@@ -172,14 +183,14 @@ export class StockTransfersService {
         destLocationId: transfer.destWarehouseId,
         productId: transfer.productId,
         packagingSizeId: transfer.packagingSizeId,
-        quantityKg: dto.receivedKg,
+        quantityKg: receivedKg,
         bagCount: dto.receivedBagCount,
         referenceDocument: transfer.transferNumber,
         userId: actor.id,
         reason: varianceKg !== 0 ? `Variance: ${varianceKg.toFixed(2)} KG` : undefined,
       });
       await this.ledger.adjustBalance(tx, { locationType: 'EXTERNAL', locationId: transfer.id, productId: transfer.productId, packagingSizeId: transfer.packagingSizeId }, -Number(transfer.totalKg), -transfer.bagCount);
-      await this.ledger.adjustBalance(tx, { locationType: 'WAREHOUSE', locationId: transfer.destWarehouseId, productId: transfer.productId, packagingSizeId: transfer.packagingSizeId }, dto.receivedKg, dto.receivedBagCount);
+      await this.ledger.adjustBalance(tx, { locationType: 'WAREHOUSE', locationId: transfer.destWarehouseId, productId: transfer.productId, packagingSizeId: transfer.packagingSizeId }, receivedKg, dto.receivedBagCount);
 
       await this.audit.record(
         {
@@ -187,7 +198,7 @@ export class StockTransfersService {
           action: 'stock_transfer.receive',
           entity: 'StockTransfer',
           entityId: id,
-          afterValue: { receivedBagCount: dto.receivedBagCount, receivedKg: dto.receivedKg, varianceKg },
+          afterValue: { receivedBagCount: dto.receivedBagCount, receivedKg: receivedKg, varianceKg },
         },
         tx,
       );

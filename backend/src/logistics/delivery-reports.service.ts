@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { LocationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -8,6 +8,9 @@ import { CreateDeliveryReportDto } from './dto/create-delivery-report.dto';
 import { UpdateDeliveryReportDto } from './dto/update-delivery-report.dto';
 import { RejectDeliveryReportDto } from './dto/reject-delivery-report.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { estimateKg } from '../common/constants/bag-weight';
+import { NotificationsService } from '../notifications/notifications.service';
+import { bagsLabel } from './dispatch-request.util';
 
 // Only APPROVED (and the shipment-lifecycle statuses beyond it) locks
 // editing - the exact same real bug already found and fixed once this
@@ -26,6 +29,7 @@ export class DeliveryReportsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly ledger: InventoryLedgerService,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
   /** There was no way to list delivery reports at all before this  - 
@@ -109,12 +113,68 @@ export class DeliveryReportsService {
     return driver.id as string;
   }
 
+  private readonly log = new Logger(DeliveryReportsService.name);
+
+  /**
+   * What follows each step of a dispatch, around the report itself: the farm manager's TASK follows the work (in progress when the report is
+   * started, done once every size of the request is on its way), and the Farm Supervisor who asked for it is told at each step, so they can
+   * follow it without chasing anyone. Best effort: the report is already saved, so a failure here is logged and never undoes it.
+   */
+  private async afterReportStep(report: any, step: 'CREATED' | 'SUBMITTED' | 'APPROVED' | 'REJECTED', actor: AuthenticatedUser) {
+    try {
+      const order = report?.deliveryOrder ?? null;
+      const ref: string | null = order?.requestRef ?? null;
+      const orderNumber = order?.orderNumber ?? 'the order';
+      const farm = report?.farm?.name ?? 'the farm';
+      const warehouse = report?.destinationWarehouse?.name ?? 'the warehouse';
+      const grade = report?.paddyGrade?.label ?? 'paddy';
+      const bags = Number(report?.actualBagCount ?? 0);
+      const notify = async (userIds: (string | null | undefined)[], title: string, body: string) => {
+        const ids = [...new Set(userIds.filter((u): u is string => !!u && u !== actor.id))];
+        if (ids.length > 0) await this.notifications?.notify({ userIds: ids, type: 'delivery_report.update', title, body, entityType: 'DeliveryReport', entityId: report.id });
+      };
+      if (step === 'CREATED' && ref) {
+        await this.prisma.task.updateMany({ where: { deliveryRequestRef: ref, status: 'TODO' }, data: { status: 'IN_PROGRESS' } });
+      }
+      if (step === 'SUBMITTED') {
+        await notify([order?.createdById], `Dispatch report ready: ${report.reportNumber}`, `${farm}'s manager has loaded ${bagsLabel(bags)} of ${grade} for ${warehouse} (order ${orderNumber}). Open Dispatch to approve it.`);
+      }
+      if (step === 'REJECTED') {
+        await notify([report.submittedById], `Dispatch report sent back: ${report.reportNumber}`, `Reason: ${report.rejectionReason ?? 'not recorded'}. Fix it and submit it again.`);
+      }
+      if (step === 'APPROVED') {
+        if (ref) {
+          const siblings = await this.prisma.deliveryOrder.findMany({ where: { requestRef: ref }, include: { reports: { select: { status: true } } } });
+          const allOut = siblings.length > 0 && siblings.every((o) => o.reports.some((r) => ['APPROVED', 'IN_TRANSIT', 'RECONCILED'].includes(r.status as string)));
+          if (allOut) {
+            await this.prisma.task.updateMany({
+              where: { deliveryRequestRef: ref, status: { notIn: ['COMPLETED', 'CANCELLED'] as any } },
+              data: { status: 'COMPLETED', completedAt: new Date(), completedById: report.submittedById, completionEvidence: `Dispatched: report ${report.reportNumber} was approved and the bags are on their way to ${warehouse}.` },
+            });
+          }
+        }
+        const trip = [report?.driver?.name && `driver ${report.driver.name}`, report?.vehicle?.plateNumber && `vehicle ${report.vehicle.plateNumber}`].filter(Boolean).join(', ');
+        await notify([order?.createdById], `Dispatched: order ${orderNumber}`, `${bagsLabel(bags)} of ${grade} left ${farm} for ${warehouse}${trip ? ` (${trip})` : ''}. Track it under Dispatch.`);
+        const receivers = await this.prisma.warehouseManager.findMany({ where: { warehouseId: report.destinationWarehouseId }, select: { userId: true } });
+        await notify(receivers.map((m) => m.userId), `Incoming: ${bagsLabel(bags)} of ${grade}`, `From ${farm}${trip ? ` (${trip})` : ''}. Receive it under Shipments when it arrives.`);
+      }
+    } catch (err) {
+      this.log.warn(`The follow-up to dispatch report ${report?.reportNumber ?? ''} did not complete: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   /** Farm Manager prepares the delivery report against an existing order.
    * Still DRAFT - no inventory effect at all yet. */
   async create(dto: CreateDeliveryReportDto, actor: AuthenticatedUser) {
     const order = await this.prisma.deliveryOrder.findUnique({ where: { id: dto.deliveryOrderId } });
     if (!order) throw new NotFoundException('Delivery order not found.');
     assertScope(actor, 'FARM', order.farmId, 'this farm');
+
+    // Most farms have no scale: the bags are counted, and with no kilograms given they are worked out from the order's own weight per bag
+    // and marked as an estimate, never passed off as a measurement.
+    const orderKgPerBag = Number(order.bagCount) > 0 ? Number(order.totalKg) / Number(order.bagCount) : undefined;
+    const actualKgEstimated = dto.actualKg === undefined;
+    const actualKg = dto.actualKg ?? estimateKg(dto.actualBagCount, orderKgPerBag);
 
     const labourCost = dto.labourCost ?? 0;
     const transportationFee = dto.transportationFee ?? 0;
@@ -134,7 +194,8 @@ export class DeliveryReportsService {
           destinationWarehouseId: order.destinationWarehouseId,
           paddyGradeId: order.paddyGradeId,
           actualBagCount: dto.actualBagCount,
-          actualKg: dto.actualKg,
+          actualKg,
+          actualKgEstimated,
           labourCost,
           numberOfLabourers: dto.numberOfLabourers,
           costPerLabourer: dto.costPerLabourer,
@@ -162,7 +223,9 @@ export class DeliveryReportsService {
       return created;
     });
 
-    return this.findById(report.id, actor);
+    const fresh = await this.findById(report.id, actor);
+    await this.afterReportStep(fresh, 'CREATED', actor);
+    return fresh;
   }
 
   async submit(id: string, actor: AuthenticatedUser) {
@@ -186,7 +249,9 @@ export class DeliveryReportsService {
       return result;
     });
 
-    return this.findById(updated.id, actor);
+    const fresh = await this.findById(updated.id, actor);
+    await this.afterReportStep(fresh, 'SUBMITTED', actor);
+    return fresh;
   }
 
   /** The transaction that actually moves stock: farm balance decreases,
@@ -270,7 +335,9 @@ export class DeliveryReportsService {
       return finalReport;
     });
 
-    return this.findById(updated.id, actor);
+    const fresh = await this.findById(updated.id, actor);
+    await this.afterReportStep(fresh, 'APPROVED', actor);
+    return fresh;
   }
 
   async reject(id: string, dto: RejectDeliveryReportDto, actor: AuthenticatedUser) {
@@ -301,7 +368,9 @@ export class DeliveryReportsService {
       return result;
     });
 
-    return this.findById(updated.id, actor);
+    const fresh = await this.findById(updated.id, actor);
+    await this.afterReportStep(fresh, 'REJECTED', actor);
+    return fresh;
   }
 
   /** The genuinely missing piece: this service could create and submit
@@ -330,11 +399,20 @@ export class DeliveryReportsService {
         (dto.transportationFee ?? Number(before.transportationFee ?? 0)) +
         (dto.otherCosts ?? Number(before.otherCosts ?? 0));
 
+      // Kilograms typed in are a measurement. Otherwise, if the earlier figure was only worked out from the bags, it is worked out again for
+      // the new bag count (at the same weight per bag), and stays marked as an estimate.
+      let kgPatch: { actualKg?: number; actualKgEstimated?: boolean } = {};
+      if (dto.actualKg !== undefined) kgPatch = { actualKg: dto.actualKg, actualKgEstimated: false };
+      else if ((before as { actualKgEstimated?: boolean }).actualKgEstimated && dto.actualBagCount !== undefined) {
+        const perBag = Number(before.actualBagCount) > 0 ? Number(before.actualKg) / Number(before.actualBagCount) : undefined;
+        kgPatch = { actualKg: estimateKg(dto.actualBagCount, perBag), actualKgEstimated: true };
+      }
+
       const result = await tx.deliveryReport.update({
         where: { id },
         data: {
           actualBagCount: dto.actualBagCount,
-          actualKg: dto.actualKg,
+          ...kgPatch,
           labourCost: dto.labourCost,
           numberOfLabourers: dto.numberOfLabourers,
           costPerLabourer: dto.costPerLabourer,

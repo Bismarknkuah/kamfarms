@@ -598,3 +598,9 @@ no `[startup]` lines before it, the steps were skipped.
 3. Sign in once as the Warehouse Supervisor and as a Warehouse Manager and open **Sales**: the Supervisor should see a "choose a warehouse" desk,
    the manager only their own warehouse's orders.
 4. See `docs/SALES_CHAIN.md` for the full chain and who sees what.
+
+## Version 2026.10.10: new database columns
+
+This release adds five columns and three indexes (paddy intake reference, dispatch request reference on orders and tasks, and flags that
+mark estimated kilograms). The start-up schema step adds them; `/api/health` should then show `2026.10.10`. The manual SQL, and what the
+release does, is in `docs/DISPATCH_REQUESTS.md`.

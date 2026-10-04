@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { PaddyEntryStatus } from '@prisma/client';
 import { PaddyEntriesService } from './paddy-entries.service';
+import { CreatePaddyIntakeDto } from './dto/create-paddy-intake.dto';
 import { CreatePaddyEntryDto } from './dto/create-paddy-entry.dto';
 import { UpdatePaddyEntryDto } from './dto/update-paddy-entry.dto';
 import { RejectPaddyEntryDto } from './dto/reject-paddy-entry.dto';
@@ -37,6 +38,13 @@ export class PaddyEntriesController {
   @RequirePermission(PERMISSIONS.PADDY_CREATE)
   create(@Body() dto: CreatePaddyEntryDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.paddyEntriesService.create(dto, actor);
+  }
+
+  /** One intake with every size that arrived (e.g. 17 bags of Size 4 and 3 bags of Size 5): all saved, or none. */
+  @Post('intake')
+  @RequirePermission(PERMISSIONS.PADDY_CREATE)
+  createIntake(@Body() dto: CreatePaddyIntakeDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.paddyEntriesService.createIntake(dto, actor);
   }
 
   @Patch(':id')

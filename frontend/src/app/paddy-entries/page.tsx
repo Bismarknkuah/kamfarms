@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
+import { PaddyIntakeForm } from '@/components/intake/PaddyIntakeForm';
 import { ReviewDialog } from '@/components/review/ReviewDialog';
 import { PaddyEntryDetails } from '@/components/review/EntityDetails';
 import { paddyEntriesApi, farmsApi, paddyGradesApi, PaddyEntry, Farm, PaddyGrade, PaddyEntryComment, ApiError } from '@/lib/api-client';
@@ -20,6 +21,7 @@ export default function PaddyEntriesPage() {
   const [farms, setFarms] = useState<Farm[]>([]);
   const [grades, setGrades] = useState<PaddyGrade[]>([]);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   // Approving and rejecting happen inside the review window, after the details have been read; a rejection always carries a comment.
   const [reviewing, setReviewing] = useState<PaddyEntry | null>(null);
@@ -28,12 +30,6 @@ export default function PaddyEntriesPage() {
   const [newComment, setNewComment] = useState('');
   const [postingComment, setPostingComment] = useState(false);
 
-  const [farmId, setFarmId] = useState('');
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
-  const [gradeId, setGradeId] = useState('');
-  const [weightKg, setWeightKg] = useState('');
-  const [bagCount, setBagCount] = useState('');
-  const [creating, setCreating] = useState(false);
 
   const loadEntries = (token: string) => {
     paddyEntriesApi
@@ -51,11 +47,13 @@ export default function PaddyEntriesPage() {
 
   const totalApprovedKg = entries?.filter((e) => e.status === 'APPROVED').reduce((sum, e) => sum + e.weightKg, 0) ?? 0;
 
-  const runAction = async (fn: () => Promise<unknown>) => {
+  const runAction = async (fn: () => Promise<unknown>, success?: string) => {
     if (!accessToken) return;
     setPageError(null);
+    setNotice(null);
     try {
       await fn();
+      if (success) setNotice(success);
       loadEntries(accessToken);
     } catch (err) {
       setPageError(err instanceof ApiError ? err.message : 'Action failed.');
@@ -74,29 +72,6 @@ export default function PaddyEntriesPage() {
       setPageError(err instanceof ApiError ? err.message : 'Failed to post comment.');
     } finally {
       setPostingComment(false);
-    }
-  };
-
-  const onCreate = async () => {
-    if (!accessToken || !farmId || !gradeId || !weightKg || !bagCount) return;
-    setCreating(true);
-    setPageError(null);
-    try {
-      await paddyEntriesApi.create(accessToken, {
-        farmId,
-        entryDate,
-        paddyGradeId: gradeId,
-        weightKg: parseFloat(weightKg),
-        bagCount: parseInt(bagCount, 10),
-      });
-      setShowCreate(false);
-      setWeightKg('');
-      setBagCount('');
-      loadEntries(accessToken);
-    } catch (err) {
-      setPageError(err instanceof ApiError ? err.message : 'Failed to create entry.');
-    } finally {
-      setCreating(false);
     }
   };
 
@@ -119,40 +94,11 @@ export default function PaddyEntriesPage() {
         )}
       </div>
 
-      {pageError && <p className="mt-4 text-sm text-red-600">{pageError}</p>}
+      {notice && <p role="status" data-testid="page-notice" className="mt-4 rounded-xl border border-paddy-700 bg-paddy-50 px-4 py-2.5 text-sm font-medium text-paddy-900">{notice}</p>}
+      {pageError && <p role="alert" className="mt-4 rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm text-red-800">{pageError}</p>}
 
-      {showCreate && (
-        <div className="mt-6 flex flex-wrap items-end gap-3 rounded-2xl border border-husk-300 bg-husk-100/30 p-5">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ink-700">Farm</label>
-            <select value={farmId} onChange={(e) => setFarmId(e.target.value)} className="rounded-lg border border-paddy-100 px-2 py-1.5 text-sm">
-              <option value="">Select…</option>
-              {farms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ink-700">Date</label>
-            <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="rounded-lg border border-paddy-100 px-2 py-1.5 text-sm" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ink-700">Grade</label>
-            <select value={gradeId} onChange={(e) => setGradeId(e.target.value)} className="rounded-lg border border-paddy-100 px-2 py-1.5 text-sm">
-              <option value="">Select…</option>
-              {grades.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ink-700">Weight (KG)</label>
-            <input type="number" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} className="w-28 rounded-lg border border-paddy-100 px-2 py-1.5 text-sm" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ink-700">Bags</label>
-            <input type="number" value={bagCount} onChange={(e) => setBagCount(e.target.value)} className="w-24 rounded-lg border border-paddy-100 px-2 py-1.5 text-sm" />
-          </div>
-          <button type="button" onClick={onCreate} disabled={creating} className="rounded-full bg-paddy-900 px-4 py-1.5 text-sm font-medium text-rice-50 disabled:opacity-50">
-            {creating ? 'Saving…' : 'Save'}
-          </button>
-        </div>
+      {showCreate && accessToken && (
+        <PaddyIntakeForm accessToken={accessToken} farms={farms} grades={grades} canSubmit={hasPermission('paddy.submit')} onSaved={() => loadEntries(accessToken)} />
       )}
 
       <div className="mt-6 overflow-x-auto rounded-2xl border border-paddy-100 bg-white">
@@ -182,7 +128,10 @@ export default function PaddyEntriesPage() {
                       className="flex items-center gap-1.5 hover:text-paddy-900"
                     >
                       <span className={`transition-transform ${expandedId === e.id ? 'rotate-90' : ''}`}>›</span>
-                      {e.entryNumber}
+                      <span className="flex flex-col items-start text-left">
+                        <span>{e.entryNumber}</span>
+                        {e.intakeRef && <span className="text-[10px] text-ink-500" data-testid="entry-intake">Intake {e.intakeRef}</span>}
+                      </span>
                     </button>
                   </td>
                   <td className="px-4 py-3 text-ink-900">{e.farm.name}</td>
@@ -197,7 +146,7 @@ export default function PaddyEntriesPage() {
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
                       {e.status === 'DRAFT' && hasPermission('paddy.submit') && (
-                        <button type="button" onClick={() => runAction(() => paddyEntriesApi.submit(accessToken!, e.id))} className="rounded-full border border-paddy-100 px-3 py-1 text-xs font-medium text-ink-700 hover:bg-paddy-50">
+                        <button type="button" onClick={() => runAction(() => paddyEntriesApi.submit(accessToken!, e.id), `${e.entryNumber} submitted for approval.`)} className="rounded-full border border-paddy-100 px-3 py-1 text-xs font-medium text-ink-700 hover:bg-paddy-50">
                           Submit
                         </button>
                       )}

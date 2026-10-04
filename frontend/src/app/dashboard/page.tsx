@@ -547,7 +547,7 @@ export default function DashboardPage() {
 
       farmsApi.list(accessToken).then((farms) => {
         Promise.all(farms.map((f) =>
-          farmsApi.getInventory(accessToken, f.id).then((inv) => ({ name: f.name, isActive: f.isActive, totalBags: inv.totalBags, totalKg: inv.totalKg })),
+          farmsApi.getInventory(accessToken, f.id).then((inv) => ({ name: f.name, isActive: f.isActive, totalBags: inv.totalBags ?? 0, totalKg: inv.totalKg ?? 0 })),
         )).then(setMdFarmTable).catch(() => {});
       }).catch(() => {});
 
@@ -1522,7 +1522,7 @@ export default function DashboardPage() {
                     {mdFarmTable.map((f) => (
                       <tr key={f.name} className="border-t border-paddy-50">
                         <td className="py-2 font-medium text-ink-900">{f.name}</td>
-                        <td className="py-2 text-ink-700">{f.totalBags.toLocaleString()} bags · {f.totalKg.toLocaleString()} kg</td>
+                        <td className="py-2 text-ink-700">{(f.totalBags ?? 0).toLocaleString()} bags · {(f.totalKg ?? 0).toLocaleString()} kg</td>
                         <td className="py-2">
                           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${f.isActive ? 'bg-paddy-100 text-paddy-900' : 'bg-ink-500/10 text-ink-500'}`}>
                             {f.isActive ? 'Active' : 'Inactive'}

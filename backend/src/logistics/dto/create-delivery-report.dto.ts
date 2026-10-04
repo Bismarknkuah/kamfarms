@@ -5,7 +5,8 @@ import { IsUuidLike } from '../../common/validators/is-uuid-like';
 export class CreateDeliveryReportDto {
   @ApiProperty() @IsUuidLike() deliveryOrderId: string;
   @ApiProperty() @IsNumber() @Min(1) actualBagCount: number;
-  @ApiProperty() @IsNumber() @IsPositive() actualKg: number;
+  @ApiProperty({ required: false, description: 'Weighed kilograms, only if there is a scale. Leave out when the bags were counted: it is then worked out from the bags and marked as an estimate.' })
+  @IsOptional() @IsNumber() @IsPositive() actualKg?: number;
 
   @ApiProperty({ required: false }) @IsOptional() @IsNumber() @Min(0) labourCost?: number;
   @ApiProperty({ required: false }) @IsOptional() @IsNumber() @Min(0) numberOfLabourers?: number;

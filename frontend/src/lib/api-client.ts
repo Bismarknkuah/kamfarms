@@ -157,7 +157,7 @@ export const farmsApi = {
 export const warehousesApi = {
   list: (accessToken: string, includeInactive?: boolean) =>
     request<Warehouse[]>(`/warehouses${includeInactive ? '?includeInactive=true' : ''}`, { method: 'GET' }, accessToken),
-  directory: (accessToken: string) => request<{ id: string; name: string; location?: string | null }[]>('/warehouses/directory', { method: 'GET' }, accessToken),
+  directory: (accessToken: string) => request<{ id: string; name: string; location?: string | null; millingCenters?: { id: string; name: string }[] }[]>('/warehouses/directory', { method: 'GET' }, accessToken),
   create: (accessToken: string, data: { code: string; name: string; location?: string }) =>
     request<Warehouse>('/warehouses', { method: 'POST', body: JSON.stringify(data) }, accessToken),
   update: (accessToken: string, id: string, data: { name?: string; location?: string; isActive?: boolean }) =>
@@ -441,6 +441,9 @@ export interface Task {
   attachmentUrl: string | null;
   /** Set on a dispatch task: the request the farm manager is being asked to carry out. */
   deliveryRequestRef?: string | null;
+  supplyRequestNumber?: string | null;
+  salesOrderId?: string | null;
+  paddyRequestId?: string | null;
   farm?: { name: string } | null;
   warehouse?: { name: string; location?: string | null } | null;
   assignedTo: { firstName: string; lastName: string } | null;
@@ -476,6 +479,8 @@ export interface Notification {
   body: string;
   isRead: boolean;
   createdAt: string;
+  entityType?: string | null;
+  entityId?: string | null;
 }
 
 export const notificationsApi = {
@@ -1347,7 +1352,10 @@ export interface RequestCard {
   overdue: boolean; daysOverdue: number; awaitingApproval: boolean; arrivedAt: string | null; bagVariance: number | null; varianceRequiresApproval: boolean;
 }
 export interface DispatchInput {
-  lines: { deliveryOrderId: string; actualBagCount: number; actualKg?: number }[];
+  /** An order the request already has, or just a size (paddyGradeId): its order is made as the truck is loaded. */
+  lines: { deliveryOrderId?: string; paddyGradeId?: string; actualBagCount: number; actualKg?: number }[];
+  /** For a size no order exists for: which request this truck is for; or, with no request at all, where it leaves from and goes to. */
+  requestRef?: string; farmId?: string; destinationWarehouseId?: string;
   labourCost?: number; numberOfLabourers?: number; transportationFee?: number; otherCosts?: number; otherCostsDescription?: string;
   vehiclePlateNumber?: string; vehicleType?: string; driverName?: string; driverPhone?: string;
   departureDate?: string; departureTime?: string; expectedArrivalTime?: string; remarks?: string;
@@ -2058,4 +2066,43 @@ export const reportCatalogApi = {
     a.remove();
     URL.revokeObjectURL(url);
   },
+};
+
+
+// ----------------------------------------------------------------------------------------------------------------------------------------
+// Paddy requests: passed up the chain (warehouse -> Warehouse Supervisor -> Farm Director; mill -> Operations Manager -> Warehouse Supervisor)
+// ----------------------------------------------------------------------------------------------------------------------------------------
+export type SupplyStage = 'WITH_REVIEWER' | 'WITH_SUPPLIER' | 'DISPATCHING' | 'ON_THE_WAY' | 'RECEIVED' | 'READY' | 'DECLINED' | 'CANCELLED';
+export interface SupplyStepView { label: string; state: 'done' | 'current' | 'upcoming' | 'stopped'; who: string | null; at: string | null; detail: string | null }
+export interface SupplyView {
+  id: string; requestNumber: string; kind: 'WAREHOUSE' | 'MILL'; status: string; stage: SupplyStage; label: string; holder: string | null; since: string | null;
+  warehouse: { id: string; name: string; location: string | null }; millingCenter: { id: string; name: string } | null;
+  lines: { paddyGradeId: string; gradeLabel: string; bags: number }[]; totalBags: number; neededBy: string | null; notes: string | null;
+  requestedBy: string; requestedById: string; requestedAt: string | null; forwardedBy: string | null; forwardedAt: string | null; forwardNote: string | null;
+  decidedBy: string | null; decidedAt: string | null; decisionNote: string | null;
+  sourceFarm: { id: string; name: string } | null;
+  dispatch: { requestRef: string; stage: string; label: string; holder: string | null; driverName: string | null; vehiclePlate: string | null; bagVariance: number | null; arrivedAt: string | null } | null;
+  parentNumber: string | null; childNumber: string | null; childLabel: string | null; childStage: SupplyStage | null; steps: SupplyStepView[];
+}
+export interface SupplySizeCheck { paddyGradeId: string; label: string; needed: number; has: number; enough: boolean }
+export type SupplySources =
+  | { kind: 'WAREHOUSE'; farms: { farmId: string; farmName: string; managers: string[]; bySize: SupplySizeCheck[]; canCover: boolean; totalHas: number }[] }
+  | { kind: 'MILL'; warehouse: { id: string; name: string }; bySize: SupplySizeCheck[]; canCover: boolean };
+export interface Whereabouts {
+  sizes: { id: string; label: string }[];
+  places: { type: 'FARM' | 'ROAD' | 'WAREHOUSE' | 'MILL'; id: string; name: string; location: string | null; detail: string | null; bags: Record<string, number>; total: number }[];
+  totals: Record<string, number>;
+}
+export interface SupplyRequestInput { warehouseId?: string; millingCenterId?: string; lines: { paddyGradeId: string; bagCount: number }[]; neededBy?: string; notes?: string }
+export const supplyApi = {
+  board: (accessToken: string) => request<SupplyView[]>('/supply-requests', { method: 'GET' }, accessToken),
+  create: (accessToken: string, data: SupplyRequestInput) => request<SupplyView>('/supply-requests', { method: 'POST', body: JSON.stringify(data) }, accessToken),
+  sources: (accessToken: string, id: string) => request<SupplySources>(`/supply-requests/${id}/sources`, { method: 'GET' }, accessToken),
+  forward: (accessToken: string, id: string, note?: string) => request<SupplyView>(`/supply-requests/${id}/forward`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
+  decline: (accessToken: string, id: string, reason: string) => request<SupplyView>(`/supply-requests/${id}/decline`, { method: 'POST', body: JSON.stringify({ reason }) }, accessToken),
+  assign: (accessToken: string, id: string, data: { sourceFarmId: string; note?: string }) => request<SupplyView>(`/supply-requests/${id}/assign`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
+  ready: (accessToken: string, id: string, note?: string) => request<SupplyView>(`/supply-requests/${id}/ready`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
+  askFarmDirector: (accessToken: string, id: string, note?: string) => request<SupplyView>(`/supply-requests/${id}/ask-farm-director`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
+  cancel: (accessToken: string, id: string) => request<SupplyView>(`/supply-requests/${id}/cancel`, { method: 'POST' }, accessToken),
+  whereabouts: (accessToken: string) => request<Whereabouts>('/supply-requests/whereabouts', { method: 'GET' }, accessToken),
 };

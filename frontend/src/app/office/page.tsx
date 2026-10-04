@@ -20,6 +20,7 @@ import {
   paddyRequestsApi, PaddyRequest,
   ApiError,
 } from '@/lib/api-client';
+import { SupplyDesk } from '@/components/supply/SupplyDesk';
 import { StatusPill, PaddyQuickAction, DeliveryQuickAction, InventoryAdjustmentRequestAction, InventoryAdjustmentQueue } from '@/components/OfficeActions';
 
 // ── Farm Manager: quick paddy entry ──────────────────────────────────
@@ -626,13 +627,15 @@ export default function MyOfficePage() {
   // instead), and warehouse.receive is held only by that role, so
   // this line would never have rendered for anyone else anyway.
   if (hasPermission('delivery.create')) sections.push(<DeliveryQuickAction key="delivery" accessToken={accessToken} me={me} hasPermission={hasPermission} />);
+  if (hasPermission('supply.view') && (hasPermission('supply.request') || hasPermission('supply.forward') || hasPermission('supply.fulfil'))) {
+    sections.push(<div key="supply" className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6"><SupplyDesk accessToken={accessToken} me={me} hasPermission={hasPermission} variant="office" /></div>);
+  }
   if (hasPermission('paddy.approve')) sections.push(<PaddyApprovalQueue key="paddy-approve" accessToken={accessToken} />);
   if (hasPermission('sales.approve')) sections.push(<SalesApprovalQueue key="sales-approve" accessToken={accessToken} />);
   if (hasPermission('payment.verify')) sections.push(<PaymentVerificationQueue key="payment-verify" accessToken={accessToken} />);
   if (hasPermission('production.approve')) sections.push(<ProductionApprovalQueue key="production-approve" accessToken={accessToken} />);
   if (hasPermission('reset.approve')) sections.push(<ResetApprovalQueue key="reset-approve" accessToken={accessToken} />);
   if (hasPermission('warehouse.transfer')) sections.push(<StockTransferQuickAction key="stock-transfer" accessToken={accessToken} />);
-  if (hasPermission('warehouse.transfer')) sections.push(<PaddyRequestQuickAction key="paddy-request" accessToken={accessToken} />);
   // PaddyRequestApprovalQueue removed from here - a Farm Supervisor no
   // longer visits My Office at all (they get dedicated pages instead),
   // and delivery.approve is held only by that role, so this line would

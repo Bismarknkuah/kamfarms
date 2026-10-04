@@ -54,22 +54,16 @@ Everything else is under **In progress** (with the tracker) and **Arrived recent
 
 ## What the farm manager is told
 
-The task is titled `Dispatch 20 bags to Tamale Warehouse` and reads:
+The task is **short**, with one big **Open** button that opens the Dispatch desk on this request. It is titled `Send 20 bags to Tamale Warehouse` and
+reads one line (and the Farm Director's note, if they typed one):
 
 ```
-Dispatch from Nkawkaw Farm to Tamale Warehouse (Tamale, Northern Region).
-Needed there by: Fri 9 Oct 2026.
-Priority: HIGH.
-What to send:
-- Size 4: 17 bags
-- Size 5: 3 bags
-Total: 20 bags.
-Who to ask at the warehouse: Kwabena Adjei (0244111222).
-Instructions from Efua Mensah: Load the Size 4 first. The truck leaves at 6am.
-When the bags are loaded, open the Dispatch desk and submit one dispatch with every size on the truck. Request RQ-2026-000012.
+Size 4: 17 bags, Size 5: 3 bags · by Fri 9 Oct 2026
+Note: Load the Size 4 first. The truck leaves at 6am.
 ```
 
-The same detail goes in a notification, and the task has a button that opens the desk with that request highlighted. If the farm has **no
+The notification is one line too (`Efua Mensah asks you to send 20 bags to Tamale Warehouse (Tamale): Size 4 17, Size 5 3 · by Fri 9 Oct 2026`) and has an Open
+button. Everything else (where it goes and its location, the day, the instructions) is on the desk card. If the farm has **no
 manager assigned** nobody gets the task, and the confirmation says so in a warning. Assign a manager under Farms.
 
 ## Where it is (tracking)
@@ -158,3 +152,10 @@ CREATE INDEX IF NOT EXISTS tasks_delivery_request_ref_idx ON tasks (delivery_req
 
 Server: `cd backend && npx jest src/logistics src/paddy src/warehouses`. Browser: `e2e/t_dispatch.py` (the whole supervisor and farm manager
 collaboration) and `e2e/t_intake.py` (intake, new users, kilograms optional). See `e2e/README.md`.
+
+## Both sizes, always (version 2026.10.12)
+
+The farm manager's truck form always shows **Size 4 and Size 5**, filled in from the request. A size the request did not ask for can still go on
+the truck: `POST /api/delivery-reports/dispatch` accepts a line with a `paddyGradeId` instead of a `deliveryOrderId` (with the `requestRef`), and the
+order for it is made as part of the same dispatch (the farm's stock for it is checked). A truck can even be loaded with no request at all, by naming
+`farmId` and `destinationWarehouseId`. The bag weight used for estimates is the Settings value (see `docs/PADDY_REQUESTS.md`).

@@ -5,7 +5,10 @@ import { IsUuidLike } from '../../common/validators/is-uuid-like';
 
 /** One size on the truck: which order it fulfils, and how many bags were really loaded. */
 export class DispatchLineDto {
-  @ApiProperty() @IsUuidLike({ message: 'Choose the order for every line.' }) deliveryOrderId: string;
+  @ApiProperty({ required: false, description: 'The order this size fulfils. Leave out to add a size the request did not ask for.' })
+  @IsOptional() @IsUuidLike({ message: 'Choose the order for every line.' }) deliveryOrderId?: string;
+  @ApiProperty({ required: false, description: 'The size, when there is no order for it yet: the order is made as the truck is loaded.' })
+  @IsOptional() @IsUuidLike({ message: 'Choose the size for every line.' }) paddyGradeId?: string;
   @ApiProperty({ description: 'Bags of this size actually loaded.' })
   @IsInt({ message: 'Bags must be a whole number.' })
   @Min(1, { message: 'Each size needs at least 1 bag.' })
@@ -19,6 +22,9 @@ export class DispatchLineDto {
  * one go and approved by the supervisor in one go. The trip's costs, driver and vehicle are entered once.
  */
 export class CreateDispatchDto {
+  @ApiProperty({ required: false, description: 'The request this truck fulfils (RQ-...), needed only to add a size no order exists for.' }) @IsOptional() @IsString() requestRef?: string;
+  @ApiProperty({ required: false, description: 'Only for a truck loaded with no request at all: where it leaves from.' }) @IsOptional() @IsUuidLike() farmId?: string;
+  @ApiProperty({ required: false, description: 'Only for a truck loaded with no request at all: where it is going.' }) @IsOptional() @IsUuidLike() destinationWarehouseId?: string;
   @ApiProperty({ type: [DispatchLineDto] })
   @ValidateNested({ each: true })
   @Type(() => DispatchLineDto)

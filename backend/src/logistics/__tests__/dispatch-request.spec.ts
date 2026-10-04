@@ -67,47 +67,32 @@ describe('a Farm Supervisor\'s dispatch request to a farm manager', () => {
     expect(r.tasks).toEqual([{ id: 't1', taskNumber: 'TASK-2026-000001', assignedTo: 'Yaa Owusu' }]);
   });
 
-  it('the task says exactly WHERE it goes, WHAT to send, WHEN, who to ask, and any instruction, so nobody has to ask which warehouse', async () => {
+  it('the task is SHORT: what to send and by when, and the supervisor\'s note. The work itself is behind the button', async () => {
     const { service, tasks } = build();
     const r = await service.createRequest(request(), supervisor);
     const t = tasks[0];
-    expect(t.title).toBe('Dispatch 20 bags to Tamale Warehouse');
-    for (const line of [
-      'Dispatch from Nkawkaw Farm to Tamale Warehouse (Tamale, Northern Region).',
-      'Needed there by: Fri 9 Oct 2026.',
-      'Priority: HIGH.',
-      '- Size 4: 17 bags',
-      '- Size 5: 3 bags',
-      'Total: 20 bags.',
-      'Who to ask at the warehouse: Kwabena Adjei (0244111222).',
-      'Instructions from Efua Mensah: Load the Size 4 first. The truck leaves at 6am.',
-      'open the Dispatch desk and submit one dispatch with every size on the truck',
-      `Request ${r.requestRef}`,
-    ]) expect(t.description).toContain(line);
+    expect(t.title).toBe('Send 20 bags to Tamale Warehouse');
+    expect(t.description).toBe('Size 4: 17 bags, Size 5: 3 bags · by Fri 9 Oct 2026\nNote: Load the Size 4 first. The truck leaves at 6am.');
+    expect(t.description.split('\n')).toHaveLength(2);
+    expect(t.deliveryRequestRef).toBe(r.requestRef); // the link the Tasks page opens: the Dispatch desk, on this request
+    for (const gone of ['Priority', 'Who to ask', 'Instructions from', 'Request RQ', 'Dispatch from']) expect(t.description).not.toContain(gone);
   });
 
-  it('a single size reads naturally too: no total line, one report', async () => {
+  it('a single size reads naturally too: one line, no note when there is none', async () => {
     const { service, tasks } = build();
     await service.createRequest(request({ lines: [{ paddyGradeId: 'g4', bagCount: 1 }], priority: undefined, notes: undefined }), supervisor);
-    expect(tasks[0].title).toBe('Dispatch 1 bag to Tamale Warehouse');
-    expect(tasks[0].description).toContain('- Size 4: 1 bag');
-    expect(tasks[0].description).not.toContain('Total:');
-    expect(tasks[0].description).not.toContain('Priority:');
-    expect(tasks[0].description).not.toContain('Instructions from');
-    expect(tasks[0].description).toContain('open the Dispatch desk and submit one dispatch. Request');
+    expect(tasks[0].title).toBe('Send 1 bag to Tamale Warehouse');
+    expect(tasks[0].description).toBe('Size 4: 1 bag · by Fri 9 Oct 2026');
   });
 
-  it('tells the farm manager, with the same detail, and points the notification at their task', async () => {
+  it('tells the farm manager in one line, and points the notification at their task', async () => {
     const { service, notifications } = build();
     await service.createRequest(request(), supervisor);
     expect(notifications.notify).toHaveBeenCalledTimes(1);
     const n = notifications.notify.mock.calls[0][0];
     expect(n).toMatchObject({ userIds: ['fm-1'], type: 'task.assigned', entityType: 'Task', entityId: 't1' });
     expect(n.title).toBe('New dispatch task - TASK-2026-000001');
-    expect(n.body).toContain('Efua Mensah asks you to dispatch 20 bags');
-    expect(n.body).toContain('Tamale Warehouse (Tamale, Northern Region)');
-    expect(n.body).toContain('Size 4 17, Size 5 3');
-    expect(n.body).toContain('Fri 9 Oct 2026');
+    expect(n.body).toBe('Efua Mensah asks you to send 20 bags to Tamale Warehouse (Tamale, Northern Region): Size 4 17, Size 5 3 · by Fri 9 Oct 2026');
   });
 
   it('gives each of the farm\'s managers their own task', async () => {

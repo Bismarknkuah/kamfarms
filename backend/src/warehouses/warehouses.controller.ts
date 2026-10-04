@@ -30,7 +30,7 @@ export class WarehousesController {
   // without being able to see warehouse stock, which warehouse.view
   // would otherwise open up.
   @Get('directory')
-  @RequirePermission([PERMISSIONS.WAREHOUSE_VIEW, PERMISSIONS.DELIVERY_CREATE])
+  @RequirePermission([PERMISSIONS.WAREHOUSE_VIEW, PERMISSIONS.DELIVERY_CREATE, PERMISSIONS.SUPPLY_REQUEST])
   directory() {
     return this.warehousesService.directory();
   }

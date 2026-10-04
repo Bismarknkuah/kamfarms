@@ -610,3 +610,14 @@ release does, is in `docs/DISPATCH_REQUESTS.md`.
 Adds one column and one index (`delivery_reports.dispatch_ref`) on top of 2026.10.10. The start-up schema step adds them; `/api/health`
 should then show `2026.10.11`. After deploying, make sure **each farm has a manager assigned** (Farms), otherwise a request creates no task.
 See `docs/DISPATCH_REQUESTS.md`.
+
+## Version 2026.10.12: paddy requests
+
+Adds one table (`supply_requests`), one column (`tasks.supply_request_number`) and four permissions (`supply.view`, `supply.request`, `supply.forward`,
+`supply.fulfil`), added by the start-up steps. `/api/health` should then show `2026.10.12`. After deploying:
+
+1. Make sure every **warehouse has a Warehouse Supervisor** assigned, and the **Operations Manager** and each mill's **Operations Officer** exist
+   (Users). A request goes to the people holding those roles.
+2. Set the real **Standard paddy bag weight** in Settings (Logistics). Every estimate follows it.
+
+See `docs/PADDY_REQUESTS.md`.

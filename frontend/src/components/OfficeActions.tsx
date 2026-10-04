@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { paddyEntriesApi, farmsApi, paddyGradesApi, PaddyEntry, Farm, PaddyGrade, salesOrdersApi, customersApi, masterDataApi, SalesOrder, Customer, Product, PackagingSize, paymentsApi, Payment, shipmentsApi, Shipment, productionApi, ProductionRecord, warehousesApi, Warehouse, deliveryOrdersApi, deliveryReportsApi, DeliveryOrder, DeliveryReport, systemResetApi, ResetRequest, stockTransfersApi, StockTransfer, inventoryAdjustmentsApi, InventoryAdjustment, paddyRequestsApi, PaddyRequest, ApiError, PaddyIntakeResult } from '@/lib/api-client';
 import { IntakeFailure, IntakeSuccess } from '@/components/intake/IntakeFeedback';
 import { DispatchDesk } from '@/components/dispatch/DispatchDesk';
+import { primarySizes } from '@/components/SizeBags';
 
 export function StatusPill({ status }: { status: string }) {
   const styles: Record<string, string> = {
@@ -99,6 +100,12 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
 
   const validRows = rows.filter((r) => r.paddyGradeId && r.bagCount);
   const totalBags = validRows.reduce((sum, r) => sum + (parseInt(r.bagCount, 10) || 0), 0);
+
+  // Size 4 and Size 5 are on the form from the start: nobody has to choose a size or add a line.
+  useEffect(() => {
+    if (grades.length === 0) return;
+    setRows((prev) => (prev.length === 1 && !prev[0].paddyGradeId && !prev[0].bagCount ? primarySizes(grades).map((g) => ({ paddyGradeId: g.id, bagCount: '', weightKg: '' })) : prev));
+  }, [grades]);
 
   const onSubmit = async () => {
     if (!farmId || validRows.length === 0) return;

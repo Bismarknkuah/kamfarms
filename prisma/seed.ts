@@ -33,7 +33,7 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
     // masterdata.manage let the Managing Director edit company details
     // and master data, while the CEO stays view-only for both, matching
     // the specific asymmetry requested between the two executive roles.
-    permissionCodes: [
+    permissionCodes: ['supply.view', 
       'dashboard.view', 'farm.view', 'farm.inventory.view', 'warehouse.view',
       'warehouse.inventory.view', 'milling.view', 'machine.view', 'delivery.view', 'finance.view',
       'sales.view', 'expense.view', 'reports.view', 'reports.export', 'ai.view', 'ai.use',
@@ -54,7 +54,7 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
     // expense the Finance Director entered personally, which they cannot
     // approve themselves). Visibility of farm and warehouse inventory and
     // finance records is fully retained.
-    permissionCodes: [
+    permissionCodes: ['supply.view', 
       'dashboard.view', 'farm.view', 'farm.inventory.view', 'warehouse.view',
       'warehouse.inventory.view', 'milling.view', 'machine.view', 'delivery.view', 'finance.view',
       'sales.view', 'expense.view', 'reports.view', 'reports.export', 'ai.view', 'ai.use',
@@ -77,7 +77,7 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
     // Warehouse Manager (packaging), Warehouse Supervisor (broader
     // oversight of what's produced and packaged), and MD (read-only
     // company-wide visibility).
-    permissionCodes: [
+    permissionCodes: ['supply.view', 'supply.fulfil', 
       // delivery.create restored - the assign-a-task-to-a-farm-manager
       // workflow (still available via Warehouse requests) covers the
       // "react to a specific warehouse's request" case, but a Farm
@@ -120,7 +120,7 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
     // (see frontend) - broader than Warehouse Manager's, matching
     // their oversight of everything produced and packaged across
     // every warehouse, not just their own.
-    permissionCodes: [
+    permissionCodes: ['supply.view', 'supply.request', 'supply.forward', 'supply.fulfil', 
       'dashboard.view', 'warehouse.view', 'warehouse.create', 'warehouse.update', 'warehouse.delete',
       'warehouse.inventory.view', 'warehouse.transfer', 'milling.manage', 'inventory.adjust',
       'sales.assign', 'sales.fulfill', 'milling.view', 'reports.view', 'reports.export', 'ai.view', 'ai.use',
@@ -143,7 +143,7 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
     // frontend) - they physically package rice into specific bag
     // sizes, the one master data type directly tied to their actual
     // day-to-day work.
-    permissionCodes: [
+    permissionCodes: ['supply.view', 'supply.request', 
       'dashboard.view', 'warehouse.view', 'warehouse.inventory.view', 'warehouse.receive',
       'milling.view', 'packaging.create', 'sales.fulfill', 'reports.view', 'reports.export', 'messages.send', 'tasks.complete',
       'expense.create', 'warehouse.equipment.manage', 'masterdata.manage',
@@ -155,7 +155,7 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
     // team.manage added - same real capability upgrade as Warehouse
     // Supervisor: can now add, edit, and deactivate their own
     // Operations Officers, not just assign them tasks.
-    permissionCodes: [
+    permissionCodes: ['supply.view', 'supply.request', 'supply.forward', 
       'dashboard.view', 'milling.view', 'production.approve', 'machine.view', 'machine.manage',
       'meter.create', 'quality.manage', 'inventory.adjust', 'reports.view', 'reports.export', 'ai.view', 'ai.use', 'messages.send',
       'tasks.assign', 'tasks.complete', 'expense.view', 'team.manage',
@@ -167,7 +167,7 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
     // reports.export added - same reason as Warehouse Manager: held
     // reports.view but couldn't reach the Reports page at all, since
     // its nav item requires reports.export specifically.
-    permissionCodes: [
+    permissionCodes: ['supply.view', 'supply.request', 
       'dashboard.view', 'milling.view', 'production.create', 'machine.view', 'machine.manage', 'meter.create',
       'quality.manage', 'packaging.create', 'reports.view', 'reports.export', 'messages.send', 'tasks.complete', 'expense.create',
     ],

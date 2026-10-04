@@ -33,19 +33,20 @@ const DTOS = {
 
 const GLOBAL = [{ scopeType: 'GLOBAL', scopeId: null }];
 const WH1 = '11111111-1111-4111-8111-111111111111', WH2 = '22222222-2222-4222-8222-222222222222';
-const ALL_PERMS = ['dashboard.view', 'sales.create', 'sales.approve', 'sales.release', 'sales.assign', 'sales.fulfill', 'sales.view', 'finance.view', 'finance.approve', 'finance.approve.director', 'expense.view', 'expense.create', 'paddy.approve', 'paddy.reject', 'paddy.create', 'production.approve', 'delivery.approve', 'delivery.reject', 'payment.verify', 'reset.approve', 'inventory.adjust', 'masterdata.manage', 'customer.manage', 'paddy.submit', 'delivery.create', 'farm.inventory.view', 'users.manage', 'warehouse.transfer', 'packaging.create', 'warehouse.receive'];
+const ALL_PERMS = ['dashboard.view', 'sales.create', 'sales.approve', 'sales.release', 'sales.assign', 'sales.fulfill', 'sales.view', 'finance.view', 'finance.approve', 'finance.approve.director', 'expense.view', 'expense.create', 'paddy.approve', 'paddy.reject', 'paddy.create', 'production.approve', 'delivery.approve', 'delivery.reject', 'payment.verify', 'reset.approve', 'inventory.adjust', 'masterdata.manage', 'customer.manage', 'paddy.submit', 'delivery.create', 'farm.inventory.view', 'users.manage', 'warehouse.transfer', 'packaging.create', 'warehouse.receive', 'supply.view', 'supply.request', 'supply.forward', 'supply.fulfil'];
 const USERS = {
   sales1: { id: 'u-sales1', email: 'sales.1@kam.local', firstName: 'Nana', lastName: 'Yeboah', role: 'SALES_OFFICER', scopes: GLOBAL, perms: ['dashboard.view', 'sales.create', 'customer.manage', 'payment.create', 'reports.view', 'reports.export', 'messages.send', 'tasks.complete'] },
   sales2: { id: 'u-sales2', email: 'sales.2@kam.local', firstName: 'Akosua', lastName: 'Frimpong', role: 'SALES_OFFICER', scopes: GLOBAL, perms: ['dashboard.view', 'sales.create', 'customer.manage', 'payment.create', 'reports.view', 'reports.export', 'messages.send', 'tasks.complete'] },
   fd: { id: 'u-fd', email: 'financedirector@kam.local', firstName: 'Kwesi', lastName: 'Appiah', role: 'FINANCE_DIRECTOR', scopes: GLOBAL, perms: ['dashboard.view', 'sales.approve', 'sales.view', 'finance.view', 'finance.approve', 'expense.view', 'payment.verify'] },
-  md: { id: 'u-md', email: 'md@kam.local', firstName: 'Kwame', lastName: 'Asante', role: 'MD', scopes: GLOBAL, perms: ['dashboard.view', 'sales.release', 'sales.view', 'finance.view', 'finance.approve.director', 'ai.view', 'ai.use', 'milling.view'] },
+  md: { id: 'u-md', email: 'md@kam.local', firstName: 'Kwame', lastName: 'Asante', role: 'MD', scopes: GLOBAL, perms: ['supply.view', 'dashboard.view', 'sales.release', 'sales.view', 'finance.view', 'finance.approve.director', 'ai.view', 'ai.use', 'milling.view'] },
   ceo: { id: 'u-ceo', email: 'ceo@kam.local', firstName: 'Ama', lastName: 'Owusu', role: 'CEO', scopes: GLOBAL, perms: ['dashboard.view', 'sales.release', 'sales.view', 'finance.view', 'ai.view', 'ai.use', 'milling.view'] },
-  ops: { id: 'u-ops', email: 'operationsmanager.1@kam.local', firstName: 'Kojo', lastName: 'Antwi', role: 'OPERATIONS_MANAGER', scopes: GLOBAL, perms: ['dashboard.view', 'milling.view', 'production.approve', 'reports.view', 'ai.view', 'ai.use'] },
-  sup: { id: 'u-sup', email: 'warehousesupervisor@kam.local', firstName: 'Efua', lastName: 'Darko', role: 'WAREHOUSE_SUPERVISOR', scopes: GLOBAL, perms: ['dashboard.view', 'sales.assign', 'sales.fulfill', 'warehouse.view'] },
-  wm1: { id: 'u-wm1', email: 'warehousemanager.1@kam.local', firstName: 'Kwabena', lastName: 'Adjei', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH1 }], perms: ['dashboard.view', 'sales.fulfill', 'warehouse.view', 'warehouse.receive', 'farm.inventory.view'] },
+  ops: { id: 'u-ops', email: 'operationsmanager.1@kam.local', firstName: 'Kojo', lastName: 'Antwi', role: 'OPERATIONS_MANAGER', scopes: GLOBAL, perms: ['supply.view', 'supply.request', 'supply.forward', 'dashboard.view', 'milling.view', 'production.approve', 'reports.view', 'ai.view', 'ai.use'] },
+  sup: { id: 'u-sup', email: 'warehousesupervisor@kam.local', firstName: 'Efua', lastName: 'Darko', role: 'WAREHOUSE_SUPERVISOR', scopes: GLOBAL, perms: ['supply.view', 'supply.request', 'supply.forward', 'supply.fulfil', 'dashboard.view', 'sales.assign', 'sales.fulfill', 'warehouse.view'] },
+  wm1: { id: 'u-wm1', email: 'warehousemanager.1@kam.local', firstName: 'Kwabena', lastName: 'Adjei', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH1 }], perms: ['supply.view', 'supply.request', 'dashboard.view', 'sales.fulfill', 'warehouse.view', 'warehouse.receive', 'farm.inventory.view'] },
   wm2: { id: 'u-wm2', email: 'warehousemanager.2@kam.local', firstName: 'Abena', lastName: 'Gyasi', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH2 }], perms: ['dashboard.view', 'sales.fulfill', 'warehouse.view'] },
-  fsup: { id: 'u-fsup', email: 'farmdirector@kam.local', firstName: 'Efua', lastName: 'Mensah', role: 'FARM_DIRECTOR', scopes: GLOBAL, perms: ['dashboard.view', 'delivery.create', 'delivery.view', 'delivery.approve', 'delivery.reject', 'farm.inventory.view', 'paddy.approve', 'tasks.assign', 'tasks.complete'] },
+  fsup: { id: 'u-fsup', email: 'farmdirector@kam.local', firstName: 'Efua', lastName: 'Mensah', role: 'FARM_DIRECTOR', scopes: GLOBAL, perms: ['supply.view', 'supply.fulfil', 'dashboard.view', 'delivery.create', 'delivery.view', 'delivery.approve', 'delivery.reject', 'farm.inventory.view', 'paddy.approve', 'tasks.assign', 'tasks.complete'] },
   fm: { id: 'u-fm', email: 'farmmanager@kam.local', firstName: 'Yaa', lastName: 'Owusu', role: 'FARM_MANAGER', scopes: [{ scopeType: 'FARM', scopeId: '33333333-3333-4333-8333-333333333333' }], perms: ['dashboard.view', 'paddy.create', 'paddy.submit', 'delivery.create', 'delivery.view', 'farm.inventory.view', 'tasks.complete'] },
+  oo: { id: 'u-oo', email: 'operationsofficer@kam.local', firstName: 'Ama', lastName: 'Frimpong', role: 'OPERATIONS_OFFICER', scopes: [{ scopeType: 'MILLING_CENTER', scopeId: '66666666-6666-4666-8666-666666666666' }], perms: ['dashboard.view', 'milling.view', 'production.create', 'supply.view', 'supply.request'] },
   admin: { id: 'u-admin', email: 'admin@kam.local', firstName: 'System', lastName: 'Administrator', role: 'ADMIN', scopes: GLOBAL, perms: ALL_PERMS },
 };
 const actorOf = (k) => { const u = USERS[k]; return { id: u.id, email: u.email, firstName: u.firstName, lastName: u.lastName, permissionCodes: new Set(u.perms), roles: [{ roleId: u.role, roleCode: u.role, permissions: u.perms, scopes: u.scopes }] }; };
@@ -144,7 +145,7 @@ app.get('/api/customers', (req, res) => ok(res, [{ id: 'c1', customerNumber: 'CU
 app.get('/api/master-data/products', (req, res) => ok(res, [{ id: 'p1', name: 'Pectra Rice', isActive: true }, { id: 'p2', name: 'Broken Rice', isActive: true }, { id: 'p3', name: 'Rice Hull', isActive: true }]));
 app.get('/api/master-data/packaging-sizes', (req, res) => ok(res, [{ id: 's25', label: '25KG', sizeKg: 25, isActive: true }, { id: 's50', label: '50KG', sizeKg: 50, isActive: true }]));
 app.get('/api/product-prices/effective', (req, res) => ok(res, [{ productId: 'p1', packagingSizeId: 's25', pricePerBag: 210, source: 'list' }]));
-app.get('/api/warehouses/directory', (req, res) => ok(res, Object.entries(WAREHOUSES).map(([id, name]) => ({ id, name, location: LOCATIONS[id] ?? null }))));
+app.get('/api/warehouses/directory', (req, res) => ok(res, Object.entries(WAREHOUSES).map(([id, name]) => ({ id, name, location: LOCATIONS[id] ?? null, millingCenters: id === WH1 ? [{ id: MC1, name: 'Tamale Mill' }] : [] }))));
 
 // ---- sales orders (the rules of sales-orders.service.ts, in short) ----
 const asList = (o) => { const { files, receipts, events, ...rest } = o; return { ...rest, events: events.filter((e) => e.toStatus).slice(-1), _count: { receipts: receipts.length } }; };
@@ -361,7 +362,7 @@ const withRel = (o) => ({ ...o, farm: { name: 'Nkawkaw Farm' }, destinationWareh
 const matchWhere = (r, w = {}) => Object.entries(w).every(([k, v]) => (v && typeof v === 'object' && 'in' in v ? v.in.includes(r[k]) : v && typeof v === 'object' && 'notIn' in v ? !v.notIn.includes(r[k]) : r[k] === v));
 let _un = 0; const uuidn = () => `00000000-0000-4000-8000-${String(100 + ++_un).padStart(12, '0')}`;
 const stTx = {
-  deliveryOrder: { create: async ({ data }) => { const row = { ...data, id: uuidn(), status: 'PENDING', createdAt: new Date().toISOString(), requestedDate: data.requestedDate.toISOString() }; X.orders.push(row); return withRel(row); } },
+  deliveryOrder: { create: async ({ data }) => { const row = { ...data, id: uuidn(), status: 'PENDING', createdAt: new Date().toISOString(), requestedDate: new Date(data.requestedDate).toISOString() }; X.orders.push(row); return withRel(row); } },
   deliveryReport: {
     create: async ({ data }) => { const row = { ...data, id: uid('dr'), createdAt: new Date().toISOString() }; X.reports.push(row); return row; },
     update: async ({ where, data }) => { const r = X.reports.find((x) => x.id === where.id); Object.assign(r, data); return r; },
@@ -419,6 +420,68 @@ app.post('/api/delivery-reports/dispatch/:ref/submit', async (req, res) => { con
 app.post('/api/delivery-reports/dispatch/:ref/approve', async (req, res) => { const k = who(req); log(req, { item: req.params.ref }); try { ok(res, await reportsService.approveDispatch(req.params.ref, actorOf(k))); } catch (e) { apiErr(res, e); } });
 app.post('/api/delivery-reports/dispatch/:ref/reject', async (req, res) => { const k = who(req); log(req, { item: req.params.ref }); const d = await body(res, RejectDeliveryReportDto, req.body); if (!d) return; try { ok(res, await reportsService.rejectDispatch(req.params.ref, d, actorOf(k))); } catch (e) { apiErr(res, e); } });
 app.get('/api/farms/:id/inventory', (req, res) => { const by = [[G4, 'SIZE_4', 'Size 4'], [G5, 'SIZE_5', 'Size 5']].map(([id, code, label]) => ({ gradeCode: code, gradeLabel: label, bagCount: X.stock[id] ?? 0, totalKg: (X.stock[id] ?? 0) * 50 })); ok(res, { farmId: req.params.id, byGrade: by, totalKg: by.reduce((t, g) => t + g.totalKg, 0), totalBags: by.reduce((t, g) => t + g.bagCount, 0), dispatchedByGrade: [], dispatchedTotalKg: 0, dispatchedTotalBags: 0 }); });
+
+// ---- paddy requests: the REAL service and the REAL whereabouts, over the same in-memory picture as the dispatch ----
+const { SupplyRequestsService } = require(B + '/supply/supply-requests.service');
+const { PaddyWhereaboutsService } = require(B + '/supply/paddy-whereabouts.service');
+const { CreateSupplyRequestDto, ForwardSupplyRequestDto, DeclineSupplyRequestDto, AssignSupplyRequestDto, ReadySupplyRequestDto } = require(B + '/supply/dto/supply-request.dto');
+const MC1 = '66666666-6666-4666-8666-666666666666';
+const FARM_B = '77777777-7777-4777-8777-777777777777';
+const FARMS_ALL = () => [{ id: FARM, name: 'Nkawkaw Farm', isActive: true, managers: X.noManager ? [] : [{ user: who2 }] }, { id: FARM_B, name: 'Techiman Farm', isActive: true, managers: [] }];
+const prevSeed = seedX;
+seedX = function () { prevSeed(); X.supply = []; X.whStock = { [WH1]: { [G4]: 12, [G5]: 3 } }; };
+seedX();
+stLedger.getBalancesForLocation = async (type, id) => Object.entries(type === 'WAREHOUSE' ? X.whStock[id] ?? {} : id === FARM_B ? { [G4]: 5, [G5]: 0 } : X.stock).map(([paddyGradeId, bagCount]) => ({ paddyGradeId, bagCount }));
+const matchS = (r, w = {}) => Object.entries(w).every(([k, v]) => (k === 'OR' ? v.some((c) => matchS(r, c)) : v && typeof v === 'object' && 'in' in v ? v.in.includes(r[k]) : v && typeof v === 'object' && 'notIn' in v ? !v.notIn.includes(r[k]) : r[k] === v));
+const userRows = () => Object.values(USERS).map((u) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName, role: u.role, scopes: u.scopes ?? [] }));
+const sTx = { supplyRequest: { create: async ({ data }) => { const row = { id: uuidn(), createdAt: new Date().toISOString(), forwardedAt: null, decidedAt: null, forwardedById: null, decidedById: null, sourceFarmId: null, dispatchRequestRef: null, parentRequestId: null, millingCenterId: null, forwardNote: null, decisionNote: null, ...data }; X.supply.push(row); return row; } } };
+const supplyPrisma = {
+  supplyRequest: {
+    ...sTx.supplyRequest,
+    findUnique: async ({ where }) => X.supply.find((r) => r.id === where.id) ?? null,
+    findMany: async ({ where } = {}) => X.supply.filter((r) => matchS(r, where)),
+    findFirst: async ({ where }) => X.supply.find((r) => matchS(r, where)) ?? null,
+    update: async ({ where, data }) => { const r = X.supply.find((x) => x.id === where.id); Object.assign(r, data); return r; },
+  },
+  user: { findMany: async ({ where }) => { if (where.id) return userRows().filter((u) => where.id.in.includes(u.id)); const some = where.roles.some; const wh = some.OR?.[2]?.scopes?.some?.scopeId; return userRows().filter((u) => some.role.code.in.includes(u.role) && (!some.OR || u.scopes.length === 0 || u.scopes.some((s) => s.scopeType === 'GLOBAL' || (s.scopeType === 'WAREHOUSE' && s.scopeId === wh)))); } },
+  warehouse: { findUnique: async ({ where }) => (WAREHOUSES[where.id] ? { ...whOf(where.id), isActive: true } : null), findMany: async ({ where }) => Object.keys(WAREHOUSES).filter((id) => where.id.in.includes(id)).map((id) => whOf(id)) },
+  millingCenter: { findUnique: async ({ where }) => (where.id === MC1 ? { id: MC1, name: 'Tamale Mill', warehouseId: WH1, isActive: true } : null), findMany: async ({ where }) => (where.id.in.includes(MC1) ? [{ id: MC1, name: 'Tamale Mill' }] : []) },
+  farm: { findMany: async ({ where }) => (where.isActive ? FARMS_ALL() : FARMS_ALL().filter((f) => where.id.in.includes(f.id))) },
+  paddyGrade: { findMany: async ({ where }) => GRADES2.filter((g) => where.id.in.includes(g.id)) },
+  task: {
+    count: async () => X.tasks.length,
+    create: async ({ data }) => { const row = { ...data, id: uuidn(), priority: 'MEDIUM', description: data.description ?? null, dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null, createdBy: boss, assignedTo: userRef(data.assignedToId), farm: null, warehouse: data.warehouseId ? whOf(data.warehouseId) : null, completionEvidence: null, attachmentUrl: null }; X.tasks.push(row); return row; },
+    updateMany: async ({ where, data }) => { X.tasks.filter((t) => t.supplyRequestNumber === where.supplyRequestNumber && where.status.in.includes(t.status)).forEach((t) => Object.assign(t, data)); },
+  },
+  $transaction: async (cb) => cb(sTx),
+};
+const supplyService = new SupplyRequestsService(supplyPrisma, fakeAudit, stLedger, dispatchOrders, notifier);
+const whereaboutsService = new PaddyWhereaboutsService({
+  paddyGrade: { findMany: async () => GRADES2 },
+  inventoryBalance: { findMany: async () => [...Object.entries(X.stock).map(([g, n]) => ({ locationType: 'FARM', locationId: FARM, paddyGradeId: g, bagCount: n })), ...Object.entries(X.whStock[WH1] ?? {}).map(([g, n]) => ({ locationType: 'WAREHOUSE', locationId: WH1, paddyGradeId: g, bagCount: n }))].filter((b) => b.bagCount > 0) },
+  shipment: { findMany: async () => X.shipments.filter((s) => !s.receivedAt).map((s) => { const rep = X.reports.find((r) => r.id === s.deliveryReportId); return { ...s, farm: { name: 'Nkawkaw Farm' }, warehouse: { name: WAREHOUSES[s.warehouseId] }, deliveryReport: rep ? { dispatchRef: rep.dispatchRef, driver: rep.driverId ? X.drivers[rep.driverId] : null, vehicle: rep.vehicleId ? X.vehicles[rep.vehicleId] : null } : null }; }) },
+  farm: { findMany: async ({ where }) => FARMS_ALL().filter((f) => where.id.in.includes(f.id)) },
+  warehouse: { findMany: async ({ where }) => Object.keys(WAREHOUSES).filter((id) => where.id.in.includes(id)).map((id) => whOf(id)) },
+  millingCenter: { findMany: async ({ where }) => (where.id.in.includes(MC1) ? [{ id: MC1, name: 'Tamale Mill' }] : []) },
+});
+const sRoute = (method, path, Cls, fn) => app[method](path, async (req, res) => {
+  const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); log(req, { item: req.params.id });
+  let d = {}; if (Cls) { d = await body(res, Cls, req.body); if (!d) return; }
+  try { ok(res, await fn(d, actorOf(k), req)); } catch (e) { apiErr(res, e); }
+});
+sRoute('get', '/api/supply-requests/whereabouts', null, (d, a) => whereaboutsService.whereabouts(a));
+sRoute('get', '/api/supply-requests', null, (d, a) => supplyService.board(a));
+sRoute('post', '/api/supply-requests', CreateSupplyRequestDto, (d, a) => supplyService.create(d, a));
+sRoute('get', '/api/supply-requests/:id/sources', null, (d, a, req) => supplyService.sources(req.params.id, a));
+sRoute('post', '/api/supply-requests/:id/forward', ForwardSupplyRequestDto, (d, a, req) => supplyService.forward(req.params.id, d, a));
+sRoute('post', '/api/supply-requests/:id/decline', DeclineSupplyRequestDto, (d, a, req) => supplyService.decline(req.params.id, d, a));
+sRoute('post', '/api/supply-requests/:id/assign', AssignSupplyRequestDto, (d, a, req) => supplyService.assign(req.params.id, d, a));
+sRoute('post', '/api/supply-requests/:id/ready', ReadySupplyRequestDto, (d, a, req) => supplyService.ready(req.params.id, d, a));
+sRoute('post', '/api/supply-requests/:id/ask-farm-director', ReadySupplyRequestDto, (d, a, req) => supplyService.askFarmDirector(req.params.id, d, a));
+sRoute('post', '/api/supply-requests/:id/cancel', null, (d, a, req) => supplyService.cancel(req.params.id, a));
+app.get('/api/notifications', (req, res) => { const k = who(req); const mine = X.notes.filter((n) => k && n.userIds.includes(USERS[k].id)); ok(res, mine.map((n, i) => ({ id: `n${i}`, title: n.title, body: n.body, isRead: false, createdAt: new Date().toISOString(), entityType: n.entityType, entityId: n.entityId, type: n.type }))); });
+app.get('/__supply', (req, res) => res.json(X.supply));
+app.get('/__orders', (req, res) => res.json(X.orders));
 // ---- anything else the pages ask for: empty, so they load ----
 app.get('/api/*', (req, res) => ok(res, []));
 app.all('/api/*', (req, res) => ok(res, {}));

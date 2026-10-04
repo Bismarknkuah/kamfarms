@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
+import { taskHref } from '@/lib/links';
 import { DashboardShell } from '@/components/DashboardShell';
 import { tasksApi, Task, ApiError } from '@/lib/api-client';
 
@@ -79,12 +80,15 @@ export default function TasksPage() {
                   <p className="font-mono text-xs text-ink-500">{task.taskNumber}</p>
                   <h3 className="mt-0.5 font-display text-lg text-paddy-900">{task.title}</h3>
                   {task.description && <p className={`mt-1 whitespace-pre-line text-sm ${task.deliveryRequestRef ? 'text-ink-700' : 'text-ink-500'}`} data-testid="task-description">{task.description}</p>}
-                  {task.deliveryRequestRef && (
-                    <div className="mt-3 flex flex-wrap items-center gap-3" data-testid="dispatch-task-actions">
-                      {task.warehouse && <span className="rounded-full bg-paddy-50 px-3 py-1 text-xs font-medium text-paddy-900" data-testid="task-destination">To: {task.warehouse.name}{task.warehouse.location ? ` (${task.warehouse.location})` : ''}</span>}
-                      <a href={`/deliveries?request=${encodeURIComponent(task.deliveryRequestRef)}`} data-testid="open-dispatch" className="rounded-full bg-paddy-900 px-4 py-1.5 text-xs font-medium text-rice-50">Open the dispatch and log the report</a>
-                    </div>
-                  )}
+                  {(() => {
+                    const href = taskHref(task);
+                    return href ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-3" data-testid="dispatch-task-actions">
+                        {task.warehouse && task.deliveryRequestRef && <span className="rounded-full bg-paddy-50 px-3 py-1 text-xs font-medium text-paddy-900" data-testid="task-destination">To: {task.warehouse.name}{task.warehouse.location ? ` (${task.warehouse.location})` : ''}</span>}
+                        <a href={href} data-testid={task.deliveryRequestRef ? 'open-dispatch' : 'open-task'} className="rounded-full bg-paddy-900 px-8 py-3 text-base font-medium text-rice-50">Open</a>
+                      </div>
+                    ) : null;
+                  })()}
                   {task.dueDate && (
                     <p className="mt-2 text-xs text-ink-500">
                       Due {new Date(task.dueDate).toLocaleDateString()}

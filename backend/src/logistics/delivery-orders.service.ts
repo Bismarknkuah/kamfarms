@@ -72,6 +72,19 @@ export class DeliveryOrdersService {
     return buildRequestCards(orders as any[]);
   }
 
+  /** The dispatch cards for some request references, whoever is asking: a warehouse that asked for paddy follows its dispatch without having farm access. */
+  async cardsByRequestRefs(refs: string[]) {
+    if (refs.length === 0) return new Map<string, ReturnType<typeof buildRequestCards>[number]>();
+    const orders = await this.prisma.deliveryOrder.findMany({
+      where: { requestRef: { in: refs } },
+      include: {
+        farm: true, destinationWarehouse: true, paddyGrade: true, createdBy: true,
+        reports: { orderBy: { createdAt: 'desc' }, include: { paddyGrade: true, vehicle: true, driver: true, submittedBy: true, approvedBy: true, shipment: true } },
+      },
+    });
+    return new Map(buildRequestCards(orders as any[]).filter((c) => c.requestRef).map((c) => [c.requestRef as string, c]));
+  }
+
   async findById(id: string, actor: AuthenticatedUser) {
     const order = await this.prisma.deliveryOrder.findUnique({
       where: { id },

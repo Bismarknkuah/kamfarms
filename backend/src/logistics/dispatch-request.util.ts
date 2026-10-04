@@ -32,24 +32,18 @@ export function longDate(d: Date | string): string {
 }
 
 export function dispatchTaskTitle(f: RequestFacts): string {
-  return `Dispatch ${bagsLabel(totalBagsOf(f.lines))} to ${f.warehouseName}`;
+  return `Send ${bagsLabel(totalBagsOf(f.lines))} to ${f.warehouseName}`;
 }
 
-/** A line per fact, readable on a phone, so the farm manager can act on it without asking anyone. */
+/**
+ * One short line: what to send, and by when (and a note, if the supervisor wrote one). Not a letter: most people reading it are busy and may not
+ * read much, so the task carries a button that opens the work, and everything else is on the Dispatch desk card.
+ */
 export function dispatchTaskDescription(f: RequestFacts): string {
-  const total = totalBagsOf(f.lines);
-  const out: string[] = [];
-  out.push(`Dispatch from ${f.farmName} to ${warehouseWithLocation(f.warehouseName, f.warehouseLocation)}.`);
   const when = longDate(f.requestedDate);
-  if (when) out.push(`Needed there by: ${when}.`);
-  if (f.priority && f.priority !== 'NORMAL') out.push(`Priority: ${f.priority}.`);
-  out.push('What to send:');
-  for (const l of f.lines) out.push(`- ${l.gradeLabel}: ${bagsLabel(l.bagCount)}${l.totalKg && !l.totalKgEstimated ? ` (${Math.round(l.totalKg).toLocaleString('en-US')} kg weighed)` : ''}`);
-  if (f.lines.length > 1) out.push(`Total: ${bagsLabel(total)}.`);
-  const contacts = (f.warehouseContacts ?? []).filter((c) => c.name);
-  if (contacts.length > 0) out.push(`Who to ask at the warehouse: ${contacts.map((c) => (c.phone ? `${c.name} (${c.phone})` : c.name)).join(', ')}.`);
-  if (f.notes && f.notes.trim()) out.push(`Instructions from ${f.requestedByName || 'the Farm Supervisor'}: ${f.notes.trim()}`);
-  out.push(`When the bags are loaded, open the Dispatch desk and submit one dispatch${f.lines.length > 1 ? ' with every size on the truck' : ''}. Request ${f.requestRef}.`);
+  const sizes = f.lines.map((l) => `${l.gradeLabel}: ${bagsLabel(l.bagCount)}`).join(', ');
+  const out = [`${sizes}${when ? ` · by ${when}` : ''}`];
+  if (f.notes && f.notes.trim()) out.push(`Note: ${f.notes.trim()}`);
   return out.join('\n');
 }
 
@@ -57,5 +51,5 @@ export function dispatchTaskDescription(f: RequestFacts): string {
 export function dispatchNotificationBody(f: RequestFacts): string {
   const sizes = f.lines.map((l) => `${l.gradeLabel} ${l.bagCount}`).join(', ');
   const when = longDate(f.requestedDate);
-  return `${f.requestedByName || 'The Farm Supervisor'} asks you to dispatch ${bagsLabel(totalBagsOf(f.lines))} (${sizes}) to ${warehouseWithLocation(f.warehouseName, f.warehouseLocation)}${when ? `, needed by ${when}` : ''}.`;
+  return `${f.requestedByName || 'The Farm Director'} asks you to send ${bagsLabel(totalBagsOf(f.lines))} to ${warehouseWithLocation(f.warehouseName, f.warehouseLocation)}: ${sizes}${when ? ` · by ${when}` : ''}`;
 }

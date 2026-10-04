@@ -1,23 +1,39 @@
 'use client';
 
 import { useState } from 'react';
-import { ApiError, DispatchResult, DispatchView, RequestCard, deliveryReportsApi } from '@/lib/api-client';
+import { useEffect } from 'react';
+import { ApiError, DispatchResult, DispatchView, PaddyGrade, RequestCard, deliveryReportsApi, paddyGradesApi } from '@/lib/api-client';
+import { SizeBags, linesOf } from '@/components/SizeBags';
 import { DispatchFailed } from '@/components/dispatch/DispatchFeedback';
 import { longDate } from '@/lib/dates';
 
-interface LineState { orderId: string; gradeLabel: string; asked: number; bags: string; kg: string }
 const today = () => new Date().toISOString().slice(0, 10);
 const input = 'w-full min-w-0 rounded-lg border border-paddy-100 bg-white px-3 py-2 text-sm';
 const num = (s: string) => (s.trim() === '' ? undefined : parseFloat(s));
+const OPEN = ['REQUESTED', 'PREPARING'];
 
 /**
- * The farm manager loads the truck and submits ONE dispatch: every size that is going, the driver and vehicle, and what the trip cost, once.
- * It goes to the Farm Supervisor as one thing to approve. Bags are what is counted; kilograms are optional. Every tap is answered: what is
- * wrong, or that it was sent, or why it was not.
+ * The farm manager loads the truck and submits ONE dispatch. Size 4 and Size 5 are BOTH on the form, whatever was asked for: the request's sizes
+ * are filled in (and any difference from what was asked is flagged), and a size nobody asked for can still go on the truck. Bags are what is
+ * counted; kilograms are optional. Every tap is answered: what is wrong, or that it was sent, or why it was not.
  */
 export function DispatchForm({ accessToken, card, previous, onDone, onCancel }: { accessToken: string; card: RequestCard; previous?: DispatchView | null; onDone: (r: DispatchResult) => void; onCancel: () => void }) {
-  const open = card.lines.filter((l) => l.stage === 'REQUESTED' || l.stage === 'PREPARING');
-  const [lines, setLines] = useState<LineState[]>(open.map((l) => ({ orderId: l.orderId, gradeLabel: l.gradeLabel, asked: l.bagCount, bags: String(previous?.lines.find((p) => p.orderNumber === l.orderNumber)?.bags ?? l.bagCount), kg: '' })));
+  const [grades, setGrades] = useState<PaddyGrade[]>([]);
+  useEffect(() => { paddyGradesApi.list(accessToken).then(setGrades).catch(() => {}); }, [accessToken]);
+  const gradeOf = (label: string) => grades.find((g) => g.label === label);
+  // what the request asked for, by size; and which sizes can still be loaded (the others have already left)
+  const asked = new Map<string, { orderId: string; bags: number; open: boolean }>();
+  for (const l of card.lines) { const g = gradeOf(l.gradeLabel); if (g) asked.set(g.id, { orderId: l.orderId, bags: l.bagCount, open: OPEN.includes(l.stage) }); }
+  const [bags, setBags] = useState<Record<string, number>>({});
+  const [seeded, setSeeded] = useState(false);
+  useEffect(() => {
+    if (seeded || grades.length === 0) return;
+    const start: Record<string, number> = {};
+    asked.forEach((v, id) => { if (v.open) start[id] = previous?.lines.find((p) => p.gradeLabel === grades.find((g) => g.id === id)?.label)?.bags ?? v.bags; });
+    setBags(start); setSeeded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grades, seeded]);
+  const [kg, setKg] = useState<Record<string, string>>({});
   const [plate, setPlate] = useState(previous?.vehiclePlate ?? '');
   const [vehicleType, setVehicleType] = useState(previous?.vehicleType ?? '');
   const [driverName, setDriverName] = useState(previous?.driverName ?? '');
@@ -35,19 +51,24 @@ export function DispatchForm({ accessToken, card, previous, onDone, onCancel }: 
   const [problems, setProblems] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const setLine = (i: number, patch: Partial<LineState>) => setLines((prev) => prev.map((l, k) => (k === i ? { ...l, ...patch } : l)));
-  const going = lines.filter((l) => /^\d+$/.test(l.bags) && parseInt(l.bags, 10) > 0);
-  const totalBags = going.reduce((n, l) => n + parseInt(l.bags, 10), 0);
+  const going = linesOf(bags);
+  const totalBags = going.reduce((n, l) => n + l.bags, 0);
+  const label = (id: string) => grades.find((g) => g.id === id)?.label ?? 'A size';
   const trip = (parseFloat(labour) || 0) + (parseFloat(transport) || 0) + (parseFloat(other) || 0);
+  const locked: Record<string, string> = {};
+  asked.forEach((v, id) => { if (!v.open) locked[id] = 'Already sent'; });
+  const hints: Record<string, React.ReactNode> = {};
+  grades.forEach((g) => {
+    const a = asked.get(g.id); const n = bags[g.id] ?? 0;
+    if (!a) hints[g.id] = n > 0 ? <span className="font-medium text-amber-800">Not asked for: it will be added</span> : <span>Not asked for</span>;
+    else if (a.open) { const d = n - a.bags; hints[g.id] = n === 0 ? <span>Asked for {a.bags}. Not on this truck</span> : d === 0 ? <span className="text-paddy-700">Asked for {a.bags}: as asked</span> : <span className="font-medium text-amber-800">Asked for {a.bags}: {Math.abs(d)} {d < 0 ? 'fewer' : 'more'} than asked</span>; }
+  });
 
   const check = (): string[] => {
     const out: string[] = [];
-    lines.forEach((l) => {
-      if (l.bags !== '' && !/^\d+$/.test(l.bags)) out.push(`${l.gradeLabel}: bags must be a whole number (use 0 if this size is not on the truck).`);
-      if (l.kg && !(parseFloat(l.kg) > 0)) out.push(`${l.gradeLabel}: kilograms must be more than zero, or left blank.`);
-    });
     if (going.length === 0) out.push('Put at least one size on the truck: enter its bags.');
-    for (const [label, v] of [['Labour cost', labour], ['Transport', transport], ['Other costs', other], ['Labourers', labourers]] as const) if (v && !(parseFloat(v) >= 0)) out.push(`${label} must be a number.`);
+    for (const l of going) if (kg[l.paddyGradeId] && !(parseFloat(kg[l.paddyGradeId]) > 0)) out.push(`${label(l.paddyGradeId)}: kilograms must be more than zero, or left blank.`);
+    for (const [name, v] of [['Labour cost', labour], ['Transport', transport], ['Other costs', other], ['Labourers', labourers]] as const) if (v && !(parseFloat(v) >= 0)) out.push(`${name} must be a number.`);
     return out;
   };
 
@@ -59,7 +80,9 @@ export function DispatchForm({ accessToken, card, previous, onDone, onCancel }: 
     setBusy(true);
     try {
       const result = await deliveryReportsApi.createDispatch(accessToken, {
-        lines: going.map((l) => ({ deliveryOrderId: l.orderId, actualBagCount: parseInt(l.bags, 10), actualKg: num(l.kg) })),
+        // a size the request has an order for goes against that order; any other size is added as the truck is loaded
+        lines: going.map((l) => { const a = asked.get(l.paddyGradeId); return a?.open ? { deliveryOrderId: a.orderId, actualBagCount: l.bags, actualKg: num(kg[l.paddyGradeId] ?? '') } : { paddyGradeId: l.paddyGradeId, actualBagCount: l.bags, actualKg: num(kg[l.paddyGradeId] ?? '') }; }),
+        requestRef: card.requestRef ?? undefined,
         vehiclePlateNumber: plate.trim() || undefined, vehicleType: vehicleType.trim() || undefined, driverName: driverName.trim() || undefined, driverPhone: driverPhone.trim() || undefined,
         departureDate: departureDate || undefined, departureTime: departureTime || undefined, expectedArrivalTime: arrival.trim() || undefined,
         numberOfLabourers: num(labourers), labourCost: num(labour), transportationFee: num(transport), otherCosts: num(other), otherCostsDescription: otherDesc.trim() || undefined,
@@ -81,24 +104,14 @@ export function DispatchForm({ accessToken, card, previous, onDone, onCancel }: 
       {previous?.rejectionReason && <p className="mt-2 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs text-red-800"><span className="font-medium">Sent back:</span> {previous.rejectionReason}</p>}
 
       <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-soil-500">1. What is on the truck</p>
-      <div className="mt-1 space-y-2" role="group" aria-label="Sizes on the truck">
-        {lines.map((l, i) => {
-          const n = /^\d+$/.test(l.bags) ? parseInt(l.bags, 10) : null;
-          const diff = n === null ? 0 : n - l.asked;
-          return (
-            <div key={l.orderId} className="grid grid-cols-2 items-start gap-2 sm:grid-cols-[1fr_1fr_1fr_1.4fr]" data-testid="dispatch-line">
-              <p className="col-span-2 self-center text-sm text-ink-900 sm:col-span-1"><strong>{l.gradeLabel}</strong> <span className="text-xs text-ink-500">asked for {l.asked}</span></p>
-              <input aria-label={`Bags of ${l.gradeLabel}`} inputMode="numeric" value={l.bags} placeholder="Bags" onChange={(e) => setLine(i, { bags: e.target.value.replace(/[^0-9]/g, '') })} className={input} />
-              <input aria-label={`Kilograms of ${l.gradeLabel}, optional`} inputMode="decimal" value={l.kg} placeholder="KG (optional)" onChange={(e) => setLine(i, { kg: e.target.value.replace(/[^0-9.]/g, '') })} className={input} />
-              <p className="col-span-2 text-xs sm:col-span-1" aria-live="polite">
-                {n === 0 || l.bags === '' ? <span className="text-ink-500">Not on this truck</span> : diff === 0 ? <span className="text-paddy-700">As asked</span> : <span className="font-medium text-amber-800">{Math.abs(diff)} {diff < 0 ? 'fewer' : 'more'} than asked</span>}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-      <p className="mt-1 text-xs text-ink-500">Bags are what is counted. Leave kilograms blank where there is no scale. Enter 0 for a size that is not on this truck.</p>
-      <p className="mt-1 text-sm font-medium text-paddy-900" data-testid="dispatch-total">{totalBags > 0 ? `On the truck: ${totalBags} bag${totalBags === 1 ? '' : 's'} (${going.map((l) => `${l.gradeLabel} ${l.bags}`).join(', ')})` : 'Nothing on the truck yet.'}</p>
+      <div className="mt-1" data-testid="dispatch-sizes"><SizeBags grades={grades} value={bags} onChange={setBags} hints={hints} locked={locked} /></div>
+      <details className="mt-2 text-sm">
+        <summary className="cursor-pointer text-xs font-medium text-paddy-700">I weighed it (not needed)</summary>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {grades.filter((g) => (bags[g.id] ?? 0) > 0).map((g) => <input key={g.id} aria-label={`Kilograms of ${g.label}, optional`} inputMode="decimal" value={kg[g.id] ?? ''} placeholder={`${g.label} KG`} onChange={(e) => setKg((p) => ({ ...p, [g.id]: e.target.value.replace(/[^0-9.]/g, '') }))} className={input} />)}
+        </div>
+      </details>
+      <p className="mt-1 text-sm font-medium text-paddy-900" data-testid="dispatch-total">{totalBags > 0 ? `On the truck: ${totalBags} bag${totalBags === 1 ? '' : 's'} (${going.map((l) => `${label(l.paddyGradeId)} ${l.bags}`).join(', ')})` : 'Nothing on the truck yet.'}</p>
 
       <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-soil-500">2. The truck and driver</p>
       <p className="text-xs text-ink-500">Add the vehicle number and driver so the supervisor and the warehouse can recognise the truck.</p>

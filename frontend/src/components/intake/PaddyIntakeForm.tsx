@@ -1,22 +1,20 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Plus, X } from 'lucide-react';
 import { ApiError, Farm, PaddyGrade, PaddyIntakeResult, paddyEntriesApi } from '@/lib/api-client';
 import { IntakeFailure, IntakeSuccess } from '@/components/intake/IntakeFeedback';
-
-interface Line { paddyGradeId: string; bagCount: string; weightKg: string }
-const EMPTY: Line = { paddyGradeId: '', bagCount: '', weightKg: '' };
+import { SizeBags, linesOf } from '@/components/SizeBags';
 
 /**
- * ONE intake with every size that arrived: "Size 4: 17 bags" and "Size 5: 3 bags" on one form, saved together (all or none) and sent for
- * approval in the same step. Bags are what is counted; kilograms are optional, for the places that have a scale. After saving it SAYS so,
- * and when saving fails it says nothing was saved and why. Nothing happens silently.
+ * ONE intake with every size that arrived: Size 4 and Size 5 are already on the form with a big minus, a number and a plus, saved together (all or
+ * none) and sent for approval in the same step. Bags are what is counted; kilograms are optional, for the places that have a scale. After saving it
+ * SAYS so, and when saving fails it says nothing was saved and why. Nothing happens silently.
  */
 export function PaddyIntakeForm({ accessToken, farms, grades, canSubmit, onSaved }: { accessToken: string; farms: Farm[]; grades: PaddyGrade[]; canSubmit: boolean; onSaved: () => void }) {
   const [farmId, setFarmId] = useState('');
   const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
-  const [lines, setLines] = useState<Line[]>([{ ...EMPTY }]);
+  const [bags, setBags] = useState<Record<string, number>>({});
+  const [kg, setKg] = useState<Record<string, string>>({});
   const [moisture, setMoisture] = useState('');
   const [quality, setQuality] = useState('');
   const [supplier, setSupplier] = useState('');
@@ -30,9 +28,7 @@ export function PaddyIntakeForm({ accessToken, farms, grades, canSubmit, onSaved
   useEffect(() => { if (farms.length === 1) setFarmId(farms[0].id); }, [farms]);
   useEffect(() => { if ((result || failure) && feedback.current) feedback.current.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [result, failure]);
 
-  const setLine = (i: number, patch: Partial<Line>) => setLines((prev) => prev.map((l, k) => (k === i ? { ...l, ...patch } : l)));
-  const filled = lines.filter((l) => l.paddyGradeId || l.bagCount);
-  const totalBags = lines.reduce((t, l) => t + (parseInt(l.bagCount, 10) || 0), 0);
+  const going = linesOf(bags);
   const labelOf = (id: string) => grades.find((g) => g.id === id)?.label ?? 'a size';
 
   /** Everything wrong, in plain words, so no tap on "Submit" is ever met with silence. */
@@ -40,16 +36,8 @@ export function PaddyIntakeForm({ accessToken, farms, grades, canSubmit, onSaved
     const out: string[] = [];
     if (!farmId) out.push('Choose the farm.');
     if (!entryDate) out.push('Enter the date.');
-    if (filled.length === 0) out.push('Add at least one size with its bags.');
-    const seen = new Set<string>();
-    filled.forEach((l, i) => {
-      const n = i + 1;
-      if (!l.paddyGradeId) out.push(`Line ${n}: choose the size.`);
-      if (!l.bagCount) out.push(`Line ${n}: enter the number of bags.`);
-      else if (!/^\d+$/.test(l.bagCount) || parseInt(l.bagCount, 10) < 1) out.push(`Line ${n}: bags must be a whole number of at least 1.`);
-      if (l.weightKg && !(parseFloat(l.weightKg) > 0)) out.push(`Line ${n}: kilograms must be more than zero, or left blank.`);
-      if (l.paddyGradeId) { if (seen.has(l.paddyGradeId)) out.push(`${labelOf(l.paddyGradeId)} is on the list twice: put all of its bags on one line.`); seen.add(l.paddyGradeId); }
-    });
+    if (going.length === 0) out.push('Put the bags on Size 4 or Size 5.');
+    for (const l of going) if (kg[l.paddyGradeId] && !(parseFloat(kg[l.paddyGradeId]) > 0)) out.push(`${labelOf(l.paddyGradeId)}: kilograms must be more than zero, or left blank.`);
     return out;
   };
 
@@ -62,14 +50,14 @@ export function PaddyIntakeForm({ accessToken, farms, grades, canSubmit, onSaved
     try {
       const r = await paddyEntriesApi.createIntake(accessToken, {
         farmId, entryDate, submit,
-        lines: filled.map((l) => ({ paddyGradeId: l.paddyGradeId, bagCount: parseInt(l.bagCount, 10), weightKg: l.weightKg ? parseFloat(l.weightKg) : undefined })),
+        lines: going.map((l) => ({ paddyGradeId: l.paddyGradeId, bagCount: l.bags, weightKg: kg[l.paddyGradeId] ? parseFloat(kg[l.paddyGradeId]) : undefined })),
         moisturePercent: moisture ? parseFloat(moisture) : undefined,
         qualityGrade: quality.trim() || undefined,
         supplierName: supplier.trim() || undefined,
         notes: notes.trim() || undefined,
       });
       setResult(r);
-      setLines([{ ...EMPTY }]); setMoisture(''); setQuality(''); setSupplier(''); setNotes('');
+      setBags({}); setKg({}); setMoisture(''); setQuality(''); setSupplier(''); setNotes('');
       onSaved();
     } catch (err) {
       setFailure(err instanceof ApiError ? err.message : 'The intake could not be saved. Check your connection and try again.');
@@ -83,7 +71,7 @@ export function PaddyIntakeForm({ accessToken, farms, grades, canSubmit, onSaved
     <div className="mt-6 space-y-4" data-testid="intake-form">
       <div className="rounded-2xl border border-husk-300 bg-husk-100/30 p-5">
         <h2 className="font-display text-lg text-paddy-900">Log a paddy intake</h2>
-        <p className="mt-0.5 text-sm text-ink-500">Everything that arrived, in one go: add each size with its bags. Kilograms are optional, for places with a scale.</p>
+        <p className="mt-0.5 text-sm text-ink-500">Everything that arrived, in one go. Kilograms are not needed.</p>
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
@@ -99,27 +87,14 @@ export function PaddyIntakeForm({ accessToken, farms, grades, canSubmit, onSaved
           </div>
         </div>
 
-        <div className="mt-4" role="group" aria-label="Sizes in this intake">
-          <div className="hidden grid-cols-[1.4fr_0.8fr_1fr_auto] gap-2 px-1 text-xs font-medium text-ink-500 sm:grid"><span>Size</span><span>Bags</span><span>KG (optional)</span><span /></div>
-          {lines.map((l, i) => (
-            <div key={i} className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-[1.4fr_0.8fr_1fr_auto]" data-testid="intake-line">
-              <select aria-label={`Size, line ${i + 1}`} value={l.paddyGradeId} onChange={(e) => setLine(i, { paddyGradeId: e.target.value })} className={`${input} col-span-2 w-full min-w-0 sm:col-span-1`}>
-                <option value="">Choose a size...</option>
-                {grades.map((g) => <option key={g.id} value={g.id} disabled={lines.some((o, k) => k !== i && o.paddyGradeId === g.id)}>{g.label}</option>)}
-              </select>
-              <input aria-label={`Bags, line ${i + 1}`} inputMode="numeric" value={l.bagCount} placeholder="Bags" onChange={(e) => setLine(i, { bagCount: e.target.value.replace(/[^0-9]/g, '') })} className={`${input} w-full min-w-0`} />
-              <input aria-label={`Kilograms, line ${i + 1}, optional`} inputMode="decimal" value={l.weightKg} placeholder="No scale? leave blank" onChange={(e) => setLine(i, { weightKg: e.target.value.replace(/[^0-9.]/g, '') })} className={`${input} w-full min-w-0`} />
-              {lines.length > 1 ? (
-                <button type="button" onClick={() => setLines((prev) => prev.filter((_, k) => k !== i))} aria-label={`Remove line ${i + 1}`} className="col-span-2 grid h-10 place-items-center justify-self-end rounded-full px-3 text-ink-500 hover:bg-red-50 hover:text-red-700 sm:col-span-1 sm:w-10 sm:px-0"><X className="h-4 w-4" aria-hidden="true" /></button>
-              ) : <span className="hidden h-10 w-10 sm:block" aria-hidden="true" />}
+        <div className="mt-4">
+          <SizeBags grades={grades} value={bags} onChange={setBags} />
+          <details className="mt-2 text-sm">
+            <summary className="cursor-pointer text-xs font-medium text-paddy-700">I weighed it (not needed)</summary>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {grades.filter((g) => (bags[g.id] ?? 0) > 0).map((g) => <input key={g.id} aria-label={`Kilograms of ${g.label}, optional`} inputMode="decimal" value={kg[g.id] ?? ''} placeholder={`${g.label} KG`} onChange={(e) => setKg((p) => ({ ...p, [g.id]: e.target.value.replace(/[^0-9.]/g, '') }))} className={`${input} w-full min-w-0`} />)}
             </div>
-          ))}
-          <button type="button" onClick={() => setLines((prev) => [...prev, { ...EMPTY }])} disabled={lines.length >= Math.min(12, Math.max(grades.length, 1))} className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-paddy-700 px-4 py-1.5 text-xs font-medium text-paddy-700 disabled:opacity-40">
-            <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add another size
-          </button>
-          <p className="mt-3 text-sm text-ink-700" data-testid="intake-total">
-            {filled.length > 0 && totalBags > 0 ? <>Total: <strong>{totalBags} bag{totalBags === 1 ? '' : 's'}</strong> ({filled.filter((l) => l.paddyGradeId && l.bagCount).map((l) => `${labelOf(l.paddyGradeId)} ${l.bagCount}`).join(', ')})</> : 'Nothing added yet.'}
-          </p>
+          </details>
         </div>
 
         <details className="mt-4 text-sm">

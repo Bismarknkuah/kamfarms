@@ -430,21 +430,67 @@ export class DeliveryReportsService {
    * report) so they are never counted twice. A draft the same person left on these orders the old one-size-at-a-time way is replaced.
    */
   async createDispatch(dto: CreateDispatchDto, actor: AuthenticatedUser) {
-    const ids = dto.lines.map((l) => l.deliveryOrderId);
+    const include = { paddyGrade: true, reports: { select: { id: true, status: true } } } as const;
+    const orderLines = dto.lines.filter((l) => l.deliveryOrderId);
+    const sizeLines = dto.lines.filter((l) => !l.deliveryOrderId);
+    if (sizeLines.some((l) => !l.paddyGradeId)) throw new BadRequestException('Choose the size for every line.');
+    const ids = orderLines.map((l) => l.deliveryOrderId as string);
     if (new Set(ids).size !== ids.length) throw new BadRequestException('The same order is on the list twice. Put all of its bags on one line.');
-    const orders = await this.prisma.deliveryOrder.findMany({ where: { id: { in: ids } }, include: { paddyGrade: true, reports: { select: { id: true, status: true } } } });
-    if (orders.length !== ids.length) throw new NotFoundException('One of the orders was not found.');
-    const byId = new Map(orders.map((o) => [o.id, o]));
-    const first = orders[0];
-    assertScope(actor, 'FARM', first.farmId, 'this farm');
-    if (orders.some((o) => o.farmId !== first.farmId)) throw new BadRequestException('These orders are from different farms: one dispatch leaves one farm.');
-    if (orders.some((o) => o.destinationWarehouseId !== first.destinationWarehouseId)) {
+    const sizeIds = sizeLines.map((l) => l.paddyGradeId as string);
+    if (new Set(sizeIds).size !== sizeIds.length) throw new BadRequestException('A size is on the list twice. Put all of its bags on one line.');
+    const found = ids.length ? await this.prisma.deliveryOrder.findMany({ where: { id: { in: ids } }, include }) : [];
+    if (found.length !== ids.length) throw new NotFoundException('One of the orders was not found.');
+
+    // A size the request did not ask for (or a truck loaded with no request at all) has no order yet: it is made as the truck is loaded, so the
+    // farm manager always has Size 4 and Size 5 in front of them. A size the request already has an order for is that order, never a duplicate.
+    let anchor: any = found[0] ?? null;
+    let siblings: any[] = [];
+    if (sizeLines.length > 0) {
+      const ref = anchor?.requestRef ?? dto.requestRef ?? null;
+      if (ref) siblings = await this.prisma.deliveryOrder.findMany({ where: { requestRef: ref }, include });
+      anchor = anchor ?? siblings[0] ?? null;
+      if (!anchor && !(dto.farmId && dto.destinationWarehouseId)) throw new BadRequestException('Say which warehouse this truck is going to.');
+    }
+    const reused = sizeLines.map((l) => siblings.find((o) => o.paddyGradeId === l.paddyGradeId && !ids.includes(o.id))).filter(Boolean) as any[];
+    const orders: any[] = [...found, ...reused];
+    const byId = new Map<string, any>(orders.map((o) => [o.id, o]));
+    const ctx = {
+      farmId: (anchor?.farmId ?? dto.farmId) as string,
+      destinationWarehouseId: (anchor?.destinationWarehouseId ?? dto.destinationWarehouseId) as string,
+      requestRef: (anchor?.requestRef ?? null) as string | null,
+      requestedDate: anchor?.requestedDate ?? new Date(),
+      priority: (anchor?.priority ?? 'NORMAL') as any,
+    };
+    assertScope(actor, 'FARM', ctx.farmId, 'this farm');
+    if (orders.some((o) => o.farmId !== ctx.farmId)) throw new BadRequestException('These orders are from different farms: one dispatch leaves one farm.');
+    if (orders.some((o) => o.destinationWarehouseId !== ctx.destinationWarehouseId)) {
       throw new BadRequestException('These orders go to different warehouses: one truck goes to one warehouse. Make a separate dispatch for each warehouse.');
     }
     for (const o of orders) {
       if (o.status === 'CANCELLED') throw new BadRequestException(`${o.orderNumber} was cancelled.`);
-      if ((o.reports ?? []).some((r) => IN_FLIGHT.includes(r.status as string))) throw new BadRequestException(`${o.orderNumber} already has a dispatch under way.`);
+      if ((o.reports ?? []).some((r: any) => IN_FLIGHT.includes(r.status as string))) throw new BadRequestException(`${o.orderNumber} already has a dispatch under way.`);
     }
+    // one entry per line, in the order they were entered: an order that exists, or a size that needs one
+    const plan = dto.lines.map((line) => {
+      if (line.deliveryOrderId) return { line, orderId: line.deliveryOrderId as string, grade: null as string | null };
+      const existing = reused.find((o) => o.paddyGradeId === line.paddyGradeId);
+      return existing ? { line, orderId: existing.id as string, grade: null as string | null } : { line, orderId: null as string | null, grade: line.paddyGradeId as string };
+    });
+    const needsOrder = plan.filter((p) => p.orderId === null);
+    if (needsOrder.length > 0) {
+      const farm = await this.prisma.farm.findUnique({ where: { id: ctx.farmId } });
+      if (!farm || !farm.isActive) throw new BadRequestException('Farm not found or inactive.');
+      const wh = await this.prisma.warehouse.findUnique({ where: { id: ctx.destinationWarehouseId } });
+      if (!wh || !wh.isActive) throw new BadRequestException('Destination warehouse not found or inactive.');
+      const labels = await this.prisma.paddyGrade.findMany({ where: { id: { in: needsOrder.map((p) => p.grade as string) } } });
+      if (labels.length !== needsOrder.length) throw new BadRequestException('One of the sizes was not found or is no longer in use.');
+      const have = await this.ledger.getBalancesForLocation('FARM', ctx.farmId);
+      const short = needsOrder
+        .map((p) => ({ label: labels.find((g: any) => g.id === p.grade)?.label ?? 'A size', wanted: p.line.actualBagCount, has: have.find((b: any) => b.paddyGradeId === p.grade)?.bagCount ?? 0 }))
+        .filter((x) => x.has < x.wanted);
+      if (short.length > 0) throw new BadRequestException(`The farm does not have enough bags: ${short.map((x) => `${x.label}: wanted ${x.wanted}, has ${x.has}`).join('; ')}.`);
+    }
+    const orderIds = orders.map((o) => o.id);
 
     const submit = dto.submit !== false;
     const labourCost = dto.labourCost ?? 0;
@@ -456,10 +502,26 @@ export class DeliveryReportsService {
       const dispatchRef = await this.ledger.generateNumber(tx, 'DS', 'dispatch');
       const vehicleId = await this.upsertVehicle(tx, dto.vehiclePlateNumber, dto.vehicleType);
       const driverId = await this.upsertDriver(tx, dto.driverName, dto.driverPhone, dto.driverLicenseNumber);
-      await tx.deliveryReport.updateMany({ where: { deliveryOrderId: { in: ids }, status: 'DRAFT', submittedById: actor.id }, data: { status: 'CANCELLED' } });
+      await tx.deliveryReport.updateMany({ where: { deliveryOrderId: { in: orderIds }, status: 'DRAFT', submittedById: actor.id }, data: { status: 'CANCELLED' } });
+      const created = new Map<unknown, any>();
+      let requestRef = ctx.requestRef;
+      if (needsOrder.length > 0 && !requestRef) requestRef = await this.ledger.generateNumber(tx, 'RQ', 'dispatchRequest');
+      for (const p of needsOrder) {
+        const orderNumber = await this.ledger.generateNumber(tx, 'DO', 'deliveryOrder');
+        const o = await tx.deliveryOrder.create({
+          data: {
+            orderNumber, requestRef, farmId: ctx.farmId, destinationWarehouseId: ctx.destinationWarehouseId, requestedDate: ctx.requestedDate, paddyGradeId: p.grade as string,
+            bagCount: p.line.actualBagCount, totalKg: estimateKg(p.line.actualBagCount), totalKgEstimated: true, priority: ctx.priority, notes: 'Added when the truck was loaded', createdById: actor.id,
+          },
+          include: { paddyGrade: true },
+        });
+        await this.audit.record({ userId: actor.id, action: 'delivery_order.create', entity: 'DeliveryOrder', entityId: o.id, afterValue: { ...o, requestRef } }, tx);
+        created.set(p.line, o);
+      }
       const rows: { id: string }[] = [];
-      for (const [i, line] of dto.lines.entries()) {
-        const order = byId.get(line.deliveryOrderId)!;
+      for (const [i, step] of plan.entries()) {
+        const line = step.line;
+        const order = (step.orderId ? byId.get(step.orderId) : created.get(step.line))!;
         const perBag = Number(order.bagCount) > 0 ? Number(order.totalKg) / Number(order.bagCount) : undefined;
         const actualKgEstimated = line.actualKg === undefined;
         const actualKg = line.actualKg ?? estimateKg(line.actualBagCount, perBag);

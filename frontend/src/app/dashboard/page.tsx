@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DispatchDesk } from '@/components/dispatch/DispatchDesk';
+import { SupplyDesk } from '@/components/supply/SupplyDesk';
 import { DashboardShell } from '@/components/DashboardShell';
 import { hasFinancialVisibility } from '@/lib/nav-items';
 import { YieldPredictionCard } from '@/components/DataEntryKit';
@@ -792,6 +793,7 @@ export default function DashboardPage() {
       {accessToken && (
         <>
           {(isFarmDirector || isFarmManager) && <div className="mb-8" data-testid="dashboard-dispatch-desk"><DispatchDesk accessToken={accessToken} me={me} hasPermission={hasPermission} variant="dashboard" /></div>}
+          {hasPermission('supply.view') && (hasPermission('supply.request') || hasPermission('supply.forward') || hasPermission('supply.fulfil')) && <div className="mb-8" data-testid="dashboard-supply-desk"><SupplyDesk accessToken={accessToken} me={me} hasPermission={hasPermission} variant="dashboard" /></div>}
           {isFinanceDirector && <FinanceDesk accessToken={accessToken} meId={me.id} />}
           {isMdOrCeo && <ReleaseDesk accessToken={accessToken} canApproveDirectorExpenses={hasPermission('finance.approve.director')} />}
           {isMdOrCeo && <OutputFeedbackCard accessToken={accessToken} />}

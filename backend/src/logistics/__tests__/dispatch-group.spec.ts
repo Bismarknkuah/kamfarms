@@ -11,7 +11,7 @@ const order = (id: string, over: Record<string, unknown> = {}) => ({
   bagCount: 100, totalKg: 5200, paddyGrade: { label: id === 'o4' ? 'Size 4' : 'Size 5' }, ...over,
 });
 
-function build(opts: { orders?: Record<string, unknown>[]; preload?: Record<string, unknown>[]; failOnReport?: number; failOnShipment?: number; scopes?: { scopeType: string; scopeId: string | null }[] } = {}) {
+function build(opts: { orders?: Record<string, unknown>[]; preload?: Record<string, unknown>[]; failOnReport?: number; failOnShipment?: number; farmStock?: Record<string, number>; scopes?: { scopeType: string; scopeId: string | null }[] } = {}) {
   let seq = 0, vehicleCalls = 0, driverCalls = 0;
   const orders = opts.orders ?? [order('o4'), order('o5')];
   const reports: Record<string, any>[] = [...(opts.preload ?? [])];
@@ -25,6 +25,7 @@ function build(opts: { orders?: Record<string, unknown>[]; preload?: Record<stri
     },
     shipment: { create: jest.fn(async ({ data }: any) => { if (opts.failOnShipment === shipments.length + 1) throw new Error('shipment table unavailable'); const row = { id: `sh${shipments.length + 1}`, ...data }; shipments.push(row); return row; }) },
     shipmentEvent: { create: jest.fn() },
+    deliveryOrder: { create: jest.fn(async ({ data }: any) => { const row = { id: `new${orders.length + 1}`, status: 'PENDING', reports: [], ...data, paddyGrade: { label: data.paddyGradeId === 'g4' ? 'Size 4' : 'Size 5' } }; orders.push(row); return row; }) },
     vehicle: { upsert: jest.fn(async () => { vehicleCalls++; return { id: 'veh-1' }; }), create: jest.fn(async () => { vehicleCalls++; return { id: 'veh-1' }; }), findFirst: jest.fn(async () => null) },
     driver: { upsert: jest.fn(async () => { driverCalls++; return { id: 'drv-1' }; }), create: jest.fn(async () => { driverCalls++; return { id: 'drv-1' }; }) },
   };
@@ -33,10 +34,13 @@ function build(opts: { orders?: Record<string, unknown>[]; preload?: Record<stri
     deliveryOrder: { findMany: jest.fn(async ({ where }: any) => orders.filter((o: any) => (where.id ? where.id.in.includes(o.id) : where.requestRef ? o.requestRef === where.requestRef : true)).map((o: any) => ({ ...o, reports: reports.filter((r) => r.deliveryOrderId === o.id).map((r) => ({ id: r.id, status: r.status })) }))) },
     deliveryReport: { findMany: jest.fn(async ({ where }: any) => reports.filter((r) => r.dispatchRef === where.dispatchRef).map(withRel)) },
     task: { updateMany: jest.fn() },
+    farm: { findUnique: jest.fn(async () => ({ id: 'farm-a', isActive: true })) },
+    warehouse: { findUnique: jest.fn(async () => ({ id: 'wh-1', isActive: true })) },
+    paddyGrade: { findMany: jest.fn(async ({ where }: any) => [{ id: 'g4', label: 'Size 4' }, { id: 'g5', label: 'Size 5' }].filter((g) => where.id.in.includes(g.id))) },
     warehouseManager: { findMany: jest.fn(async () => [{ userId: 'wm-1' }]) },
     $transaction: jest.fn(async (cb: any) => { const snap = [reports.map((r) => ({ ...r })), shipments.length]; try { return await cb(tx); } catch (err) { reports.splice(0, reports.length, ...(snap[0] as any[])); shipments.length = snap[1] as number; throw err; } }),
   };
-  const ledger = { generateNumber: jest.fn(async (_t: unknown, prefix: string) => `${prefix}-2026-${String(++seq).padStart(6, '0')}`), recordTransaction: jest.fn(), adjustBalance: jest.fn() };
+  const ledger = { generateNumber: jest.fn(async (_t: unknown, prefix: string) => `${prefix}-2026-${String(++seq).padStart(6, '0')}`), recordTransaction: jest.fn(), adjustBalance: jest.fn(), getBalancesForLocation: jest.fn(async () => Object.entries(opts.farmStock ?? { g4: 100, g5: 100 }).map(([paddyGradeId, bagCount]) => ({ paddyGradeId, bagCount }))) };
   const notifications = { notify: jest.fn() };
   const service = new DeliveryReportsService(prisma as any, { record: jest.fn() } as any, ledger as any, notifications as any);
   return { service, prisma, tx, reports, shipments, ledger, notifications, calls: () => ({ vehicleCalls, driverCalls }) };
@@ -193,5 +197,49 @@ describe('submitDispatch / approveDispatch / rejectDispatch: every size together
 
   it('an unknown dispatch is not found', async () => {
     await expect(build().service.approveDispatch('DS-nope', supervisor)).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('both sizes are always there: a size nobody asked for is added as the truck is loaded', () => {
+  it('adds the size the request did not ask for, under the same request, farm and warehouse, as part of the one dispatch', async () => {
+    const { service, reports, tx } = build({ orders: [order('o4')] });
+    const r = await service.createDispatch({ lines: [{ deliveryOrderId: 'o4', actualBagCount: 17 }, { paddyGradeId: 'g5', actualBagCount: 3 }] } as any, manager);
+    expect(tx.deliveryOrder.create).toHaveBeenCalledTimes(1);
+    const made = (tx.deliveryOrder.create.mock.calls[0] as any[])[0].data;
+    expect(made).toMatchObject({ requestRef: 'RQ-1', farmId: 'farm-a', destinationWarehouseId: 'wh-1', paddyGradeId: 'g5', bagCount: 3, totalKgEstimated: true, createdById: 'fm-1' });
+    expect(reports).toHaveLength(2);
+    expect(new Set(reports.map((x) => x.dispatchRef)).size).toBe(1);
+    expect(r.lines.map((l) => [l.gradeLabel, l.bags])).toEqual([['Size 4', 17], ['Size 5', 3]]);
+  });
+
+  it('never makes a duplicate: a size the request already has an order for uses that order', async () => {
+    const { service, reports, tx } = build();
+    await service.createDispatch({ lines: [{ deliveryOrderId: 'o4', actualBagCount: 17 }, { paddyGradeId: 'g5', actualBagCount: 3 }] } as any, manager);
+    expect(tx.deliveryOrder.create).not.toHaveBeenCalled();
+    expect(reports.map((r) => r.deliveryOrderId)).toEqual(['o4', 'o5']);
+  });
+
+  it('loads a truck with NO request at all: it makes the request and an order per size, and the dispatch goes to the supervisor', async () => {
+    const { service, reports, tx } = build({ orders: [] });
+    const r = await service.createDispatch({ farmId: 'farm-a', destinationWarehouseId: 'wh-1', lines: [{ paddyGradeId: 'g4', actualBagCount: 10 }, { paddyGradeId: 'g5', actualBagCount: 5 }] } as any, manager);
+    expect(tx.deliveryOrder.create).toHaveBeenCalledTimes(2);
+    const refs = tx.deliveryOrder.create.mock.calls.map((c: any[]) => c[0].data.requestRef);
+    expect(refs[0]).toMatch(/^RQ-2026-/); expect(refs[1]).toBe(refs[0]);
+    expect(reports).toHaveLength(2);
+    expect(r).toMatchObject({ status: 'SUPERVISOR_REVIEW', totalBags: 15 });
+  });
+
+  it('refuses a size the farm does not hold enough of, naming it, and saves nothing', async () => {
+    const { service, reports, tx } = build({ orders: [order('o4')], farmStock: { g4: 100, g5: 1 } });
+    await expect(service.createDispatch({ lines: [{ deliveryOrderId: 'o4', actualBagCount: 17 }, { paddyGradeId: 'g5', actualBagCount: 3 }] } as any, manager)).rejects.toThrow(/Size 5: wanted 3, has 1/);
+    expect(reports).toHaveLength(0);
+    expect(tx.deliveryOrder.create).not.toHaveBeenCalled();
+  });
+
+  it('needs to know where the truck goes when there is no order to tell it, and a size cannot be listed twice', async () => {
+    const h = build({ orders: [] });
+    await expect(h.service.createDispatch({ lines: [{ paddyGradeId: 'g4', actualBagCount: 10 }] } as any, manager)).rejects.toThrow(/Say which warehouse this truck is going to/);
+    await expect(h.service.createDispatch({ farmId: 'farm-a', destinationWarehouseId: 'wh-1', lines: [{ paddyGradeId: 'g4', actualBagCount: 10 }, { paddyGradeId: 'g4', actualBagCount: 2 }] } as any, manager)).rejects.toThrow(/on the list twice/);
+    await expect(h.service.createDispatch({ farmId: 'farm-a', destinationWarehouseId: 'wh-1', lines: [{ actualBagCount: 2 }] } as any, manager)).rejects.toThrow(/Choose the size for every line/);
   });
 });

@@ -17,6 +17,7 @@ import { MasterDataModule } from './master-data/master-data.module';
 import { InventoryLedgerModule } from './inventory-ledger/inventory-ledger.module';
 import { PaddyModule } from './paddy/paddy.module';
 import { LogisticsModule } from './logistics/logistics.module';
+import { SupplyModule } from './supply/supply.module';
 import { MachinesModule } from './machines/machines.module';
 import { ProductionModule } from './production/production.module';
 import { PackagingModule } from './packaging/packaging.module';
@@ -60,6 +61,7 @@ import { SystemOverviewModule } from './system-overview/system-overview.module';
     MasterDataModule,
     PaddyModule,
     LogisticsModule,
+    SupplyModule,
     MachinesModule,
     ProductionModule,
     PackagingModule,

@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional, OnModuleInit } from '@nestjs/common';
+import { setStandardBagWeightKg } from '../common/constants/bag-weight';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
@@ -59,7 +60,7 @@ function parseNumber(def: SettingDef, v: unknown): number {
 }
 
 @Injectable()
-export class SettingsService {
+export class SettingsService implements OnModuleInit {
   private cache: { at: number; map: Map<string, string> } | null = null;
 
   constructor(
@@ -82,6 +83,20 @@ export class SettingsService {
   async set(key: SettingKey, value: string): Promise<void> {
     await this.prisma.systemSetting.upsert({ where: { key }, update: { value }, create: { key, value } });
     this.cache = null;
+    await this.syncRuntime();
+  }
+
+  /** The bag weight the whole system estimates with follows the "Standard paddy bag weight" setting. Never fails the caller. */
+  private async syncRuntime(): Promise<void> {
+    try {
+      setStandardBagWeightKg(await this.getNumber('paddy.standard_bag_kg'));
+    } catch {
+      /* keep the last known value */
+    }
+  }
+
+  async onModuleInit(): Promise<void> {
+    await this.syncRuntime();
   }
 
   // ----- business rules, read by the services -----
@@ -163,6 +178,7 @@ export class SettingsService {
       }
     }
     this.cache = null;
+    await this.syncRuntime();
     if (changed.length > 0 && this.audit) {
       await this.audit.record({
         userId: actor.id,

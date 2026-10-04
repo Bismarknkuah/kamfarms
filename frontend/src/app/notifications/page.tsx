@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
+import { notificationHref } from '@/lib/links';
 import { DashboardShell } from '@/components/DashboardShell';
 import { notificationsApi, Notification, ApiError } from '@/lib/api-client';
 
@@ -58,6 +59,7 @@ export default function NotificationsPage() {
                 <p className="text-sm font-medium text-ink-900">{n.title}</p>
                 <p className="mt-0.5 text-sm text-ink-500">{n.body}</p>
                 <p className="mt-1 text-xs text-ink-500">{new Date(n.createdAt).toLocaleString()}</p>
+                {notificationHref(n) && <a href={notificationHref(n) as string} data-testid="open-notification" onClick={() => { if (!n.isRead) onMarkRead(n.id); }} className="mt-2 inline-block rounded-full bg-paddy-900 px-6 py-2 text-sm font-medium text-rice-50">Open</a>}
               </div>
               {!n.isRead && (
                 <button

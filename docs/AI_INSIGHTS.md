@@ -69,3 +69,28 @@ Adjustable in System settings, **AI predictions**: the tolerance and how quickly
 - **Claude, for open-ended questions (optional).** Set `ANTHROPIC_API_KEY` on the API service (and optionally `ANTHROPIC_MODEL`, default `claude-sonnet-5-5`). Claude then decides which lookups to make and phrases the answer; it never touches the database and only receives what a lookup returns for that person. If the key is missing, Claude is unreachable, or a person has asked 40 questions in an hour, the built-in answerer answers instead.
 - **What Claude is sent.** The question, the last few turns of the conversation, and the figures the lookups return (which can include milling center, farm and customer names). It is not sent anything the lookups did not return.
 - **Everything is recorded.** Every question is written to the audit log with who asked it, which engine answered and which lookups it used.
+
+## Three ways to ask: power, paddy, or the rice recovered
+The **Work it out** calculator on the AI Insights page works from whatever you know, and fills in the rest from what your own approved milling
+runs have taught:
+
+| You know | You get |
+|---|---|
+| **The paddy sent to the mill** (e.g. 5 bags of Size 4) | the power it should use, and the packaged rice, broken rice and hull it should give, in bags and kg |
+| **The rice recovered, or wanted** (e.g. 100 bags) | the paddy to send, the power it should take, and the broken rice and hull that come with it |
+| **The power used** (kWh on the meter) | the paddy it mills and the packaged rice, broken rice and hull it should give |
+
+Pick **Based on** to narrow it to one grade of paddy (Size 4, Size 5 ...) or one milling center. Each grade and center learns from its own runs, so
+"5 bags of Size 4" is answered from Size 4 history, not the company average. With fewer than 3 approved runs that recorded their meter, the page
+uses a clearly labelled industry benchmark instead and says so; confidence reads Low (under 4 runs), Medium (4 to 9) or High (10 or more).
+It trains itself: every approved milling run teaches it, and the feedback cards on this page show how close each run came to what was expected.
+
+**Who can use it:** the MD, CEO, Operations Manager and the Administrator (company-wide); Warehouse Supervisors see their own warehouses' runs.
+
+**Typing the question works too.** In the question box, "I milled 5 bags size 4, what should it give?", "how much paddy and power do I need for
+100 bags of rice?" and "what will 200 kWh give?" are read for their numbers and answered from the same figures (with Claude connected it
+understands any wording; without, the built-in answerer reads these patterns).
+
+Server routes: `POST /ai/predict-from-paddy` (`{bags}`), `POST /ai/predict-from-rice` (`{bags}` or `{kg}`) and `POST /ai/predict-from-energy` (`{kwh}`),
+each with optional `paddyGradeId` and `millingCenterId`, all requiring `ai.use`. Browser tests: `e2e/t_ai.py` checks the page against the server's
+real maths for every direction.

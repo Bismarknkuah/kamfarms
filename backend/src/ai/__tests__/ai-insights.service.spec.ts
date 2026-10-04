@@ -216,3 +216,52 @@ describe('AiInsightsService.feedback: did each run give what was expected?', () 
     expect(prisma.productionRecord.findMany.mock.calls[0][0].where.massBalanceFlag).toBe(false);
   });
 });
+
+describe('AiInsightsService.predictFromRice: from the rice recovered to the paddy, the power and the by-products', () => {
+  it('says how much paddy to send, the power it takes, and the broken rice and hull that come with it', async () => {
+    const out = await build(rows(12)).service.predictFromRice({ bags: 54.4 }, MD);
+    expect(out.outputs).toMatchObject({ kwh: 100, paddyBags: 80, riceBags: 54.4, brokenBags: 9.6, hullBags: 36 });
+    expect(out.basis).toBe('history');
+    expect(out.confidence).toBe('high');
+    expect(out.jurisdiction).toBe('Whole company');
+  });
+
+  it('takes the rice as a weight in kg just as well', async () => {
+    const out = await build(rows(12)).service.predictFromRice({ kg: 2720 }, MD);
+    expect(out.outputs).toMatchObject({ kwh: 100, paddyBags: 80 });
+  });
+
+  it('needs the rice, in bags or kg', async () => {
+    await expect(build(rows(12)).service.predictFromRice({}, MD)).rejects.toThrow(/Give either the bags of packaged rice or its weight/);
+  });
+
+  it('is the same answer as milling that paddy: bags in, power out, then the rice back in', async () => {
+    const { service } = build(rows(12));
+    const forward = await service.predictFromPaddy({ bags: 5 }, MD);
+    const back = await service.predictFromRice({ kg: forward.outputs.riceKg }, MD);
+    expect(back.outputs.paddyBags).toBeCloseTo(5, 1);
+    expect(back.outputs.kwh).toBeCloseTo(forward.outputs.kwh, 1);
+  });
+
+  it('narrows to the grade and milling center asked for, and refuses one outside the asker\'s jurisdiction', async () => {
+    const { service, prisma } = build(rows(12));
+    await service.predictFromRice({ bags: 10, paddyGradeId: 'g1', millingCenterId: 'c1' }, MD);
+    expect(prisma.productionRecord.findMany.mock.calls[0][0].where).toMatchObject({ paddyGradeId: 'g1', millingCenterId: 'c1' });
+    prisma.millingCenter.findUnique.mockResolvedValue({ warehouseId: 'wh-OTHER' });
+    await expect(service.predictFromRice({ bags: 1, millingCenterId: 'c-other' }, OPS(['wh-1']))).rejects.toThrow(ForbiddenException);
+  });
+
+  it('is open to the Operations Manager (company-wide scope) and refused to someone who cannot see milling figures', async () => {
+    const ops = actorOf('OPERATIONS_MANAGER', [{ scopeType: 'GLOBAL', scopeId: null }]);
+    await expect(build(rows(12)).service.predictFromRice({ bags: 10 }, ops)).resolves.toMatchObject({ jurisdiction: 'Whole company' });
+    const noMilling = actorOf('FARM_DIRECTOR', [{ scopeType: 'GLOBAL', scopeId: null }], ['ai.use']);
+    await expect(build(rows(12)).service.predictFromRice({ bags: 1 }, noMilling)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('says plainly when it is only a benchmark, with too few runs to learn from', async () => {
+    const out = await build(rows(2)).service.predictFromRice({ bags: 10 }, MD);
+    expect(out.basis).toBe('benchmark');
+    expect(out.confidence).toBe('low');
+    expect(out.assumptions).toMatch(/benchmark/i);
+  });
+});

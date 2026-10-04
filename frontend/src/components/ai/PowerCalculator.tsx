@@ -3,12 +3,12 @@
 import { useMemo, useState } from 'react';
 import { Info, Layers, Package, PackageOpen, TriangleAlert, Wheat, Zap } from 'lucide-react';
 import type { AiInsights } from '@/lib/api-client';
-import { formatBags, formatKg, formatRange, mixOf, outputsFromEnergy, outputsFromPaddyBags } from '@/lib/ai-yield';
+import { formatBags, formatKg, formatRange, mixOf, outputsFromEnergy, outputsFromPaddyBags, outputsFromRiceBags } from '@/lib/ai-yield';
 
 type Data = Extract<AiInsights, { available: true }>;
-type Mode = 'power' | 'paddy';
+type Mode = 'power' | 'paddy' | 'rice';
 
-const PRESETS: Record<Mode, number[]> = { power: [1, 10, 100, 500, 1000], paddy: [10, 50, 100, 500, 1000] };
+const PRESETS: Record<Mode, number[]> = { power: [1, 10, 100, 500, 1000], paddy: [5, 10, 50, 100, 500], rice: [10, 50, 100, 500, 1000] };
 const CONFIDENCE = {
   high: { label: 'High confidence', cls: 'bg-emerald-100 text-emerald-900' },
   medium: { label: 'Medium confidence', cls: 'bg-amber-100 text-amber-900' },
@@ -35,10 +35,10 @@ function OutputCard({ id, title, icon: Icon, tone, bags, kg, range, bagKg }: { i
   );
 }
 
-/** Power in, bags out; or paddy in, power and bags out. Instant: the page only multiplies the rates the server worked out. */
+/** Power in, bags out; paddy in, power and bags out; or the rice recovered (or wanted) in, the paddy, power, broken rice and hull out. Instant: the page only multiplies the rates the server worked out. */
 export function PowerCalculator({ data }: { data: Data }) {
   const [mode, setMode] = useState<Mode>('power');
-  const [amounts, setAmounts] = useState<Record<Mode, string>>({ power: '1', paddy: '100' });
+  const [amounts, setAmounts] = useState<Record<Mode, string>>({ power: '1', paddy: '100', rice: '50' });
   const [scope, setScope] = useState('all');
 
   const { rates, note, scopeLabel } = useMemo(() => {
@@ -55,7 +55,7 @@ export function PowerCalculator({ data }: { data: Data }) {
 
   const amount = Number(amounts[mode]);
   const valid = Number.isFinite(amount) && amount > 0;
-  const out = valid ? (mode === 'power' ? outputsFromEnergy(rates, amount, data.bagSizes) : outputsFromPaddyBags(rates, amount, data.bagSizes)) : null;
+  const out = valid ? (mode === 'power' ? outputsFromEnergy(rates, amount, data.bagSizes) : mode === 'paddy' ? outputsFromPaddyBags(rates, amount, data.bagSizes) : outputsFromRiceBags(rates, amount, data.bagSizes)) : null;
   const mix = mixOf(rates);
   const conf = CONFIDENCE[rates.confidence];
   const range = out?.typicalBags;
@@ -65,10 +65,10 @@ export function PowerCalculator({ data }: { data: Data }) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="font-display text-2xl font-medium text-paddy-900">Work it out</h2>
-          <p className="mt-0.5 text-sm text-ink-500">Type an amount and see the bags it should give. It changes as you type.</p>
+          <p className="mt-0.5 text-sm text-ink-500">Say what you know (the power, the paddy sent to the mill, or the rice recovered) and see the rest. It changes as you type.</p>
         </div>
         <div role="tablist" aria-label="What do you know?" className="inline-flex rounded-full bg-rice-50 p-1 text-sm font-medium">
-          {([['power', 'I know the power used', Zap], ['paddy', 'I know the paddy', Wheat]] as const).map(([id, label, Icon]) => (
+          {([['power', 'I know the power used', Zap], ['paddy', 'I know the paddy', Wheat], ['rice', 'I know the rice recovered', Package]] as const).map(([id, label, Icon]) => (
             <button key={id} type="button" role="tab" aria-selected={mode === id} data-testid={`mode-${id}`} onClick={() => setMode(id)}
               className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 transition ${mode === id ? 'bg-paddy-900 text-rice-50 shadow' : 'text-ink-700 hover:text-paddy-900'}`}>
               <Icon className="h-4 w-4" aria-hidden="true" /> {label}
@@ -80,14 +80,14 @@ export function PowerCalculator({ data }: { data: Data }) {
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,330px)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-4 rounded-2xl bg-rice-50 p-5">
           <div>
-            <label htmlFor="calc-amount" className="text-xs font-semibold uppercase tracking-wide text-ink-500">{mode === 'power' ? 'Electricity used' : 'Paddy to be milled'}</label>
+            <label htmlFor="calc-amount" className="text-xs font-semibold uppercase tracking-wide text-ink-500">{mode === 'power' ? 'Electricity used' : mode === 'paddy' ? 'Paddy to be milled' : 'Packaged rice recovered, or wanted'}</label>
             <div className="mt-1.5 flex items-stretch overflow-hidden rounded-xl border-2 border-paddy-100 bg-white focus-within:border-paddy-500">
               <input id="calc-amount" data-testid="calc-input" inputMode="decimal" autoComplete="off" value={amounts[mode]}
                 onChange={(e) => setAmounts((a) => ({ ...a, [mode]: e.target.value.replace(/[^0-9.]/g, '') }))}
                 size={1} className="min-w-0 flex-1 bg-transparent px-4 py-3 font-display text-3xl font-medium text-paddy-900 outline-none" />
               <span className="grid place-items-center bg-paddy-50 px-4 text-sm font-semibold text-paddy-700">{mode === 'power' ? 'kWh' : 'bags'}</span>
             </div>
-            <p className="mt-1.5 text-xs text-ink-500">{mode === 'power' ? 'kWh is the unit on the electricity meter (kilowatt-hours).' : `One bag of paddy is ${data.bagSizes.paddyKg} kg.`}</p>
+            <p className="mt-1.5 text-xs text-ink-500">{mode === 'power' ? 'kWh is the unit on the electricity meter (kilowatt-hours).' : mode === 'paddy' ? `One bag of paddy is ${data.bagSizes.paddyKg} kg.` : `One bag of packaged rice is ${data.bagSizes.riceKg} kg${valid ? `, so ${amount.toLocaleString('en-US')} bags is ${formatKg(amount * data.bagSizes.riceKg)}` : ''}.`}</p>
           </div>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Quick amounts">
             {PRESETS[mode].map((p) => (
@@ -120,8 +120,10 @@ export function PowerCalculator({ data }: { data: Data }) {
               <p className="text-sm text-ink-700" data-testid="calc-headline">
                 {mode === 'power' ? (
                   <><strong className="text-paddy-900">{amount.toLocaleString('en-US')} kWh</strong> mills about <strong data-testid="calc-paddy-bags" className="text-paddy-900">{formatBags(out.paddyBags)} bags</strong> of paddy ({formatKg(out.paddyKg)}) and should give</>
-                ) : (
+                ) : mode === 'paddy' ? (
                   <><strong className="text-paddy-900">{amount.toLocaleString('en-US')} bags</strong> of paddy needs about <strong data-testid="calc-kwh" className="text-paddy-900">{formatBags(out.kwh)} kWh</strong> and should give</>
+                ) : (
+                  <><strong className="text-paddy-900">{amount.toLocaleString('en-US')} bags</strong> of packaged rice needs about <strong data-testid="calc-paddy-bags" className="text-paddy-900">{formatBags(out.paddyBags)} bags</strong> of paddy ({formatKg(out.paddyKg)}) and about <strong data-testid="calc-kwh" className="text-paddy-900">{formatBags(out.kwh)} kWh</strong> of power, and should give</>
                 )}
               </p>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">

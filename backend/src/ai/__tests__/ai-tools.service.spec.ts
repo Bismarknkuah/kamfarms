@@ -120,6 +120,23 @@ describe('the assistant\'s tools', () => {
       expect((await service.run('power_yield', { milling_center: 'Mill A' }, MD)).summary).toContain('for Mill A, 1 kWh of power mills about 40.0 kg of paddy and should give 0.58 bags');
       expect((await service.run('power_yield', { milling_center: 'Mill Q' }, MD)).ok).toBe(false);
     });
+    it('answers "I milled 5 bags of Size 4": the power it took, and the rice, broken rice and hull it should give', async () => {
+      const r = await build().service.run('power_yield', { paddy_bags: 80, grade: 'Size 4' }, MD);
+      // Size 4 has its own history in this fixture (a better recovery than the company as a whole), so its answer differs from the company-wide 54.4 bags.
+      expect(r.summary).toMatch(/^80\.0 bags of paddy should take about 100 kWh of power and give 56\.0 bags of packaged rice \(2,800 kg\), 8\.00 bags of broken rice \(400 kg\) and 34\.0 bags of hull \(680 kg\)\./);
+      expect(r.summary).toContain('for grade Size 4');
+    });
+    it('answers "how much paddy and power for 100 bags of rice?"', async () => {
+      const r = await build().service.run('power_yield', { rice_bags: 54.4 }, MD);
+      expect(r.summary).toMatch(/^54\.4 bags of packaged rice takes about 80\.0 bags of paddy \(4,000 kg\) and about 100 kWh of power, and comes with 9\.60 bags of broken rice \(480 kg\) and 36\.0 bags of hull \(720 kg\)\./);
+    });
+    it('answers "what will 100 kWh give?"', async () => {
+      const r = await build().service.run('power_yield', { kwh: 100 }, MD);
+      expect(r.summary).toMatch(/^100 kWh mills about 80\.0 bags of paddy and should give 54\.4 bags of packaged rice/);
+    });
+    it('with no number it still says what 1 kWh gives, as before', async () => {
+      expect((await build().service.run('power_yield', {}, MD)).summary).toMatch(/^for the whole company, 1 kWh/);
+    });
     it('is refused to a role that cannot see milling figures', async () => {
       expect(await build().service.run('power_yield', {}, scoped(['ai.use']))).toMatchObject({ denied: true });
     });

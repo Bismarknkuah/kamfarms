@@ -1,4 +1,4 @@
-import { BagSizes, COLD_START, MIN_RUNS, RunSample, benchmarkRates, confidenceOf, describeBasis, outputsFromEnergy, outputsFromPaddy, ratesFromRuns } from '../ai-yield.util';
+import { BagSizes, COLD_START, MIN_RUNS, RunSample, benchmarkRates, confidenceOf, describeBasis, outputsFromEnergy, outputsFromPaddy, outputsFromRice, ratesFromRuns } from '../ai-yield.util';
 
 const bags: BagSizes = { paddyKg: 50, riceKg: 50, brokenKg: 50, hullKg: 20, hullBasis: 'setting' };
 // 1,000 kg of paddy used 25 kWh and gave 680 rice, 120 broken, 180 hull, 20 waste: 40 kg of paddy per kWh.
@@ -111,5 +111,57 @@ describe('describeBasis', () => {
     expect(t).toMatch(/Only 1 approved milling run with a power reading exist for Warehouse 1/);
     expect(t).toMatch(/not your company's own data/);
     expect(describeBasis(benchmarkRates(0))).toMatch(/No approved milling runs/);
+  });
+});
+
+describe('outputsFromRice: from the rice recovered (or wanted) to the paddy, the power and the by-products', () => {
+  const rates = ratesFromRuns(runs(12)); // 1 kWh: 40 kg paddy, 27.2 kg rice, 4.8 kg broken, 7.2 kg hull
+
+  it('says how much paddy to send, how much power it takes, and the broken rice and hull that come with it', () => {
+    const o = outputsFromRice(rates, 2720, bags); // 54.4 bags of 50 kg
+    expect(o.kwh).toBe(100);
+    expect(o.paddyKg).toBe(4000);
+    expect(o.paddyBags).toBe(80);
+    expect(o.riceKg).toBe(2720);
+    expect(o.riceBags).toBe(54.4);
+    expect(o.brokenBags).toBe(9.6);
+    expect(o.hullBags).toBe(36);
+  });
+
+  it('is the exact reverse of paddy in: milling those bags and asking for the rice they gave lands on the same paddy and power', () => {
+    for (const paddyKg of [250, 1000, 4000, 123456]) {
+      const forward = outputsFromPaddy(rates, paddyKg, bags);
+      const back = outputsFromRice(rates, forward.riceKg, bags);
+      expect(back.paddyKg).toBeCloseTo(paddyKg, 0);
+      expect(back.kwh).toBeCloseTo(forward.kwh, 1);
+      expect(back.hullKg).toBeCloseTo(forward.hullKg, 0);
+    }
+  });
+
+  it('agrees with the power direction too: the power that rice took gives that rice back', () => {
+    const o = outputsFromRice(rates, 680, bags);
+    const again = outputsFromEnergy(rates, o.kwh, bags);
+    expect(again.riceKg).toBeCloseTo(680, 1);
+    expect(again.paddyKg).toBeCloseTo(o.paddyKg, 1);
+  });
+
+  it('scales in a straight line: double the rice, double everything else', () => {
+    const one = outputsFromRice(rates, 500, bags), two = outputsFromRice(rates, 1000, bags);
+    expect(two.kwh).toBeCloseTo(one.kwh * 2, 2);
+    expect(two.paddyKg).toBeCloseTo(one.paddyKg * 2, 2);
+    expect(two.hullKg).toBeCloseTo(one.hullKg * 2, 2);
+  });
+
+  it('works on the benchmark too, and carries no range for it', () => {
+    const o = outputsFromRice(benchmarkRates(), 680, bags);
+    expect(o.paddyKg).toBeCloseTo(1000, 0); // 68 percent recovery
+    expect(o.typicalBags).toBeNull();
+  });
+
+  it('never divides by zero if the rice rate is somehow zero: it says nothing is needed rather than returning Infinity', () => {
+    const odd = { ...rates, perKwh: { ...rates.perKwh, riceKg: 0 } };
+    const o = outputsFromRice(odd, 500, bags);
+    expect(o.kwh).toBe(0);
+    expect(Number.isFinite(o.paddyKg)).toBe(true);
   });
 });

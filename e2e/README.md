@@ -1,6 +1,6 @@
 # Browser tests for the sales chain and the approval screens
 
-181 checks (74 + 76 + 31) that drive the real website in a real browser, one signed-in browser per role (Sales Officer, Finance Director, MD,
+222 checks (74 + 76 + 31 + 41) that drive the real website in a real browser, one signed-in browser per role (Sales Officer, Finance Director, MD,
 Warehouse Supervisor, Warehouse Managers, Administrator).
 
 They run against `mock-api.js`, a small stand-in for the API. It is **not** the real database, but it reuses the real backend code for the parts that
@@ -19,6 +19,7 @@ cd frontend && NEXT_PUBLIC_API_URL=http://localhost:4000/api npx next build && n
 python3 e2e/t_sales_chain.py     # the whole chain, receipts, isolation, tracking          (74)
 python3 e2e/t_modules.py         # Expenses, Paddy, Production, Deliveries, My Office       (76)
 python3 e2e/t_extras.py          # progress bar, slow flag, every dashboard desk, phone     (31)
+python3 e2e/t_ai.py              # AI Insights: three directions vs the real server maths      (41)
 ```
 Each script exits non-zero if any check fails. `POST http://localhost:4000/__reset` restores the seed data between runs.
 If the build cannot reach Google Fonts (an offline machine), build with a temporary stand-in for the two `next/font/google` fonts in

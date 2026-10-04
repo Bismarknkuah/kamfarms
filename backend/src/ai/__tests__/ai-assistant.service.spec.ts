@@ -45,6 +45,41 @@ describe('AiAssistantService', () => {
     return { service: new AiAssistantService(prisma as any, reports, receivables, insights, tools as any, agent as any, audit as any), prisma, reports, receivables, insights, tools, agent, audit };
   }
 
+  describe('a question with numbers in it ("I milled 5 bags of Size 4"), when Claude is not connected', () => {
+    it('hands the numbers to the power lookup and answers with what it says', async () => {
+      const { service, tools } = buildService();
+      const r = await service.ask({ question: 'I milled 5 bags size 4, what should it give?' }, MD);
+      expect(tools.run).toHaveBeenCalledWith('power_yield', { paddy_bags: 5, grade: 'size 4' }, MD);
+      expect(r.answer).toBe('TOOL-SUMMARY');
+      expect(r.engine).toBe('built-in');
+      expect(r.toolsUsed).toEqual([{ name: 'power_yield', label: expect.any(String), period: expect.any(String) }]);
+      expect(r.assumptions).toMatch(/benchmark/);
+    });
+
+    it('works for the rice wanted and for an amount of power', async () => {
+      const { service, tools } = buildService();
+      await service.ask({ question: 'how much paddy and power do I need for 100 bags of rice?' }, MD);
+      expect(tools.run).toHaveBeenLastCalledWith('power_yield', { rice_bags: 100 }, MD);
+      await service.ask({ question: 'what will 200 kWh give?' }, MD);
+      expect(tools.run).toHaveBeenLastCalledWith('power_yield', { kwh: 200 }, MD);
+    });
+
+    it('is open to the Operations Manager and says so plainly to a role that cannot see milling figures', async () => {
+      const ops = actorOf('OPERATIONS_MANAGER', GLOBAL, ['milling.view', 'ai.use']);
+      const { service, tools } = buildService();
+      expect((await service.ask({ question: 'I milled 5 bags size 4, what should it give?' }, ops)).answer).toBe('TOOL-SUMMARY');
+      tools.run.mockResolvedValueOnce({ ok: false, denied: true, summary: 'no', source: 'N/A', period: 'N/A', confidencePercent: 0 } as any);
+      const refused = await service.ask({ question: 'I milled 5 bags size 4, what should it give?' }, actorOf('SALES_OFFICER', GLOBAL, ['ai.use']));
+      expect(refused.answer).toMatch(/does not include milling figures/);
+    });
+
+    it('leaves an ordinary question with a number in it to the usual answerer', async () => {
+      const { service, tools } = buildService();
+      await service.ask({ question: 'What is the current paddy stock?' }, MD);
+      expect(tools.run).not.toHaveBeenCalledWith('power_yield', expect.anything(), expect.anything());
+    });
+  });
+
   describe('the whole company (MD, CEO)', () => {
     it('answers paddy stock company-wide, and says whose activities it covers', async () => {
       const { service, reports } = buildService();

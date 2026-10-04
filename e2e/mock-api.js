@@ -38,7 +38,9 @@ const USERS = {
   sales1: { id: 'u-sales1', email: 'sales.1@kam.local', firstName: 'Nana', lastName: 'Yeboah', role: 'SALES_OFFICER', scopes: GLOBAL, perms: ['dashboard.view', 'sales.create', 'customer.manage', 'payment.create', 'reports.view', 'reports.export', 'messages.send', 'tasks.complete'] },
   sales2: { id: 'u-sales2', email: 'sales.2@kam.local', firstName: 'Akosua', lastName: 'Frimpong', role: 'SALES_OFFICER', scopes: GLOBAL, perms: ['dashboard.view', 'sales.create', 'customer.manage', 'payment.create', 'reports.view', 'reports.export', 'messages.send', 'tasks.complete'] },
   fd: { id: 'u-fd', email: 'financedirector@kam.local', firstName: 'Kwesi', lastName: 'Appiah', role: 'FINANCE_DIRECTOR', scopes: GLOBAL, perms: ['dashboard.view', 'sales.approve', 'sales.view', 'finance.view', 'finance.approve', 'expense.view', 'payment.verify'] },
-  md: { id: 'u-md', email: 'md@kam.local', firstName: 'Kwame', lastName: 'Asante', role: 'MD', scopes: GLOBAL, perms: ['dashboard.view', 'sales.release', 'sales.view', 'finance.view', 'finance.approve.director'] },
+  md: { id: 'u-md', email: 'md@kam.local', firstName: 'Kwame', lastName: 'Asante', role: 'MD', scopes: GLOBAL, perms: ['dashboard.view', 'sales.release', 'sales.view', 'finance.view', 'finance.approve.director', 'ai.view', 'ai.use', 'milling.view'] },
+  ceo: { id: 'u-ceo', email: 'ceo@kam.local', firstName: 'Ama', lastName: 'Owusu', role: 'CEO', scopes: GLOBAL, perms: ['dashboard.view', 'sales.release', 'sales.view', 'finance.view', 'ai.view', 'ai.use', 'milling.view'] },
+  ops: { id: 'u-ops', email: 'operationsmanager.1@kam.local', firstName: 'Kojo', lastName: 'Antwi', role: 'OPERATIONS_MANAGER', scopes: GLOBAL, perms: ['dashboard.view', 'milling.view', 'production.approve', 'reports.view', 'ai.view', 'ai.use'] },
   sup: { id: 'u-sup', email: 'warehousesupervisor@kam.local', firstName: 'Efua', lastName: 'Darko', role: 'WAREHOUSE_SUPERVISOR', scopes: GLOBAL, perms: ['dashboard.view', 'sales.assign', 'sales.fulfill', 'warehouse.view'] },
   wm1: { id: 'u-wm1', email: 'warehousemanager.1@kam.local', firstName: 'Kwabena', lastName: 'Adjei', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH1 }], perms: ['dashboard.view', 'sales.fulfill', 'warehouse.view'] },
   wm2: { id: 'u-wm2', email: 'warehousemanager.2@kam.local', firstName: 'Abena', lastName: 'Gyasi', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH2 }], perms: ['dashboard.view', 'sales.fulfill', 'warehouse.view'] },
@@ -222,6 +224,49 @@ app.get('/api/reports/inventory-summary', (req, res) => ok(res, { paddy: { farmK
 app.get('/api/ai/feedback', (req, res) => ok(res, { available: false, reason: 'Not enough milling runs yet.', jurisdiction: { companyWide: true, label: 'The whole company', farms: [], warehouses: [] } }));
 app.get('/api/insights/watchlist', (req, res) => ok(res, { generatedAt: new Date().toISOString(), windowDays: 30, items: [], summary: { total: 0 }, findings: [], places: [] }));
 app.get('/api/users', (req, res) => ok(res, { items: [], total: 0, page: 1, pageSize: 20 }));
+
+// ---- the AI page: served from the REAL server yield maths, with fixture milling runs, so the page can be checked against the real numbers ----
+const Y = require(B + '/ai/ai-yield.util');
+const { parseYieldQuestion } = require(B + '/ai/ai-question.util');
+const BAGS = { paddyKg: 80, riceKg: 50, brokenKg: 50, hullKg: 20, hullBasis: 'setting' };
+const sample = (i, paddyKg, kwh, rice, broken, hull, waste) => ({ paddyKg: paddyKg + (i % 3) * 8, energyKwh: kwh + (i % 2) * 0.4, riceKg: rice + (i % 3) * 4, brokenKg: broken + (i % 2), hullKg: hull + (i % 3), wasteKg: waste });
+const RUNS = [
+  ...Array.from({ length: 6 }, (_, i) => ({ grade: 'g4', center: 'c1', s: sample(i, 400, 11, 272, 48, 72, 8) })),
+  ...Array.from({ length: 2 }, (_, i) => ({ grade: 'g4', center: 'c2', s: sample(i, 400, 12, 266, 50, 74, 10) })),
+  ...Array.from({ length: 4 }, (_, i) => ({ grade: 'g5', center: 'c2', s: sample(i, 800, 24, 520, 100, 160, 20) })),
+  ...Array.from({ length: 2 }, (_, i) => ({ grade: 'g6', center: 'c2', s: sample(i, 600, 18, 380, 80, 120, 20) })),
+];
+const GRADES = { g4: 'Size 4', g5: 'Size 5', g6: 'Size 6' }, CENTERS = { c1: 'Tamale Mill', c2: 'Kumasi Mill' };
+const ratesOf = (rows) => Y.ratesFromRuns(rows.map((r) => r.s), { halfLifeRuns: 40 });
+const scopeRates = (scope) => {
+  if (scope === 'all') return { rates: ratesOf(RUNS), label: 'the whole company' };
+  const [kind, name] = scope.split(':');
+  const id = Object.entries(kind === 'grade' ? GRADES : CENTERS).find(([, v]) => v === name)[0];
+  const rows = RUNS.filter((r) => (kind === 'grade' ? r.grade : r.center) === id);
+  return { rates: ratesOf(rows), label: kind === 'grade' ? `grade ${name}` : name };
+};
+app.get('/api/ai/insights', (req, res) => {
+  const k = who(req); if (!k || !USERS[k].perms.includes('ai.view')) return fail(res, 403, 'You do not have permission to do this.');
+  const overall = ratesOf(RUNS);
+  ok(res, { available: true, generatedAt: new Date().toISOString(), jurisdiction: { companyWide: true, label: 'Whole company', farms: [], warehouses: [] }, bagSizes: BAGS,
+    window: { runs: RUNS.length, from: '2026-08-01T00:00:00.000Z', to: '2026-09-30T00:00:00.000Z' }, overall, overallNote: Y.describeBasis(overall, 'the whole company'),
+    byGrade: Object.entries(GRADES).map(([id, label]) => { const rates = ratesOf(RUNS.filter((r) => r.grade === id)); return { gradeId: id, code: label.toUpperCase().replace(' ', '_'), label, rates, note: Y.describeBasis(rates, `grade ${label}`) }; }),
+    byCenter: Object.entries(CENTERS).map(([id, name]) => { const rates = ratesOf(RUNS.filter((r) => r.center === id)); return { centerId: id, code: name.slice(0, 3).toUpperCase(), name, rates, note: Y.describeBasis(rates, name) }; }) });
+});
+// what the REAL server maths says, for the test to compare the page against
+app.get('/__expect', (req, res) => {
+  const { mode, amount, scope } = req.query; const { rates } = scopeRates(scope); const a = Number(amount);
+  const o = mode === 'power' ? Y.outputsFromEnergy(rates, a, BAGS) : mode === 'paddy' ? Y.outputsFromPaddy(rates, a * BAGS.paddyKg, BAGS) : Y.outputsFromRice(rates, a * BAGS.riceKg, BAGS);
+  res.json({ ...o, basis: rates.basis, runs: rates.runs, confidence: rates.confidence });
+});
+// the question box, using the REAL number reader and the REAL maths
+app.post('/api/ai/assistant/ask', (req, res) => {
+  const q = String((req.body || {}).question || ''); const n = parseYieldQuestion(q);
+  if (!n) return ok(res, { answer: 'I could not tell what to calculate from that.', sourceData: 'N/A', dateRange: 'N/A', confidencePercent: 0, assumptions: 'None.', jurisdiction: 'Whole company', engine: 'built-in' });
+  const { rates, label } = scopeRates(n.grade ? `grade:${n.grade.replace('size', 'Size')}` : 'all'); const f = (x) => (Math.round(x * 10) / 10).toString();
+  const o = n.paddy_bags ? Y.outputsFromPaddy(rates, n.paddy_bags * BAGS.paddyKg, BAGS) : n.rice_bags ? Y.outputsFromRice(rates, n.rice_bags * BAGS.riceKg, BAGS) : Y.outputsFromEnergy(rates, n.kwh, BAGS);
+  ok(res, { answer: `For ${label}: ${f(o.paddyBags)} bags of paddy, ${f(o.kwh)} kWh, ${f(o.riceBags)} bags of packaged rice, ${f(o.brokenBags)} bags of broken rice and ${f(o.hullBags)} bags of hull.`, sourceData: 'Approved milling runs', dateRange: '2026-08-01 to 2026-09-30', confidencePercent: 65, assumptions: 'Test stand-in.', jurisdiction: 'Whole company', engine: 'built-in', toolsUsed: [{ name: 'power_yield', label: 'What power gives', period: '2026-08-01 to 2026-09-30' }], _parsed: n });
+});
 // ---- anything else the pages ask for: empty, so they load ----
 app.get('/api/*', (req, res) => ok(res, []));
 app.all('/api/*', (req, res) => ok(res, {}));

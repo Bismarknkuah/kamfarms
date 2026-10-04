@@ -42,6 +42,15 @@ export function outputsFromPaddyBags(rates: AiYieldRates, paddyBags: number, bag
   return outputsFromEnergy(rates, (paddyBags * bags.paddyKg) / rates.perKwh.paddyKg, bags);
 }
 
+/**
+ * Packaged rice (in bags) recovered or wanted: the paddy to send, the power it should take, and the broken rice and hull that come with
+ * it. The same rates as the other two directions, read the other way round (same arithmetic as outputsFromRice on the server).
+ */
+export function outputsFromRiceBags(rates: AiYieldRates, riceBags: number, bags: AiBagSizes): AiOutputs {
+  const riceKgPerKwh = rates.perKwh.riceKg;
+  return outputsFromEnergy(rates, riceKgPerKwh > 0 ? (riceBags * bags.riceKg) / riceKgPerKwh : 0, bags);
+}
+
 /** Bags to a readable figure: two decimals under 10, one under 100, whole numbers above. */
 export function formatBags(n: number): string {
   if (!Number.isFinite(n)) return '-';

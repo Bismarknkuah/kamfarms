@@ -10,6 +10,7 @@ import { AiAgentService } from './ai-agent.service';
 import { AiToolsService, TOOL_LABEL } from './ai-tools.service';
 import { AuditService } from '../audit/audit.service';
 import { periodFromText } from './ai-periods.util';
+import { parseYieldQuestion } from './ai-question.util';
 import { hasPermission, jurisdictionOf, productionScope } from './jurisdiction';
 
 export interface AssistantAnswer {
@@ -101,6 +102,22 @@ export class AiAssistantService {
     const noPlaces = (what: string) =>
       reply({ answer: `No ${what} are assigned to you yet, so there is nothing to report in your jurisdiction.`, sourceData: 'N/A', dateRange: 'N/A', confidencePercent: 0, assumptions: 'Your jurisdiction is set by the System Administrator.' });
     const canSeeMilling = hasPermission(actor, PERMISSIONS.MILLING_VIEW);
+
+    // ---- "I milled 5 bags of Size 4, what should it give?", "how much paddy and power for 100 bags of rice?", "what will 200 kWh give?":
+    // the numbers go to the same permission-checked lookup the page's calculator uses.
+    const numbers = parseYieldQuestion(dto.question);
+    if (numbers) {
+      const r = await this.tools.run('power_yield', numbers as Record<string, unknown>, actor);
+      if (r.denied) return noAccess('milling figures');
+      return reply({
+        answer: r.summary,
+        sourceData: r.source,
+        dateRange: r.period,
+        confidencePercent: r.confidencePercent,
+        assumptions: 'Worked out from the rates your approved milling runs taught (what 1 kWh of power mills and gives). A grade or place with fewer than 3 runs that recorded their power uses an industry benchmark, and the answer says so. The Work it out calculator on this page gives the same figures with a typical range.',
+        toolsUsed: [{ name: 'power_yield', label: TOOL_LABEL.power_yield, period: r.period }],
+      });
+    }
 
     // ---- what power turns into
     if (q.includes('kwh') || q.includes('kilowatt') || q.includes('electricity') || (q.includes('power') && !q.includes('powerful'))) {

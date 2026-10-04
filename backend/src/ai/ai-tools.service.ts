@@ -3,6 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ReportsService } from '../reports/reports.service';
 import { ReceivablesService } from '../finance/receivables.service';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { outputsFromEnergy, outputsFromPaddy, outputsFromRice } from './ai-yield.util';
+import type { Outputs } from './ai-yield.util';
 import { PERMISSIONS } from '../common/constants/permissions';
 import { AiInsightsService } from './ai-insights.service';
 import { AiPredictionsService } from './ai-predictions.service';
@@ -36,7 +38,7 @@ const centerProp = { type: 'string', description: 'The name or code of one milli
 export const TOOL_DEFS: ToolDef[] = [
   { name: 'get_my_access', label: 'Your access', description: 'Who is asking, which places they may see, and what can be looked up for them. Use for "what can I see?" or "who am I?".', input_schema: { type: 'object', properties: {} } },
   { name: 'production_summary', label: 'Production summary', description: 'Approved milling runs in a period: paddy milled, packaged rice, broken rice, hull and waste (kg and bags), power used and recovery, by milling center. Use for any question about production or output.', input_schema: { type: 'object', properties: { period: periodProp, milling_center: centerProp } } },
-  { name: 'power_yield', label: 'What power gives', description: 'What 1 kWh of power turns into: kilograms and bags of packaged rice, broken rice and hull, learned from approved milling runs. Use for questions about kWh, electricity or power versus output.', input_schema: { type: 'object', properties: { grade: { type: 'string', description: 'A paddy grade name or code (optional).' }, milling_center: centerProp } } },
+  { name: 'power_yield', label: 'What power gives', description: 'What 1 kWh of power turns into: kilograms and bags of packaged rice, broken rice and hull, learned from approved milling runs. Use for questions about kWh, electricity or power versus output, and for "I milled N bags of paddy, what should it give?" (paddy_bags) or "how much paddy and power for N bags of rice?" (rice_bags).', input_schema: { type: 'object', properties: { grade: { type: 'string', description: 'A paddy grade name or code (optional).' }, milling_center: centerProp, paddy_bags: { type: 'number', description: 'Bags of paddy milled or to be milled: answers how much packaged rice, broken rice, hull and power that gives.' }, rice_bags: { type: 'number', description: 'Bags of packaged rice recovered or wanted: answers how much paddy, power, broken rice and hull that takes.' }, kwh: { type: 'number', description: 'An amount of power in kWh: answers how much it mills and gives.' } } } },
   { name: 'output_vs_expected', label: 'Output against what was expected', description: 'For each milling center: did its runs give more than, as much as, or less than the AI expected for the power used, plus how accurate the AI has been. Use for questions about performance, whether a center delivered what it should, or under- or over-delivery.', input_schema: { type: 'object', properties: { period: periodProp, milling_center: centerProp } } },
   { name: 'stock_levels', label: 'Stock levels', description: 'Current stock (paddy and finished goods) at farms, warehouses and milling centers, in kg and bags.', input_schema: { type: 'object', properties: { location: { type: 'string', description: 'Part of a farm, warehouse or milling center name (optional).' } } } },
   { name: 'paddy_intake', label: 'Paddy intake', description: 'Approved paddy intake per farm in a period.', input_schema: { type: 'object', properties: { period: periodProp } } },
@@ -176,8 +178,15 @@ export class AiToolsService {
       pick = { rates: g.rates, note: g.note, label: `grade ${g.label}` };
     }
     const k = pick.rates.perKwh, b = data.bagSizes;
+    // A question with a number in it ("5 bags of Size 4", "100 bags of rice", "200 kWh") gets that answer first, then the per-kWh basis.
+    const give = (o: Outputs) => `${fmtBags(o.riceBags)} bags of packaged rice (${kg(o.riceKg)}), ${fmtBags(o.brokenBags)} bags of broken rice (${kg(o.brokenKg)}) and ${fmtBags(o.hullBags)} bags of hull (${kg(o.hullKg)})`;
+    const kwhAsked = Number(a.kwh), paddyBagsAsked = Number(a.paddy_bags), riceBagsAsked = Number(a.rice_bags);
+    let asked = '';
+    if (kwhAsked > 0) { const o = outputsFromEnergy(pick.rates, kwhAsked, b); asked = `${n0(kwhAsked)} kWh mills about ${fmtBags(o.paddyBags)} bags of paddy and should give ${give(o)}. `; }
+    else if (paddyBagsAsked > 0) { const o = outputsFromPaddy(pick.rates, paddyBagsAsked * b.paddyKg, b); asked = `${fmtBags(paddyBagsAsked)} bags of paddy should take about ${fmtBags(o.kwh)} kWh of power and give ${give(o)}. `; }
+    else if (riceBagsAsked > 0) { const o = outputsFromRice(pick.rates, riceBagsAsked * b.riceKg, b); asked = `${fmtBags(riceBagsAsked)} bags of packaged rice takes about ${fmtBags(o.paddyBags)} bags of paddy (${kg(o.paddyKg)}) and about ${fmtBags(o.kwh)} kWh of power, and comes with ${fmtBags(o.brokenBags)} bags of broken rice (${kg(o.brokenKg)}) and ${fmtBags(o.hullBags)} bags of hull (${kg(o.hullKg)}). `; }
     return done({
-      summary: `${pick.rates.basis === 'benchmark' ? 'On an industry benchmark, ' : ''}for ${pick.label}, 1 kWh of power mills about ${k.paddyKg.toFixed(1)} kg of paddy and should give ${fmtBags(k.riceKg / b.riceKg)} bags of packaged rice (${k.riceKg.toFixed(1)} kg), ${fmtBags(k.brokenKg / b.brokenKg)} bags of broken rice (${k.brokenKg.toFixed(1)} kg) and ${fmtBags(k.hullKg / b.hullKg)} bags of hull (${k.hullKg.toFixed(1)} kg). ${pick.note}`,
+      summary: `${asked}${pick.rates.basis === 'benchmark' ? 'On an industry benchmark, ' : ''}for ${pick.label}, 1 kWh of power mills about ${k.paddyKg.toFixed(1)} kg of paddy and should give ${fmtBags(k.riceKg / b.riceKg)} bags of packaged rice (${k.riceKg.toFixed(1)} kg), ${fmtBags(k.brokenKg / b.brokenKg)} bags of broken rice (${k.brokenKg.toFixed(1)} kg) and ${fmtBags(k.hullKg / b.hullKg)} bags of hull (${k.hullKg.toFixed(1)} kg). ${pick.note}`,
       data: { perKwh: k, bagSizes: b, runs: pick.rates.runs, basis: pick.rates.basis },
       source: pick.rates.basis === 'benchmark' ? 'Industry benchmark (too few approved runs with a power reading)' : 'Approved milling runs that recorded their power',
       period: data.window.from && data.window.to ? `${data.window.from.slice(0, 10)} to ${data.window.to.slice(0, 10)}` : 'N/A',

@@ -5,6 +5,7 @@ import { AiAssistantService } from './ai-assistant.service';
 import { AiInsightsService } from './ai-insights.service';
 import { PredictFromEnergyDto } from './dto/predict-from-energy.dto';
 import { PredictFromPaddyDto } from './dto/predict-from-paddy.dto';
+import { PredictFromRiceDto } from './dto/predict-from-rice.dto';
 import { PredictProductionDto } from './dto/predict-production.dto';
 import { PredictEnergyDto } from './dto/predict-energy.dto';
 import { ForecastStockDto } from './dto/forecast-stock.dto';
@@ -79,5 +80,11 @@ export class AiController {
   @RequirePermission(PERMISSIONS.AI_USE)
   predictFromPaddy(@Body() dto: PredictFromPaddyDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.insightsService.predictFromPaddy(dto, actor);
+  }
+
+  @Post('predict-from-rice')
+  @RequirePermission(PERMISSIONS.AI_USE)
+  predictFromRice(@Body() dto: PredictFromRiceDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.insightsService.predictFromRice(dto, actor);
   }
 }

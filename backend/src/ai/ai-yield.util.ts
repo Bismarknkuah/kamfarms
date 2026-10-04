@@ -115,6 +115,15 @@ export function outputsFromPaddy(rates: YieldRates, paddyKg: number, bags: BagSi
   return outputsFromEnergy(rates, paddyKg / rates.perKwh.paddyKg, bags);
 }
 
+/**
+ * What it takes to get a given amount of packaged rice (recovered, or wanted): the paddy to send to the mill, the power it should take,
+ * and the broken rice and hull that come with it. The same rates as the other two directions, read the other way round.
+ */
+export function outputsFromRice(rates: YieldRates, riceKg: number, bags: BagSizes): Outputs {
+  const riceKgPerKwh = rates.perKwh.riceKg;
+  return outputsFromEnergy(rates, riceKgPerKwh > 0 ? riceKg / riceKgPerKwh : 0, bags);
+}
+
 /** Plain words saying where the figures come from, so nobody has to guess how much to trust them. */
 export function describeBasis(rates: YieldRates, subject = 'your milling runs'): string {
   if (rates.basis === 'benchmark') {

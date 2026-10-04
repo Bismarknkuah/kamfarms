@@ -1,14 +1,15 @@
-import { ForbiddenException, Injectable, Optional } from '@nestjs/common';
+import { ForbiddenException, Injectable, Optional, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { defaultOf } from '../settings/settings.registry';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { PERMISSIONS } from '../common/constants/permissions';
 import { Jurisdiction, assertCenterInJurisdiction, hasPermission, jurisdictionOf, productionScope } from './jurisdiction';
-import { BagSizes, Outputs, RunSample, YieldRates, describeBasis, outputsFromEnergy, outputsFromPaddy, ratesFromRuns, round3 } from './ai-yield.util';
+import { BagSizes, Outputs, RunSample, YieldRates, describeBasis, outputsFromEnergy, outputsFromPaddy, ratesFromRuns, round3, outputsFromRice } from './ai-yield.util';
 import { LearnRun, Learning, RunFeedback, Scorecard, learningStats, scorecards, walkForward } from './ai-learning.util';
 import { PredictFromEnergyDto } from './dto/predict-from-energy.dto';
 import { PredictFromPaddyDto } from './dto/predict-from-paddy.dto';
+import { PredictFromRiceDto } from './dto/predict-from-rice.dto';
 
 /** The most recent approved runs with a power reading that the figures are drawn from. */
 const MAX_RUNS = 300;
@@ -193,6 +194,14 @@ export class AiInsightsService {
   async predictFromPaddy(dto: PredictFromPaddyDto, actor: AuthenticatedUser): Promise<EnergyPrediction> {
     const { rates, bagSizes, jurisdiction, assumptions } = await this.ratesFor(actor, dto);
     return { basis: rates.basis, confidence: rates.confidence, sampleSize: rates.runs, outputs: outputsFromPaddy(rates, dto.bags * bagSizes.paddyKg, bagSizes), bagSizes, assumptions, jurisdiction };
+  }
+
+  /** Packaged rice in (recovered, or wanted), and the paddy to send, the power it should take, and the broken rice and hull that come with it. */
+  async predictFromRice(dto: PredictFromRiceDto, actor: AuthenticatedUser): Promise<EnergyPrediction> {
+    if (dto.bags === undefined && dto.kg === undefined) throw new BadRequestException('Give either the bags of packaged rice or its weight in kg.');
+    const { rates, bagSizes, jurisdiction, assumptions } = await this.ratesFor(actor, dto);
+    const riceKg = dto.kg ?? (dto.bags as number) * bagSizes.riceKg;
+    return { basis: rates.basis, confidence: rates.confidence, sampleSize: rates.runs, outputs: outputsFromRice(rates, riceKg, bagSizes), bagSizes, assumptions, jurisdiction };
   }
 
   /**

@@ -30,6 +30,9 @@ Every setting starts at a **standard** value, which is exactly the number that u
 | | Paddy intake drop that is flagged | 50 % of usual | 10 to 90 |
 | | Paddy entries rejected that is flagged | 25 % | 5 to 90 |
 | | Spending jump that is flagged | 2 times usual | 1.2 to 10 |
+| AI predictions | Packaged rice bag weight (used to show rice in bags) | 50 kg | 1 to 100 |
+| | Broken rice bag weight | 50 kg | 1 to 100 |
+| | Rice hull bag weight (until enough runs record their hull bags) | 20 kg | 1 to 100 |
 
 A "serious" limit can never be set below the limit at which something is first flagged, and an alert list can never be left empty.
 

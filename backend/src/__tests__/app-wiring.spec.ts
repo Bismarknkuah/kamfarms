@@ -10,6 +10,7 @@ import { ProductionRecordsService } from '../production/production-records.servi
 import { PaddyMillingReceiptsService } from '../production/paddy-milling-receipts.service';
 import { InsightsService } from '../insights/insights.service';
 import { SystemOverviewService } from '../system-overview/system-overview.service';
+import { AiInsightsService } from '../ai/ai-insights.service';
 import { ReportCatalogService } from '../reports/report-catalog.service';
 import { ReportsController } from '../reports/reports.controller';
 import { SiteService } from '../site/site.service';
@@ -41,6 +42,7 @@ describe('the whole application wires up', () => {
   it.each([
     ['AuthService', AuthService], ['ShipmentsService', ShipmentsService], ['MachinesService', MachinesService],
     ['ProductionRecordsService', ProductionRecordsService], ['PaddyMillingReceiptsService', PaddyMillingReceiptsService], ['InsightsService', InsightsService], ['SystemOverviewService', SystemOverviewService],
+    ['AiInsightsService', AiInsightsService],
   ])('%s really received the settings service (so the administrator\'s changes reach it)', (_name, token) => {
     expect(settingsOf(token as any)).toBeInstanceOf(SettingsService);
   });

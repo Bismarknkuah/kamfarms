@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildBalanceDimensionKey } from '../inventory-ledger/balance-key.util';
 import { PredictProductionDto } from './dto/predict-production.dto';
 import { PredictEnergyDto } from './dto/predict-energy.dto';
 import { ForecastStockDto } from './dto/forecast-stock.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { PERMISSIONS } from '../common/constants/permissions';
+import { assertCenterInJurisdiction, assertWarehouseInJurisdiction, hasPermission, jurisdictionOf, productionScope } from './jurisdiction';
 
 const MIN_RECORDS_FOR_STATS = 5;
 /** Kilograms to the nearest gram, so 20000 x 68% shows as 13600 and not 13600.000000000002. */
@@ -60,8 +62,13 @@ export class AiPredictionsService {
    * falling back to a documented benchmark when there isn't enough of
    * it yet. */
   async predictProduction(dto: PredictProductionDto, actor: AuthenticatedUser) {
-    const records = await this.prisma.productionRecord.findMany({
+    // Only the runs inside the asker's jurisdiction count, and a milling center outside it is refused.
+    const j = jurisdictionOf(actor);
+    if (dto.millingCenterId) await assertCenterInJurisdiction(this.prisma, j, dto.millingCenterId);
+    const scope = productionScope(j);
+    const records = scope === null ? [] : await this.prisma.productionRecord.findMany({
       where: {
+        ...scope,
         paddyGradeId: dto.paddyGradeId,
         millingCenterId: dto.millingCenterId,
         status: 'APPROVED',
@@ -134,6 +141,12 @@ export class AiPredictionsService {
   }
 
   async predictEnergyConsumption(dto: PredictEnergyDto, actor: AuthenticatedUser) {
+    const j = jurisdictionOf(actor);
+    if (!j.companyWide) {
+      const machine = await this.prisma.machine.findUnique({ where: { id: dto.machineId }, select: { millingCenter: { select: { warehouseId: true } } } });
+      if (!machine) throw new NotFoundException('Machine not found.');
+      assertWarehouseInJurisdiction(j, machine.millingCenter.warehouseId, 'this machine');
+    }
     const records = await this.prisma.productionRecord.findMany({
       where: { machineId: dto.machineId, status: 'APPROVED', energyConsumptionKwh: { not: null } },
       orderBy: { date: 'desc' },
@@ -194,6 +207,7 @@ export class AiPredictionsService {
    * from the two production-side predictions above (rate-of-depletion
    * against a live balance, not a historical ratio). */
   async forecastStockDepletion(dto: ForecastStockDto, actor: AuthenticatedUser) {
+    assertWarehouseInJurisdiction(jurisdictionOf(actor), dto.warehouseId, 'this warehouse');
     const windowDays = 30;
     const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
 
@@ -258,17 +272,24 @@ export class AiPredictionsService {
    * implementation; spec section 21 calls this "machine anomaly
    * detection" and "unusual production variance", both of which already
    * exist as real, tested logic elsewhere in this codebase. */
-  async recentAnomalies() {
+  /** Unusual power readings and runs that did not add up, limited to the asker's jurisdiction and to people whose role can see production or machines. */
+  async recentAnomalies(actor: AuthenticatedUser) {
+    const none = { meterAnomalies: [], productionAnomalies: [] };
+    if (!hasPermission(actor, PERMISSIONS.MILLING_VIEW, PERMISSIONS.MACHINE_VIEW)) return none;
+    const j = jurisdictionOf(actor);
+    const scope = productionScope(j);
+    if (scope === null) return none;
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const machineScope = j.companyWide ? {} : { machine: { millingCenter: { warehouseId: { in: j.warehouseIds } } } };
     const [meterAnomalies, productionAnomalies] = await Promise.all([
       this.prisma.meterReading.findMany({
-        where: { isAnomalous: true, createdAt: { gte: since } },
+        where: { isAnomalous: true, createdAt: { gte: since }, ...machineScope },
         include: { machine: true },
         orderBy: { createdAt: 'desc' },
         take: 20,
       }),
       this.prisma.productionRecord.findMany({
-        where: { massBalanceFlag: true, createdAt: { gte: since } },
+        where: { massBalanceFlag: true, createdAt: { gte: since }, ...scope },
         include: { millingCenter: true },
         orderBy: { createdAt: 'desc' },
         take: 20,

@@ -5,7 +5,7 @@
  * exactly the number that used to be fixed in the code, so nothing changes until an administrator changes it.
  */
 export type SettingType = 'number' | 'roles';
-export type SettingGroup = 'security' | 'logistics' | 'production' | 'machines' | 'alerts' | 'watchlist';
+export type SettingGroup = 'security' | 'logistics' | 'production' | 'machines' | 'alerts' | 'watchlist' | 'ai';
 
 export interface SettingDef {
   key: string;
@@ -27,6 +27,7 @@ export const SETTING_GROUPS: { id: SettingGroup; title: string; intro: string }[
   { id: 'machines', title: 'Machine power checks', intro: 'When a machine\'s power reading is flagged as unusual.' },
   { id: 'alerts', title: 'Who is alerted', intro: 'The roles whose members receive these alerts the moment they happen.' },
   { id: 'watchlist', title: 'Watchlist limits', intro: 'How far a place has to drift from its own usual before the MD and CEO Watchlist flags it. See the Watchlist guide for what each check compares.' },
+  { id: 'ai', title: 'AI predictions', intro: 'The bag weights the AI uses to turn kilograms of rice, broken rice and hull into bags.' },
 ];
 
 const ALERT_ROLES = ['OPERATIONS_MANAGER', 'MD', 'CEO'];
@@ -60,6 +61,10 @@ export const SETTING_DEFS: SettingDef[] = [
   { key: 'watchlist.intake_drop_percent', group: 'watchlist', label: 'Paddy intake drop that is flagged', help: 'A farm whose approved paddy falls to this share of its usual, or less, is flagged (allowing for the season by comparing with the other farms).', type: 'number', default: 50, unit: '%', min: 10, max: 90, step: 5 },
   { key: 'watchlist.rejection_percent', group: 'watchlist', label: 'Paddy entries rejected that is flagged', help: 'A farm whose entries are rejected this often is flagged.', type: 'number', default: 25, unit: '%', min: 5, max: 90, step: 5 },
   { key: 'watchlist.spend_factor', group: 'watchlist', label: 'Spending jump that is flagged', help: 'A farm or warehouse spending this many times its usual is flagged.', type: 'number', default: 2, unit: 'times', min: 1.2, max: 10, step: 0.1 },
+
+  { key: 'ai.rice_bag_kg', group: 'ai', label: 'Packaged rice bag weight', help: 'One bag of finished rice. The AI predictions use it to show packaged rice in bags.', type: 'number', default: 50, unit: 'kg', min: 1, max: 100, step: 0.5 },
+  { key: 'ai.broken_bag_kg', group: 'ai', label: 'Broken rice bag weight', help: 'One bag of broken rice. The AI predictions use it to show broken rice in bags.', type: 'number', default: 50, unit: 'kg', min: 1, max: 100, step: 0.5 },
+  { key: 'ai.hull_bag_kg', group: 'ai', label: 'Rice hull bag weight', help: 'One bag of hull. Used only until enough milling runs record their hull bags, after which the AI uses the weight those runs actually show.', type: 'number', default: 20, unit: 'kg', min: 1, max: 100, step: 0.5 },
 ];
 
 export const SETTING_BY_KEY: Map<string, SettingDef> = new Map(SETTING_DEFS.map((d) => [d.key, d] as [string, SettingDef]));

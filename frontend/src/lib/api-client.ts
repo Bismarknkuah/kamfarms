@@ -908,11 +908,56 @@ export interface AssistantAnswer {
   dateRange: string;
   confidencePercent: number;
   assumptions: string;
+  /** Whose activities the answer covers: "Whole company", or the person's own places. */
+  jurisdiction?: string;
+}
+
+export type AiConfidence = 'high' | 'medium' | 'low';
+export interface AiPerKwh { paddyKg: number; riceKg: number; brokenKg: number; hullKg: number; wasteKg: number }
+export interface AiYieldRates {
+  runs: number;
+  basis: 'history' | 'benchmark';
+  confidence: AiConfidence;
+  energyKwh: number;
+  paddyKg: number;
+  /** What 1 kWh of metered power gives, in kilograms. */
+  perKwh: AiPerKwh;
+  /** One spread either side of the figure, per kWh. Null for a benchmark. */
+  typical: { riceKg: [number, number]; brokenKg: [number, number]; hullKg: [number, number] } | null;
+}
+export interface AiBagSizes { paddyKg: number; riceKg: number; brokenKg: number; hullKg: number; hullBasis: 'history' | 'setting' }
+export interface AiJurisdiction { companyWide: boolean; label: string; farms: string[]; warehouses: string[] }
+export type AiInsights =
+  | { available: false; reason: string; jurisdiction: AiJurisdiction }
+  | {
+      available: true;
+      generatedAt: string;
+      jurisdiction: AiJurisdiction;
+      bagSizes: AiBagSizes;
+      window: { runs: number; from: string | null; to: string | null };
+      overall: AiYieldRates;
+      overallNote: string;
+      byGrade: { gradeId: string; code: string; label: string; rates: AiYieldRates; note: string }[];
+      byCenter: { centerId: string; code: string; name: string; rates: AiYieldRates; note: string }[];
+    };
+
+/** True only for a reply shaped the way the AI page needs. Anything else (an old server, a proxy's error page) is reported, not trusted. */
+export function isAiInsights(x: unknown): x is AiInsights {
+  const o = x as Record<string, any> | null;
+  if (!o || typeof o !== 'object' || typeof o.available !== 'boolean') return false;
+  const j = o.jurisdiction;
+  if (!j || typeof j.companyWide !== 'boolean' || typeof j.label !== 'string') return false;
+  if (!o.available) return typeof o.reason === 'string';
+  const rates = (r: any) => !!r && typeof r.runs === 'number' && !!r.perKwh && typeof r.perKwh.riceKg === 'number';
+  return rates(o.overall) && typeof o.overallNote === 'string' && !!o.bagSizes && typeof o.bagSizes.riceKg === 'number' && !!o.window && Array.isArray(o.byGrade) && Array.isArray(o.byCenter)
+    && o.byGrade.every((g: any) => rates(g?.rates)) && o.byCenter.every((c: any) => rates(c?.rates));
 }
 
 export const aiApi = {
   ask: (accessToken: string, question: string) =>
     request<AssistantAnswer>('/ai/assistant/ask', { method: 'POST', body: JSON.stringify({ question }) }, accessToken),
+  /** What power and paddy turn into, within the signed-in person's jurisdiction (the whole company for the MD and CEO). */
+  insights: (accessToken: string) => request<AiInsights>('/ai/insights', { method: 'GET', cache: 'no-store' }, accessToken),
 };
 
 // ── Admin: audit, backup, reset ───────────────────────────────────

@@ -62,3 +62,21 @@ all - they can only read via `PrismaService` and write to the two AI
 tables. This isn't a runtime check; it's structurally impossible for
 these services to touch inventory or financial records, because they
 have no reference to the services that do.
+
+## Jurisdiction: the AI never shows more than a person's own places
+
+Every AI route and every answer is limited to the asker's jurisdiction. This is enforced on the server
+(`backend/src/ai/jurisdiction.ts`), not in the screens.
+
+- **The MD, CEO and System Administrator see every activity in the company**, whatever scope their account carries.
+- **Everyone else sees only their own farms and warehouses.** Production belongs to a milling center, and a milling
+  center belongs to a warehouse, so production figures are filtered through the warehouse. A person with no place
+  assigned sees nothing, never everything.
+- **The AI is never a way round a permission.** The assistant checks the same permission the data's own screen
+  checks (finance figures need `finance.view`, milling figures need `milling.view`), then applies the jurisdiction.
+  Customer balances and sales are tracked for the whole company, so a person whose access is limited to their own
+  places is told that, rather than shown a company total.
+- **Asking for a place that is not yours is refused**, for milling centers, machines and warehouses alike.
+
+See `docs/AI_INSIGHTS.md` for the predictions built on top of this.
+

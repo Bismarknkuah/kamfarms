@@ -209,10 +209,10 @@ export const NAV_ITEMS: NavItem[] = [
   },
   { label: 'Messages', href: '/messages', icon: 'message-square', description: 'Direct conversations with anyone in the company.' },
   {
-    label: 'AI Assistant',
+    label: 'AI Insights',
     href: '/assistant',
     icon: 'bot',
-    description: 'Ask about stock, sales, or performance and get a real, sourced answer.',
+    description: 'Predictions from your own milling records: the bags of rice, broken rice and hull that power or paddy should give. Plus answers about stock, sales and performance, within your own places.',
     permission: 'ai.use',
   },
   { label: 'Tasks', href: '/tasks', icon: 'square-check', description: 'Things assigned to you, and marking them done.' },

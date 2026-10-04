@@ -4,7 +4,8 @@ import { InventoryLedgerService } from '../../inventory-ledger/inventory-ledger.
 import { AuthenticatedUser } from '../../auth/types/authenticated-user';
 
 describe('AiPredictionsService', () => {
-  const actor = { id: 'user-1' } as AuthenticatedUser;
+  // The MD: company-wide, so the production history is not narrowed by place.
+  const actor = { id: 'user-1', roles: [{ roleId: 'r', roleCode: 'MD', permissions: [], scopes: [] }], permissionCodes: new Set<string>() } as unknown as AuthenticatedUser;
 
   function buildService(productionRecords: { recoveryPercent: number; brokenPercent: number; hullPercent: number }[]) {
     const prisma = {
@@ -85,5 +86,83 @@ describe('AiPredictionsService', () => {
   it('is structurally unable to modify inventory: InventoryLedgerService is never injected into its constructor', () => {
     const paramTypes: unknown[] = Reflect.getMetadata('design:paramtypes', AiPredictionsService) ?? [];
     expect(paramTypes).not.toContain(InventoryLedgerService);
+  });
+
+  describe('jurisdiction: a person only gets predictions from their own places', () => {
+    const scoped = (ids: string[], perms: string[] = []) =>
+      ({ id: 'u2', roles: [{ roleId: 'r', roleCode: 'OPERATIONS_MANAGER', permissions: [], scopes: ids.map((scopeId) => ({ scopeType: 'WAREHOUSE', scopeId })) }], permissionCodes: new Set(perms) }) as unknown as AuthenticatedUser;
+    const history = Array.from({ length: 6 }, () => ({ recoveryPercent: 70, brokenPercent: 10, hullPercent: 18 }));
+
+    it('narrows the production history to the milling centers at their own warehouses', async () => {
+      const { service, prisma } = buildService(history);
+      await service.predictProduction({ paddyKg: 1000, paddyGradeId: 'grade-4' }, scoped(['wh-1']));
+      expect(prisma.productionRecord.findMany.mock.calls[0][0].where.millingCenter).toEqual({ warehouseId: { in: ['wh-1'] } });
+    });
+
+    it('does not narrow it for the MD', async () => {
+      const { service, prisma } = buildService(history);
+      await service.predictProduction({ paddyKg: 1000, paddyGradeId: 'grade-4' }, actor);
+      expect(prisma.productionRecord.findMany.mock.calls[0][0].where.millingCenter).toBeUndefined();
+    });
+
+    it('reads no history, and uses the labelled benchmark, for a person with no warehouse', async () => {
+      const { service, prisma } = buildService(history);
+      const r = await service.predictProduction({ paddyKg: 20000, paddyGradeId: 'grade-4' }, scoped([]));
+      expect(prisma.productionRecord.findMany).not.toHaveBeenCalled();
+      expect(r.predictedRecoveredKg).toBe(13600);
+      expect(r.sampleSize).toBe(0);
+    });
+
+    it('refuses a milling center at someone else\'s warehouse', async () => {
+      const { service, prisma } = buildService(history);
+      (prisma as any).millingCenter = { findUnique: jest.fn().mockResolvedValue({ warehouseId: 'wh-OTHER' }) };
+      await expect(service.predictProduction({ paddyKg: 1000, paddyGradeId: 'g', millingCenterId: 'c-other' }, scoped(['wh-1']))).rejects.toThrow(/outside your jurisdiction/);
+      expect(prisma.productionRecord.findMany).not.toHaveBeenCalled();
+    });
+
+    it('refuses a machine at someone else\'s warehouse, and a stock forecast for someone else\'s warehouse', async () => {
+      const { service, prisma } = buildService(history);
+      (prisma as any).machine = { findUnique: jest.fn().mockResolvedValue({ millingCenter: { warehouseId: 'wh-OTHER' } }) };
+      await expect(service.predictEnergyConsumption({ paddyKg: 1000, machineId: 'm-other' }, scoped(['wh-1']))).rejects.toThrow(/This machine is outside your jurisdiction/);
+      await expect(service.forecastStockDepletion({ warehouseId: 'wh-OTHER', productId: 'p' }, scoped(['wh-1']))).rejects.toThrow(/This warehouse is outside your jurisdiction/);
+    });
+
+    it('lets the MD forecast any warehouse', async () => {
+      const { service, prisma } = buildService([]);
+      prisma.inventoryBalance.findUnique.mockResolvedValue({ bagCount: 10 });
+      prisma.salesOrderItem.findMany.mockResolvedValue([]);
+      await expect(service.forecastStockDepletion({ warehouseId: 'wh-ANY', productId: 'p' }, actor)).resolves.toBeDefined();
+    });
+  });
+
+  describe('recentAnomalies', () => {
+    const scoped = (ids: string[], perms: string[]) =>
+      ({ id: 'u2', roles: [{ roleId: 'r', roleCode: 'OPERATIONS_MANAGER', permissions: [], scopes: ids.map((scopeId) => ({ scopeType: 'WAREHOUSE', scopeId })) }], permissionCodes: new Set(perms) }) as unknown as AuthenticatedUser;
+    const mdWith = (perms: string[]) => ({ ...actor, permissionCodes: new Set(perms) }) as AuthenticatedUser;
+
+    it('shows a scoped person only the anomalies at their own milling centers and machines', async () => {
+      const { service, prisma } = buildService([]);
+      prisma.meterReading.findMany.mockResolvedValue([]);
+      prisma.productionRecord.findMany.mockResolvedValue([]);
+      await service.recentAnomalies(scoped(['wh-1'], ['milling.view']));
+      expect(prisma.meterReading.findMany.mock.calls[0][0].where.machine).toEqual({ millingCenter: { warehouseId: { in: ['wh-1'] } } });
+      expect(prisma.productionRecord.findMany.mock.calls[0][0].where.millingCenter).toEqual({ warehouseId: { in: ['wh-1'] } });
+    });
+
+    it('shows the MD everything', async () => {
+      const { service, prisma } = buildService([]);
+      prisma.meterReading.findMany.mockResolvedValue([]);
+      prisma.productionRecord.findMany.mockResolvedValue([]);
+      await service.recentAnomalies(mdWith(['milling.view']));
+      expect(prisma.meterReading.findMany.mock.calls[0][0].where.machine).toBeUndefined();
+      expect(prisma.productionRecord.findMany.mock.calls[0][0].where.millingCenter).toBeUndefined();
+    });
+
+    it('shows nothing, without querying, to a role that cannot see production or machines, or to someone with no warehouse', async () => {
+      const { service, prisma } = buildService([]);
+      expect(await service.recentAnomalies(mdWith(['ai.view']))).toEqual({ meterAnomalies: [], productionAnomalies: [] });
+      expect(await service.recentAnomalies(scoped([], ['milling.view']))).toEqual({ meterAnomalies: [], productionAnomalies: [] });
+      expect(prisma.meterReading.findMany).not.toHaveBeenCalled();
+    });
   });
 });

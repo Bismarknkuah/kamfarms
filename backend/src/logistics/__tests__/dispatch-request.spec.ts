@@ -81,7 +81,7 @@ describe('a Farm Supervisor\'s dispatch request to a farm manager', () => {
       'Total: 20 bags.',
       'Who to ask at the warehouse: Kwabena Adjei (0244111222).',
       'Instructions from Efua Mensah: Load the Size 4 first. The truck leaves at 6am.',
-      'log a dispatch report for each size',
+      'open the Dispatch desk and submit one dispatch with every size on the truck',
       `Request ${r.requestRef}`,
     ]) expect(t.description).toContain(line);
   });
@@ -94,7 +94,7 @@ describe('a Farm Supervisor\'s dispatch request to a farm manager', () => {
     expect(tasks[0].description).not.toContain('Total:');
     expect(tasks[0].description).not.toContain('Priority:');
     expect(tasks[0].description).not.toContain('Instructions from');
-    expect(tasks[0].description).toContain('log a dispatch report.');
+    expect(tasks[0].description).toContain('open the Dispatch desk and submit one dispatch. Request');
   });
 
   it('tells the farm manager, with the same detail, and points the notification at their task', async () => {

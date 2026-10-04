@@ -1324,6 +1324,43 @@ export interface DeliveryOrder {
   tracking?: DispatchTracking;
 }
 
+/** One card per dispatch request, shared by the Farm Supervisor who asked and the farm manager who does it (see the server's dispatch-board). */
+export type DispatchStage = DispatchTracking['stage'];
+export interface RequestCardLine { orderId: string; orderNumber: string; gradeLabel: string; bagCount: number; totalKg: number; totalKgEstimated: boolean; stage: DispatchStage; label: string }
+export interface DispatchLineView {
+  reportId: string; reportNumber: string; orderNumber: string; gradeLabel: string; bags: number; kg: number; kgEstimated: boolean; status: string;
+  shipment: { shipmentNumber: string | null; expectedBags: number | null; receivedBags: number | null; receivedAt: string | null; varianceRequiresApproval: boolean } | null;
+}
+export interface DispatchView {
+  ref: string; dispatchRef: string | null; status: string; lines: DispatchLineView[]; totalBags: number; totalKg: number;
+  preparedBy: string; preparedById: string | null; preparedAt: string | null; submittedAt: string | null; approvedBy: string; approvedAt: string | null; rejectionReason: string | null;
+  driverName: string | null; driverPhone: string | null; vehiclePlate: string | null; vehicleType: string | null;
+  departureDate: string | null; departureTime: string | null; expectedArrivalTime: string | null; remarks: string | null;
+  labourCost: number; numberOfLabourers: number | null; transportationFee: number; otherCosts: number; otherCostsDescription: string | null; totalCost: number;
+}
+export interface RequestCard {
+  key: string; requestRef: string | null;
+  farm: { id: string; name: string }; warehouse: { id: string; name: string; location: string | null };
+  requestedDate: string | null; priority: string; notes: string | null; requestedBy: string; requestedById: string | null; createdAt: string | null;
+  lines: RequestCardLine[]; totalBags: number; dispatches: DispatchView[];
+  stage: DispatchStage; label: string; holder: string | null; since: string | null; sentBack: string | null; steps: DispatchStep[];
+  overdue: boolean; daysOverdue: number; awaitingApproval: boolean; arrivedAt: string | null; bagVariance: number | null; varianceRequiresApproval: boolean;
+}
+export interface DispatchInput {
+  lines: { deliveryOrderId: string; actualBagCount: number; actualKg?: number }[];
+  labourCost?: number; numberOfLabourers?: number; transportationFee?: number; otherCosts?: number; otherCostsDescription?: string;
+  vehiclePlateNumber?: string; vehicleType?: string; driverName?: string; driverPhone?: string;
+  departureDate?: string; departureTime?: string; expectedArrivalTime?: string; remarks?: string;
+  /** Default true: send it to the supervisor straight away. false saves a draft. */
+  submit?: boolean;
+}
+export interface DispatchResult {
+  dispatchRef: string; status: string; submitted: boolean; farmName: string; warehouse: { name: string; location: string | null };
+  totalBags: number; totalKg: number; anyKgEstimated: boolean;
+  lines: { reportNumber: string; orderNumber: string | null; gradeLabel: string; bags: number; kg: number; kgEstimated: boolean }[];
+  driverName: string | null; vehiclePlate: string | null; totalCost: number;
+}
+
 export interface DispatchRequestInput {
   farmId: string;
   destinationWarehouseId: string;
@@ -1358,6 +1395,9 @@ export interface DeliveryReport {
   actualKg: number;
   /** True when only the bags were counted: the kg is worked out from them, not weighed. */
   actualKgEstimated?: boolean;
+  /** Who prepared it, and the trip it belongs to (every size on one truck). */
+  submittedById?: string;
+  dispatchRef?: string | null;
   labourCost: number;
   transportationFee: number;
   otherCosts: number;
@@ -1397,6 +1437,8 @@ export const deliveryOrdersApi = {
     accessToken: string,
     data: { farmId: string; destinationWarehouseId: string; requestedDate: string; paddyGradeId: string; bagCount: number; totalKg?: number },
   ) => request<DeliveryOrder>('/delivery-orders', { method: 'POST', body: JSON.stringify(data) }, accessToken),
+  /** Every dispatch request as one card: the same picture for the supervisor who asked and the farm manager who does it. */
+  requests: (accessToken: string) => request<RequestCard[]>('/delivery-orders/requests', { method: 'GET' }, accessToken),
   /** A request to a farm manager: every size in one go, to one warehouse, by a date, with instructions. It also becomes the farm manager's task. */
   createRequest: (accessToken: string, data: DispatchRequestInput) =>
     request<DispatchRequestResult>('/delivery-orders/request', { method: 'POST', body: JSON.stringify(data) }, accessToken),
@@ -1422,6 +1464,11 @@ export interface DispatchTrace {
 };
 
 export const deliveryReportsApi = {
+  /** ONE dispatch: one truck with every size on it, prepared in one go (and sent to the supervisor unless submit is false). */
+  createDispatch: (accessToken: string, data: DispatchInput) => request<DispatchResult>('/delivery-reports/dispatch', { method: 'POST', body: JSON.stringify(data) }, accessToken),
+  submitDispatch: (accessToken: string, ref: string) => request<DispatchResult>(`/delivery-reports/dispatch/${encodeURIComponent(ref)}/submit`, { method: 'POST' }, accessToken),
+  approveDispatch: (accessToken: string, ref: string) => request<DispatchResult>(`/delivery-reports/dispatch/${encodeURIComponent(ref)}/approve`, { method: 'POST' }, accessToken),
+  rejectDispatch: (accessToken: string, ref: string, reason: string) => request<DispatchResult>(`/delivery-reports/dispatch/${encodeURIComponent(ref)}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }, accessToken),
   list: (accessToken: string, farmId?: string, status?: string) => {
     const params = new URLSearchParams();
     if (farmId) params.set('farmId', farmId);

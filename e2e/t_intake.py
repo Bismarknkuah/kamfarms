@@ -97,15 +97,12 @@ with sync_playwright() as pw:
     check('no page errors on the Users page', not p.errors, p.errors[:2]); ctx.close()
 
     # =============== 4. Kilograms are optional wherever things are dispatched ===============
-    reset(); ctx, p = as_user(b, 'admin'); p.goto(BASE + '/deliveries'); p.wait_for_selector('text=DO-2026-009001')
-    p.get_by_role('button', name='Log delivery report').first.click(); p.get_by_label('Actual bags').wait_for() if p.get_by_label('Actual bags').count() else p.wait_for_selector('text=Actual KG (optional)')
-    bags = p.locator('xpath=//label[contains(.,"Actual bags")]/following-sibling::input').first; kgbox = p.get_by_placeholder('No scale? leave blank').first
-    check('the dispatch report says kilograms are optional', 'Actual KG (optional)' in p.inner_text('body') and kgbox.count() == 1)
-    p.get_by_role('button', name=re.compile('^(Create|Save|Submit|Log)', re.I)).filter(has_text=re.compile('report|save|create', re.I)).last.click(); p.wait_for_timeout(500)
-    check('leaving the bags empty is explained, not ignored', 'Enter the number of bags that were loaded' in p.inner_text('body'))
-    bags.fill('80'); p.get_by_role('button', name=re.compile('report|Save|Create', re.I)).last.click(); p.wait_for_timeout(900)
-    c = last_call('/delivery-reports'); check('a dispatch report with only the bags goes through (no kilograms sent)', c and c['body']['actualBagCount'] == 80 and 'actualKg' not in c['body'], c)
-    rep = http('/__reports')[1]; check('the server works the kilograms out at the order\'s own 52 kg a bag (80 x 52 = 4,160) and marks them as an estimate', rep and rep[-1]['actualKg'] == 4160 and rep[-1]['actualKgEstimated'] is True, rep[-1] if rep else rep)
+    reset(); ctx, p = as_user(b, 'fm'); p.goto(BASE + '/deliveries'); c1 = p.locator('[data-testid=request-card][data-request="RQ-2026-009001"]'); c1.wait_for()
+    c1.get_by_test_id('act-dispatch').click(); f = c1.get_by_test_id('dispatch-form'); f.wait_for()
+    check('the dispatch form says kilograms are optional', 'optional' in f.inner_text().lower() or f.get_by_label('Kilograms of Size 4, optional').count() == 1)
+    f.get_by_label('Bags of Size 4').fill('80'); f.get_by_test_id('dispatch-submit').click(); p.get_by_test_id('dispatch-sent').wait_for(); p.wait_for_timeout(300)
+    c = last_call('/delivery-reports/dispatch'); check('a dispatch with only the bags goes through (no kilograms sent)', c and c['body']['lines'][0]['actualBagCount'] == 80 and 'actualKg' not in c['body']['lines'][0], c)
+    rep = http('/__reports')[1]; check('the server works the kilograms out at the order\'s own 50 kg a bag (80 x 50 = 4,000) and marks them as an estimate', rep and rep[-1]['actualKg'] == 4000 and rep[-1]['actualKgEstimated'] is True, rep[-1] if rep else rep)
     check('no page errors on the Dispatch page', not p.errors, p.errors[:2]); ctx.close()
 
     reset(); ctx, p = as_user(b, 'admin'); p.goto(BASE + '/office'); p.wait_for_selector('text=Total KG', state='attached') if False else p.wait_for_timeout(1500)

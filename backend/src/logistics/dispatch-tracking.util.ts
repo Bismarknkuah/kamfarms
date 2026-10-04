@@ -45,7 +45,8 @@ const time = (d: When) => (d ? new Date(d).getTime() : 0);
 
 export function trackingOf(order: TrackableOrder): DispatchTracking {
   const warehouse = order.destinationWarehouse?.name ?? 'the warehouse';
-  const reports = [...(order.reports ?? [])].sort((a, b) => time(b.createdAt) - time(a.createdAt));
+  // A cancelled draft (replaced by a newer dispatch) is not part of the story.
+  const reports = [...(order.reports ?? [])].filter((r) => r.status !== 'CANCELLED').sort((a, b) => time(b.createdAt) - time(a.createdAt));
   const r = reports[0] ?? null;
   const s = r?.shipment ?? null;
 

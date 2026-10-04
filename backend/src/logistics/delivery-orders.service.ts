@@ -8,6 +8,7 @@ import { CreateDeliveryOrderDto } from './dto/create-delivery-order.dto';
 import { CreateDispatchRequestDto } from './dto/create-dispatch-request.dto';
 import { dispatchNotificationBody, dispatchTaskDescription, dispatchTaskTitle, personName, totalBagsOf } from './dispatch-request.util';
 import { trackingOf } from './dispatch-tracking.util';
+import { buildRequestCards } from './dispatch-board.util';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { estimateKg } from '../common/constants/bag-weight';
 
@@ -46,6 +47,29 @@ export class DeliveryOrdersService {
     });
     // Where each order is, in words, for whoever asked for it and whoever handles it.
     return orders.map((o) => ({ ...o, tracking: trackingOf(o as any) }));
+  }
+
+  /**
+   * One card per dispatch REQUEST, the same picture for the Farm Supervisor who asked and the farm manager who does it: what was asked and
+   * where it goes, where it is now and whose move it is, the dispatch the manager prepared, and what the supervisor must approve.
+   */
+  async board(actor: AuthenticatedUser) {
+    const where: Record<string, unknown> = {};
+    const { isGlobal, ids } = scopedLocationIds(actor, 'FARM');
+    if (!isGlobal) {
+      if (ids.length === 0) return [];
+      where.farmId = { in: ids };
+    }
+    const orders = await this.prisma.deliveryOrder.findMany({
+      where,
+      include: {
+        farm: true, destinationWarehouse: true, paddyGrade: true, createdBy: true,
+        reports: { orderBy: { createdAt: 'desc' }, include: { paddyGrade: true, vehicle: true, driver: true, submittedBy: true, approvedBy: true, shipment: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 300,
+    });
+    return buildRequestCards(orders as any[]);
   }
 
   async findById(id: string, actor: AuthenticatedUser) {

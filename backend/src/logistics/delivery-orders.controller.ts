@@ -26,6 +26,13 @@ export class DeliveryOrdersController {
   // earlier this session. Two segments here vs one for ':id' means
   // there's actually no ambiguity either way, but the ordering
   // convention stays consistent regardless.
+  /** Every dispatch request as one card, shared by the supervisor and the farm manager. */
+  @Get('requests')
+  @RequirePermission([PERMISSIONS.FARM_INVENTORY_VIEW, PERMISSIONS.DELIVERY_VIEW])
+  requests(@CurrentUser() actor: AuthenticatedUser) {
+    return this.deliveryOrdersService.board(actor);
+  }
+
   @Get('trace/:orderNumber')
   @RequirePermission([PERMISSIONS.FARM_INVENTORY_VIEW, PERMISSIONS.DELIVERY_VIEW])
   getFullTrace(@Param('orderNumber') orderNumber: string, @CurrentUser() actor: AuthenticatedUser) {

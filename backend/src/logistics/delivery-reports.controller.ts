@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { DeliveryReportsService } from './delivery-reports.service';
 import { CreateDeliveryReportDto } from './dto/create-delivery-report.dto';
+import { CreateDispatchDto } from './dto/create-dispatch.dto';
 import { UpdateDeliveryReportDto } from './dto/update-delivery-report.dto';
 import { RejectDeliveryReportDto } from './dto/reject-delivery-report.dto';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
@@ -42,6 +43,31 @@ export class DeliveryReportsController {
   @RequirePermission(PERMISSIONS.DELIVERY_CREATE)
   update(@Param('id') id: string, @Body() dto: UpdateDeliveryReportDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.deliveryReportsService.update(id, dto, actor);
+  }
+
+  /** ONE dispatch: one truck with every size on it, prepared in one go. */
+  @Post('dispatch')
+  @RequirePermission(PERMISSIONS.DELIVERY_CREATE)
+  createDispatch(@Body() dto: CreateDispatchDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.deliveryReportsService.createDispatch(dto, actor);
+  }
+
+  @Post('dispatch/:ref/submit')
+  @RequirePermission(PERMISSIONS.DELIVERY_CREATE)
+  submitDispatch(@Param('ref') ref: string, @CurrentUser() actor: AuthenticatedUser) {
+    return this.deliveryReportsService.submitDispatch(ref, actor);
+  }
+
+  @Post('dispatch/:ref/approve')
+  @RequirePermission(PERMISSIONS.DELIVERY_APPROVE)
+  approveDispatch(@Param('ref') ref: string, @CurrentUser() actor: AuthenticatedUser) {
+    return this.deliveryReportsService.approveDispatch(ref, actor);
+  }
+
+  @Post('dispatch/:ref/reject')
+  @RequirePermission(PERMISSIONS.DELIVERY_REJECT)
+  rejectDispatch(@Param('ref') ref: string, @Body() dto: RejectDeliveryReportDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.deliveryReportsService.rejectDispatch(ref, dto, actor);
   }
 
   @Post(':id/submit')

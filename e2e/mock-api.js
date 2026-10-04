@@ -44,7 +44,7 @@ const USERS = {
   sup: { id: 'u-sup', email: 'warehousesupervisor@kam.local', firstName: 'Efua', lastName: 'Darko', role: 'WAREHOUSE_SUPERVISOR', scopes: GLOBAL, perms: ['dashboard.view', 'sales.assign', 'sales.fulfill', 'warehouse.view'] },
   wm1: { id: 'u-wm1', email: 'warehousemanager.1@kam.local', firstName: 'Kwabena', lastName: 'Adjei', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH1 }], perms: ['dashboard.view', 'sales.fulfill', 'warehouse.view', 'warehouse.receive', 'farm.inventory.view'] },
   wm2: { id: 'u-wm2', email: 'warehousemanager.2@kam.local', firstName: 'Abena', lastName: 'Gyasi', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH2 }], perms: ['dashboard.view', 'sales.fulfill', 'warehouse.view'] },
-  fsup: { id: 'u-fsup', email: 'farmdirector@kam.local', firstName: 'Efua', lastName: 'Mensah', role: 'FARM_DIRECTOR', scopes: GLOBAL, perms: ['dashboard.view', 'delivery.create', 'delivery.view', 'delivery.approve', 'farm.inventory.view', 'paddy.approve', 'tasks.assign', 'tasks.complete'] },
+  fsup: { id: 'u-fsup', email: 'farmdirector@kam.local', firstName: 'Efua', lastName: 'Mensah', role: 'FARM_DIRECTOR', scopes: GLOBAL, perms: ['dashboard.view', 'delivery.create', 'delivery.view', 'delivery.approve', 'delivery.reject', 'farm.inventory.view', 'paddy.approve', 'tasks.assign', 'tasks.complete'] },
   fm: { id: 'u-fm', email: 'farmmanager@kam.local', firstName: 'Yaa', lastName: 'Owusu', role: 'FARM_MANAGER', scopes: [{ scopeType: 'FARM', scopeId: '33333333-3333-4333-8333-333333333333' }], perms: ['dashboard.view', 'paddy.create', 'paddy.submit', 'delivery.create', 'delivery.view', 'farm.inventory.view', 'tasks.complete'] },
   admin: { id: 'u-admin', email: 'admin@kam.local', firstName: 'System', lastName: 'Administrator', role: 'ADMIN', scopes: GLOBAL, perms: ALL_PERMS },
 };
@@ -319,12 +319,6 @@ app.post('/api/users', async (req, res) => {
   const u = { id: uid('u'), firstName: d.firstName, lastName: d.lastName, email: d.email.toLowerCase(), status: 'ACTIVE', roles: (d.roleCodes || []).map((c) => ({ role: { code: c, name: c } })), mustChangePassword: true }; X.users.push(u); X.lastPassword = d.temporaryPassword; ok(res, u);
 });
 // dispatch
-const reportsService = new DeliveryReportsService({
-  deliveryOrder: { findUnique: async () => X.order },
-  deliveryReport: { findUnique: async ({ where }) => X.reports.find((r) => r.id === where.id) },
-  $transaction: async (cb) => cb({ deliveryReport: { create: async ({ data }) => { const row = { ...data, id: uid('dr'), reportNumber: `DR-2026-${String(100 + X.reports.length)}`, status: 'DRAFT', submittedById: 'u-admin', vehicle: null, driver: null }; X.reports.push(row); return row; } } }),
-}, fakeAudit, fakeLedger);
-app.post('/api/delivery-reports', async (req, res) => { const k = who(req); log(req, {}); const d = await body(res, CreateDeliveryReportDto, req.body); if (!d) return; try { ok(res, await reportsService.create(d, actorOf(k))); } catch (e) { fail(res, e.getStatus ? e.getStatus() : 500, e.message); } });
 const dtoOnly = (method, path, Cls, reply) => app[method](path, async (req, res) => { log(req, {}); const d = await body(res, Cls, req.body); if (!d) return; ok(res, reply); });
 app.get('/api/stock-transfers', (req, res) => ok(res, [{ id: 'st1', transferNumber: 'TRF-2026-000001', status: 'DISPATCHED', sourceWarehouse: { name: 'Tamale Warehouse' }, destWarehouse: { name: 'Kumasi Warehouse' }, product: { name: 'Pectra Rice' }, packagingSize: { label: '25KG' }, bagCount: 40, totalKg: 1000, receivedBagCount: null, receivedKg: null, varianceKg: null, reason: null, requestedBy: { firstName: 'A', lastName: 'B' } }]));
 dtoOnly('post', '/api/stock-transfers', CreateStockTransferDto, { id: 'st2', transferNumber: 'TRF-2026-000002', status: 'DISPATCHED' });
@@ -333,50 +327,97 @@ app.get('/api/shipments', (req, res) => ok(res, [{ id: 'sh1', shipmentNumber: 'S
 dtoOnly('post', '/api/shipments/:id/receive', ReceiveShipmentDto, { id: 'sh1', receivedAt: new Date().toISOString() });
 dtoOnly('post', '/api/paddy-requests', CreatePaddyRequestDto, { id: 'rq1', requestNumber: 'PR-REQ-2026-000001' });
 
-// ---- dispatch requests: the REAL service and tracker, with the Farm Supervisor -> Farm Manager task ----
+
+// ---- ONE in-memory picture of orders, reports, shipments, stock and tasks, served by the REAL order and report services ----
 const { DeliveryOrdersService } = require(B + '/logistics/delivery-orders.service');
 const { trackingOf } = require(B + '/logistics/dispatch-tracking.util');
 const { CreateDispatchRequestDto } = require(B + '/logistics/dto/create-dispatch-request.dto');
+const { CreateDispatchDto } = require(B + '/logistics/dto/create-dispatch.dto');
+const { RejectDeliveryReportDto } = require(B + '/logistics/dto/reject-delivery-report.dto');
 const LOCATIONS = { [WH1]: 'Tamale, Northern Region', [WH2]: 'Kumasi, Ashanti Region' };
 const T = { t0: '2026-10-05T08:00:00.000Z', t1: '2026-10-05T10:00:00.000Z', t2: '2026-10-05T12:00:00.000Z', t3: '2026-10-05T14:00:00.000Z', t4: '2026-10-06T09:00:00.000Z' };
-const fx = (id, n, reports) => ({ id, orderNumber: `DO-2026-00900${n}`, requestRef: `RQ-2026-00900${n}`, status: 'PENDING', farmId: FARM, destinationWarehouseId: WH1, paddyGradeId: G4, bagCount: 100, totalKg: 5000, totalKgEstimated: true, priority: 'NORMAL', notes: null, requestedDate: '2026-10-09T00:00:00.000Z', createdAt: T.t0, createdById: 'u-fsup', reports });
 const who2 = { firstName: 'Yaa', lastName: 'Owusu' }, boss = { firstName: 'Efua', lastName: 'Mensah' };
-const FIXTURES = () => [
-  fx('00000000-0000-4000-8000-0000000000f1', 1, []),
-  fx('00000000-0000-4000-8000-0000000000f2', 2, [{ reportNumber: 'DR-9002', status: 'SUPERVISOR_REVIEW', createdAt: T.t1, submittedAt: T.t2, actualBagCount: 98, submittedBy: who2 }]),
-  fx('00000000-0000-4000-8000-0000000000f3', 3, [{ reportNumber: 'DR-9003', status: 'IN_TRANSIT', createdAt: T.t1, submittedAt: T.t2, approvedAt: T.t3, actualBagCount: 98, submittedBy: who2, approvedBy: boss, driver: { name: 'Yaw Boateng' }, vehicle: { plateNumber: 'GT-5521-21' }, shipment: { departedAt: T.t3, expectedBags: 98 } }]),
-  fx('00000000-0000-4000-8000-0000000000f4', 4, [{ reportNumber: 'DR-9004', status: 'RECONCILED', createdAt: T.t1, submittedAt: T.t2, approvedAt: T.t3, actualBagCount: 98, submittedBy: who2, approvedBy: boss, shipment: { departedAt: T.t3, receivedAt: T.t4, expectedBags: 98, receivedBags: 96, varianceRequiresApproval: true } }]),
-  fx('00000000-0000-4000-8000-0000000000f5', 5, [{ reportNumber: 'DR-9005', status: 'REJECTED', createdAt: T.t1, rejectionReason: 'The weight does not match the bags', actualBagCount: 98, submittedBy: who2 }]),
-];
+const userRef = (id) => (id === 'u-fm' ? who2 : id === 'u-fsup' ? boss : id ? { firstName: 'Someone', lastName: 'Else' } : null);
+const OID = (n) => `00000000-0000-4000-8000-0000000000f${n}`;
+const fx = (n) => ({ id: OID(n), orderNumber: `DO-2026-00900${n}`, requestRef: `RQ-2026-00900${n}`, status: 'PENDING', farmId: FARM, destinationWarehouseId: WH1, paddyGradeId: G4, bagCount: 100, totalKg: 5000, totalKgEstimated: true, priority: 'NORMAL', notes: null, requestedDate: '2026-10-09T00:00:00.000Z', createdAt: T.t0, createdById: 'u-fsup' });
+const fr = (n, status, over = {}) => ({ id: uid('dr'), reportNumber: `DR-2026-0090${n}`, deliveryOrderId: OID(n), farmId: FARM, destinationWarehouseId: WH1, paddyGradeId: G4, status, createdAt: T.t1, submittedAt: T.t2, submittedById: 'u-fm', actualBagCount: 98, actualKg: 4900, actualKgEstimated: true, labourCost: 0, transportationFee: 0, otherCosts: 0, totalDeliveryCost: 0, dispatchRef: null, ...over });
 const origSeedX = seedX;
-seedX = function () { origSeedX(); X.orders = FIXTURES(); X.tasks = []; X.notes = []; X.stock = { [G4]: 100, [G5]: 100 }; X.noManager = false; };
+seedX = function () {
+  origSeedX();
+  X.orders = [1, 2, 3, 4, 5].map(fx);
+  X.reports = [
+    fr(2, 'SUPERVISOR_REVIEW'),
+    fr(3, 'IN_TRANSIT', { approvedAt: T.t3, approvedById: 'u-fsup', driverId: 'drv-f3', vehicleId: 'veh-f3', shipment: { shipmentNumber: 'SH-2026-009003', departedAt: T.t3, expectedBags: 98 } }),
+    fr(4, 'RECONCILED', { approvedAt: T.t3, approvedById: 'u-fsup', shipment: { shipmentNumber: 'SH-2026-009004', departedAt: T.t3, receivedAt: new Date(Date.now() - 3600e3).toISOString(), expectedBags: 98, receivedBags: 96, varianceRequiresApproval: true } }),
+    fr(5, 'REJECTED', { rejectionReason: 'The weight does not match the bags' }),
+  ];
+  X.shipments = []; X.vehicles = { 'veh-f3': { plateNumber: 'GT-5521-21', vehicleType: 'Truck' } }; X.drivers = { 'drv-f3': { name: 'Yaw Boateng', phone: '0244111222' } };
+  X.tasks = []; X.notes = []; X.stock = { [G4]: 100, [G5]: 100 }; X.noManager = false;
+};
 seedX();
-const withRel = (o) => ({ ...o, farm: { name: 'Nkawkaw Farm' }, destinationWarehouse: { id: o.destinationWarehouseId, name: WAREHOUSES[o.destinationWarehouseId], location: LOCATIONS[o.destinationWarehouseId] ?? null }, paddyGrade: { label: GRADES2.find((g) => g.id === o.paddyGradeId).label }, createdBy: boss });
-const dispatchPrisma = {
+const whOf = (id) => ({ id, name: WAREHOUSES[id], location: LOCATIONS[id] ?? null });
+const relReport = (r) => ({ ...r, farm: { name: 'Nkawkaw Farm' }, destinationWarehouse: whOf(r.destinationWarehouseId), paddyGrade: { label: GRADES2.find((g) => g.id === r.paddyGradeId)?.label }, vehicle: r.vehicleId ? X.vehicles[r.vehicleId] ?? null : null, driver: r.driverId ? X.drivers[r.driverId] ?? null : null, submittedBy: userRef(r.submittedById), approvedBy: userRef(r.approvedById), shipment: X.shipments.find((s) => s.deliveryReportId === r.id) ?? r.shipment ?? null, deliveryOrder: X.orders.find((o) => o.id === r.deliveryOrderId) ?? X.order });
+const withRel = (o) => ({ ...o, farm: { name: 'Nkawkaw Farm' }, destinationWarehouse: whOf(o.destinationWarehouseId), paddyGrade: { label: GRADES2.find((g) => g.id === o.paddyGradeId)?.label }, createdBy: userRef(o.createdById), reports: X.reports.filter((r) => r.deliveryOrderId === o.id).map(relReport).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))) });
+const matchWhere = (r, w = {}) => Object.entries(w).every(([k, v]) => (v && typeof v === 'object' && 'in' in v ? v.in.includes(r[k]) : v && typeof v === 'object' && 'notIn' in v ? !v.notIn.includes(r[k]) : r[k] === v));
+let _un = 0; const uuidn = () => `00000000-0000-4000-8000-${String(100 + ++_un).padStart(12, '0')}`;
+const stTx = {
+  deliveryOrder: { create: async ({ data }) => { const row = { ...data, id: uuidn(), status: 'PENDING', createdAt: new Date().toISOString(), requestedDate: data.requestedDate.toISOString() }; X.orders.push(row); return withRel(row); } },
+  deliveryReport: {
+    create: async ({ data }) => { const row = { ...data, id: uid('dr'), createdAt: new Date().toISOString() }; X.reports.push(row); return row; },
+    update: async ({ where, data }) => { const r = X.reports.find((x) => x.id === where.id); Object.assign(r, data); return r; },
+    updateMany: async ({ where, data }) => { X.reports.filter((r) => matchWhere(r, where)).forEach((r) => Object.assign(r, data)); },
+  },
+  shipment: { create: async ({ data }) => { const row = { ...data, id: uid('sh'), departedAt: new Date().toISOString(), receivedAt: null }; X.shipments.push(row); return row; } },
+  shipmentEvent: { create: async () => ({}) },
+  vehicle: { upsert: async ({ create }) => { const id = uid('veh'); X.vehicles[id] = { plateNumber: create.plateNumber, vehicleType: create.vehicleType ?? null }; return { id }; } },
+  driver: { create: async ({ data }) => { const id = uid('drv'); X.drivers[id] = { name: data.name, phone: data.phone ?? null }; return { id }; }, upsert: async ({ create }) => { const id = uid('drv'); X.drivers[id] = { name: create.name, phone: create.phone ?? null }; return { id }; } },
+  task: { count: async () => X.tasks.length, create: async ({ data }) => { const row = { ...data, id: uid('task'), priority: 'MEDIUM', dueDate: data.dueDate.toISOString(), createdBy: boss, assignedTo: who2, farm: { name: 'Nkawkaw Farm' }, warehouse: whOf(data.warehouseId), completionEvidence: null, attachmentUrl: null }; X.tasks.push(row); return row; } },
+};
+const stPrisma = {
   farm: { findUnique: async () => ({ id: FARM, name: 'Nkawkaw Farm', isActive: true }) },
-  warehouse: { findUnique: async ({ where }) => ({ id: where.id, name: WAREHOUSES[where.id], location: LOCATIONS[where.id] ?? null, isActive: true, managers: [{ user: { firstName: 'Kwabena', lastName: 'Adjei', phone: '0244111222' } }] }) },
+  warehouse: { findUnique: async ({ where }) => ({ ...whOf(where.id), isActive: true, managers: [{ user: { firstName: 'Kwabena', lastName: 'Adjei', phone: '0244111222' } }] }) },
   paddyGrade: { findMany: async ({ where }) => GRADES2.filter((g) => where.id.in.includes(g.id)) },
   farmManager: { findMany: async () => (X.noManager ? [] : [{ userId: 'u-fm', user: who2 }]) },
-  deliveryOrder: { findUnique: async ({ where }) => { const o = X.orders.find((x) => x.id === where.id); return o ? withRel(o) : null; }, findMany: async () => X.orders.map(withRel) },
+  warehouseManager: { findMany: async () => [{ userId: 'u-wm1' }] },
+  deliveryOrder: {
+    findUnique: async ({ where }) => { const o = X.orders.find((x) => x.id === where.id) ?? (X.order && X.order.id === where.id ? X.order : null); return o ? withRel(o) : null; },
+    findMany: async ({ where = {} } = {}) => X.orders.filter((o) => matchWhere(o, where)).map(withRel),
+  },
+  deliveryReport: {
+    findUnique: async ({ where }) => { const r = X.reports.find((x) => x.id === where.id); return r ? relReport(r) : null; },
+    findMany: async ({ where = {} } = {}) => X.reports.filter((r) => matchWhere(r, where)).map(relReport).sort((a, b) => String(a.reportNumber).localeCompare(String(b.reportNumber))),
+  },
+  task: { updateMany: async ({ where, data }) => { X.tasks.filter((t) => matchWhere(t, where)).forEach((t) => Object.assign(t, data)); } },
   $transaction: async (cb) => {
-    const [o, t] = [X.orders.length, X.tasks.length];
-    try {
-      return await cb({
-        deliveryOrder: { create: async ({ data }) => { const row = { ...data, id: uid('do'), status: 'PENDING', createdAt: new Date().toISOString(), requestedDate: data.requestedDate.toISOString(), reports: [] }; X.orders.push(row); return withRel(row); } },
-        task: { count: async () => X.tasks.length, create: async ({ data }) => { const row = { ...data, id: uid('task'), priority: 'MEDIUM', dueDate: data.dueDate.toISOString(), createdBy: boss, assignedTo: who2, farm: { name: 'Nkawkaw Farm' }, warehouse: { name: WAREHOUSES[data.warehouseId], location: LOCATIONS[data.warehouseId] ?? null }, completionEvidence: null, attachmentUrl: null }; X.tasks.push(row); return row; } },
-      });
-    } catch (e) { X.orders.length = o; X.tasks.length = t; throw e; }
+    const snap = [X.orders.length, X.reports.map((r) => ({ ...r })), X.tasks.length, X.shipments.length, { ...X.stock }];
+    try { return await cb(stTx); } catch (e) { X.orders.length = snap[0]; X.reports.splice(0, X.reports.length, ...snap[1]); X.tasks.length = snap[2]; X.shipments.length = snap[3]; X.stock = snap[4]; throw e; }
   },
 };
-const dispatchLedger = { generateNumber: fakeLedger.generateNumber, getBalancesForLocation: async () => Object.entries(X.stock).map(([paddyGradeId, bagCount]) => ({ paddyGradeId, bagCount })) };
-const dispatchOrders = new DeliveryOrdersService(dispatchPrisma, fakeAudit, dispatchLedger, { notify: async (n) => { X.notes.push(n); } });
+const stLedger = {
+  generateNumber: fakeLedger.generateNumber,
+  getBalancesForLocation: async () => Object.entries(X.stock).map(([paddyGradeId, bagCount]) => ({ paddyGradeId, bagCount })),
+  recordTransaction: async () => {},
+  adjustBalance: async (_tx, key, _kg, bags) => { if (key.locationType === 'FARM') X.stock[key.paddyGradeId] = (X.stock[key.paddyGradeId] ?? 0) + bags; },
+};
+const notifier = { notify: async (n) => { X.notes.push(n); } };
+const dispatchOrders = new DeliveryOrdersService(stPrisma, fakeAudit, stLedger, notifier);
+const reportsService = new DeliveryReportsService(stPrisma, fakeAudit, stLedger, notifier);
+const apiErr = (res, e) => fail(res, e.getStatus ? e.getStatus() : 500, (e.getResponse && typeof e.getResponse() === 'object' ? e.getResponse().message : null) || e.message || 'An unexpected error occurred.');
+app.get('/__stockmap', (req, res) => res.json(X.stock));
+app.get('/__shipments', (req, res) => res.json(X.shipments));
 app.get('/api/delivery-orders', (req, res) => ok(res, X.orders.map((o) => { const r = withRel(o); return { ...r, tracking: trackingOf(r) }; })));
+app.get('/api/delivery-orders/requests', async (req, res) => { const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); try { ok(res, await dispatchOrders.board(actorOf(k))); } catch (e) { apiErr(res, e); } });
 app.post('/api/delivery-orders/request', async (req, res) => {
   const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); log(req, {});
   const d = await body(res, CreateDispatchRequestDto, req.body); if (!d) return;
-  try { ok(res, await dispatchOrders.createRequest(d, actorOf(k))); } catch (e) { fail(res, e.getStatus ? e.getStatus() : 500, (e.getResponse && typeof e.getResponse() === 'object' ? e.getResponse().message : null) || e.message || 'An unexpected error occurred.'); }
+  try { ok(res, await dispatchOrders.createRequest(d, actorOf(k))); } catch (e) { apiErr(res, e); }
 });
 app.get('/api/tasks', (req, res) => { const k = who(req); const mine = req.query.mine === 'true'; ok(res, X.tasks.filter((t) => !mine || (k && t.assignedToId === USERS[k].id))); });
+app.post('/api/delivery-reports', async (req, res) => { const k = who(req); log(req, {}); const d = await body(res, CreateDeliveryReportDto, req.body); if (!d) return; try { ok(res, await reportsService.create(d, actorOf(k))); } catch (e) { apiErr(res, e); } });
+app.post('/api/delivery-reports/dispatch', async (req, res) => { const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); log(req, {}); const d = await body(res, CreateDispatchDto, req.body); if (!d) return; try { ok(res, await reportsService.createDispatch(d, actorOf(k))); } catch (e) { apiErr(res, e); } });
+app.post('/api/delivery-reports/dispatch/:ref/submit', async (req, res) => { const k = who(req); log(req, { item: req.params.ref }); try { ok(res, await reportsService.submitDispatch(req.params.ref, actorOf(k))); } catch (e) { apiErr(res, e); } });
+app.post('/api/delivery-reports/dispatch/:ref/approve', async (req, res) => { const k = who(req); log(req, { item: req.params.ref }); try { ok(res, await reportsService.approveDispatch(req.params.ref, actorOf(k))); } catch (e) { apiErr(res, e); } });
+app.post('/api/delivery-reports/dispatch/:ref/reject', async (req, res) => { const k = who(req); log(req, { item: req.params.ref }); const d = await body(res, RejectDeliveryReportDto, req.body); if (!d) return; try { ok(res, await reportsService.rejectDispatch(req.params.ref, d, actorOf(k))); } catch (e) { apiErr(res, e); } });
 app.get('/api/farms/:id/inventory', (req, res) => { const by = [[G4, 'SIZE_4', 'Size 4'], [G5, 'SIZE_5', 'Size 5']].map(([id, code, label]) => ({ gradeCode: code, gradeLabel: label, bagCount: X.stock[id] ?? 0, totalKg: (X.stock[id] ?? 0) * 50 })); ok(res, { farmId: req.params.id, byGrade: by, totalKg: by.reduce((t, g) => t + g.totalKg, 0), totalBags: by.reduce((t, g) => t + g.bagCount, 0), dispatchedByGrade: [], dispatchedTotalKg: 0, dispatchedTotalBags: 0 }); });
 // ---- anything else the pages ask for: empty, so they load ----
 app.get('/api/*', (req, res) => ok(res, []));

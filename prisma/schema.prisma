@@ -1130,6 +1130,8 @@ model DeliveryReport {
   actualKg         Decimal  @map("actual_kg") @db.Decimal(12, 3)
   /// True when only the bags were counted (no scale): the kg is then the bags x the order\'s weight per bag, not a measurement.
   actualKgEstimated Boolean @default(false) @map("actual_kg_estimated")
+  /// Reports made together for ONE trip (every size on the truck) share this reference, e.g. "DS-2026-000007". They are submitted, approved or sent back together.
+  dispatchRef String? @map("dispatch_ref")
 
   labourCost        Decimal @default(0) @map("labour_cost") @db.Decimal(12, 2)
   numberOfLabourers Int?    @map("number_of_labourers")
@@ -1167,6 +1169,8 @@ model DeliveryReport {
   @@index([destinationWarehouseId])
   @@index([status])
   @@map("delivery_reports")
+
+  @@index([dispatchRef])
 }
 
 model Shipment {

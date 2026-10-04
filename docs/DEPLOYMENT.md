@@ -604,3 +604,9 @@ no `[startup]` lines before it, the steps were skipped.
 This release adds five columns and three indexes (paddy intake reference, dispatch request reference on orders and tasks, and flags that
 mark estimated kilograms). The start-up schema step adds them; `/api/health` should then show `2026.10.10`. The manual SQL, and what the
 release does, is in `docs/DISPATCH_REQUESTS.md`.
+
+## Version 2026.10.11: the Dispatch desk
+
+Adds one column and one index (`delivery_reports.dispatch_ref`) on top of 2026.10.10. The start-up schema step adds them; `/api/health`
+should then show `2026.10.11`. After deploying, make sure **each farm has a manager assigned** (Farms), otherwise a request creates no task.
+See `docs/DISPATCH_REQUESTS.md`.

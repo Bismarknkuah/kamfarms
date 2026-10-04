@@ -625,7 +625,7 @@ export default function MyOfficePage() {
   // longer visits My Office at all (moved to the Shipments page
   // instead), and warehouse.receive is held only by that role, so
   // this line would never have rendered for anyone else anyway.
-  if (hasPermission('delivery.create')) sections.push(<DeliveryQuickAction key="delivery" accessToken={accessToken} />);
+  if (hasPermission('delivery.create')) sections.push(<DeliveryQuickAction key="delivery" accessToken={accessToken} me={me} hasPermission={hasPermission} />);
   if (hasPermission('paddy.approve')) sections.push(<PaddyApprovalQueue key="paddy-approve" accessToken={accessToken} />);
   if (hasPermission('sales.approve')) sections.push(<SalesApprovalQueue key="sales-approve" accessToken={accessToken} />);
   if (hasPermission('payment.verify')) sections.push(<PaymentVerificationQueue key="payment-verify" accessToken={accessToken} />);

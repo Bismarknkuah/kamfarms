@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useCurrentUser } from '@/lib/use-current-user';
+import { DispatchDesk } from '@/components/dispatch/DispatchDesk';
 import { DashboardShell } from '@/components/DashboardShell';
 import { hasFinancialVisibility } from '@/lib/nav-items';
 import { YieldPredictionCard } from '@/components/DataEntryKit';
@@ -724,6 +725,7 @@ export default function DashboardPage() {
   // longer duplicates it as a grid of the same links.
   const myFarmId = myFarmIdRobust;
   const isFarmDirector = me.roles.some((r) => r.code === 'FARM_DIRECTOR');
+  const isFarmManager = me.roles.some((r) => r.code === 'FARM_MANAGER');
   const isWarehouseManager = me.roles.some((r) => r.code === 'WAREHOUSE_MANAGER');
   const isWarehouseSupervisor = me.roles.some((r) => r.code === 'WAREHOUSE_SUPERVISOR');
   const isMdOrCeo = me.roles.some((r) => r.code === 'MD' || r.code === 'CEO');
@@ -789,6 +791,7 @@ export default function DashboardPage() {
 
       {accessToken && (
         <>
+          {(isFarmDirector || isFarmManager) && <div className="mb-8" data-testid="dashboard-dispatch-desk"><DispatchDesk accessToken={accessToken} me={me} hasPermission={hasPermission} variant="dashboard" /></div>}
           {isFinanceDirector && <FinanceDesk accessToken={accessToken} meId={me.id} />}
           {isMdOrCeo && <ReleaseDesk accessToken={accessToken} canApproveDirectorExpenses={hasPermission('finance.approve.director')} />}
           {isMdOrCeo && <OutputFeedbackCard accessToken={accessToken} />}

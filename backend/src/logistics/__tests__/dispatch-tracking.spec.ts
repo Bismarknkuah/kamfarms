@@ -68,6 +68,11 @@ describe('trackingOf: where a dispatch order is, for the Farm Supervisor who ask
     expect(t.sentBack).toBeNull();
   });
 
+  it('ignores a cancelled report: an order whose stale draft was replaced is not shown as preparing', () => {
+    const t = trackingOf(order({ reports: [report({ status: 'CANCELLED', createdAt: T3 })] }));
+    expect(t.stage).toBe('REQUESTED');
+  });
+
   it('copes with an order that carries no details at all (never throws)', () => {
     expect(() => trackingOf({} as any)).not.toThrow();
     expect(trackingOf({} as any).stage).toBe('REQUESTED');

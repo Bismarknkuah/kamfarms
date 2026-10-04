@@ -49,7 +49,7 @@ export function dispatchTaskDescription(f: RequestFacts): string {
   const contacts = (f.warehouseContacts ?? []).filter((c) => c.name);
   if (contacts.length > 0) out.push(`Who to ask at the warehouse: ${contacts.map((c) => (c.phone ? `${c.name} (${c.phone})` : c.name)).join(', ')}.`);
   if (f.notes && f.notes.trim()) out.push(`Instructions from ${f.requestedByName || 'the Farm Supervisor'}: ${f.notes.trim()}`);
-  out.push(`When the bags are loaded, open Dispatch and log a dispatch report${f.lines.length > 1 ? ' for each size' : ''}. Request ${f.requestRef}.`);
+  out.push(`When the bags are loaded, open the Dispatch desk and submit one dispatch${f.lines.length > 1 ? ' with every size on the truck' : ''}. Request ${f.requestRef}.`);
   return out.join('\n');
 }
 

@@ -480,6 +480,16 @@ async function main() {
   const salesOfficer2 = await prisma.user.findUniqueOrThrow({ where: { email: 'sales.2@kam.local' } });
   const financeDirector = await prisma.user.findUniqueOrThrow({ where: { email: 'financedirector@kam.local' } });
   const pectraRiceId = '00000000-0000-0000-0000-000000000021';
+
+  // Demo list prices, so a fresh demo can create an order straight away. Real prices are set by the Administrator on the
+  // Price list screen; this never overwrites one that is already there.
+  const DEMO_PRICES: Record<string, number> = { '1KG': 21, '2KG': 40, '5KG': 95, '10KG': 185, '25KG': 420, '50KG': 820 };
+  for (const [label, price] of Object.entries(DEMO_PRICES)) {
+    const size = await prisma.packagingSize.findUnique({ where: { label } });
+    if (!size) continue;
+    const already = await prisma.productPrice.findFirst({ where: { productId: pectraRiceId, packagingSizeId: size.id, customerId: null } });
+    if (!already) await prisma.productPrice.create({ data: { productId: pectraRiceId, packagingSizeId: size.id, pricePerBag: price, effectiveFrom: new Date('2026-01-01'), createdById: financeDirector.id } });
+  }
   const now = new Date();
 
   const demoCustomers = [

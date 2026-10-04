@@ -41,6 +41,7 @@ import {
   ClipboardEdit,
   Inbox,
   Eye,
+  Tag,
   type LucideIcon,
 } from 'lucide-react';
 import { MeResponse, authApi } from '@/lib/api-client';
@@ -92,6 +93,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'clipboard-edit': ClipboardEdit,
   'inbox': Inbox,
   eye: Eye,
+  tag: Tag,
 };
 
 function NavIcon({ name, className }: { name: string; className?: string }) {

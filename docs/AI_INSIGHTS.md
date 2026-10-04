@@ -13,7 +13,8 @@ and the same question starting from paddy: *100 bags of paddy needs how much pow
 | **Top band** | Whose activities the page covers (**Whole company** for the MD, CEO and Administrator, or the person's own places), how many milling runs it read, and the headline: every 1 kWh gives X bags of packaged rice, broken rice and hull. |
 | **Work it out** | Type a kWh amount (or bags of paddy) and see the bags, the kilograms, the typical range, and a colour bar of where the paddy goes. It changes as you type. Can be based on all runs, one grade of paddy, or one milling center. |
 | **Side by side** | A table by grade and a table by milling center, for 1, 100 or 1,000 kWh. For the MD and CEO the center table ranks the centers by rice per kWh and shows each one above or below the company. |
-| **Ask a question** | The fixed-question assistant (not a general chatbot). Every answer says whose activities it covers, its confidence and what it is based on. |
+| **Is every milling center delivering what was expected?** | For each milling center, whether its runs gave **more than, as much as, or less than** the AI expected for the power used, with the AI's own accuracy, and every run in turn. For the MD and CEO the whole company; for everyone else their own places. A short version sits on the MD and CEO home page. |
+| **Ask a question** | A conversation. Ask about activities, stock, production, sales, who owes money, what is waiting for approval, or how to do something in the system. Every answer says who worked it out, whose activities it covers, which lookups it made, its confidence and what it is based on. |
 
 ## How the figures are made
 
@@ -42,6 +43,29 @@ centers at their own warehouses, and a role without `milling.view` gets no predi
 | `POST /ai/predict-from-energy` | `ai.use` | `{ kwh, paddyGradeId?, millingCenterId? }` to bags of each product. |
 | `POST /ai/predict-from-paddy` | `ai.use` | `{ bags, paddyGradeId?, millingCenterId? }` to the power needed and bags of each product. |
 | `GET /ai/anomalies` | `ai.view` | Unusual readings and runs that did not add up, limited to the asker's places. |
-| `POST /ai/assistant/ask` | `ai.use` | The question box. |
+| `GET /ai/feedback?days=30&millingCenterId=` | `ai.view` | Each milling run against what the AI expected, per milling center, and how the AI is learning. |
+| `POST /ai/assistant/ask` | `ai.use` | The question box. Body: `question` and, optionally, the earlier `history` turns. |
 
 The server reports the feature `ai-predictions` in `/api/health`; the Administrator dashboard warns when the website needs it and the server lacks it.
+
+## The AI learns from every approved run
+
+`backend/src/ai/ai-learning.util.ts`. Nothing is stored: it is all worked out again from the recorded milling runs.
+
+1. **Expected before the run.** Each run is judged against what the approved runs *before it* had taught: the same grade's own history when there are at least 3 earlier runs, otherwise all grades, otherwise a labelled industry benchmark.
+2. **Compared with what it actually gave.** Packaged rice (and broken rice and hull) against expectation, as a percentage. Within the tolerance (5% by default) is **as expected**; above is **more than expected**; below is **less than expected**.
+3. **Learned from.** Once a run is **approved** it joins the history the next expectation is built from, so the AI adapts as soon as runs are approved. **Recent runs count more** than old ones (a run's weight halves every 40 runs by default), so it follows the mill as it changes. A run **flagged as not adding up is never learned from**, and a run that is only submitted gets feedback but does not teach the AI yet.
+4. **Early estimates.** A run judged only against the industry benchmark (fewer than 3 earlier runs) is called an early estimate. It is shown, but never counted as a verdict.
+5. **The AI's report card.** Accuracy is 100 minus its average miss on packaged rice over its latest 20 judged runs, with a trend (still learning, getting more accurate, steady, getting less accurate) and the average miss by week.
+
+Adjustable in System settings, **AI predictions**: the tolerance and how quickly the AI favours recent runs.
+
+## The question box
+
+`backend/src/ai/ai-assistant.service.ts`, `ai-tools.service.ts`, `ai-agent.service.ts`.
+
+- **Lookups (tools).** Production, what power gives, output against expectations, stock, paddy intake, sales, customers who owe money, runs waiting for approval, unusual readings, what the person can see, and a guide to how the system works (`ai-help.ts`). **Each lookup checks the person's permission and applies their jurisdiction itself, on the server.** Whoever asks, it returns only what the person could already open elsewhere, inside their own places.
+- **Built-in answerer.** Always available. Recognises the common questions (and periods like "last week", and milling center names) and answers from the lookups.
+- **Claude, for open-ended questions (optional).** Set `ANTHROPIC_API_KEY` on the API service (and optionally `ANTHROPIC_MODEL`, default `claude-sonnet-5-5`). Claude then decides which lookups to make and phrases the answer; it never touches the database and only receives what a lookup returns for that person. If the key is missing, Claude is unreachable, or a person has asked 40 questions in an hour, the built-in answerer answers instead.
+- **What Claude is sent.** The question, the last few turns of the conversation, and the figures the lookups return (which can include milling center, farm and customer names). It is not sent anything the lookups did not return.
+- **Everything is recorded.** Every question is written to the audit log with who asked it, which engine answered and which lookups it used.

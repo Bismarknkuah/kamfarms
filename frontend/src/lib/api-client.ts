@@ -19,15 +19,26 @@ export class ApiError extends Error {
   }
 }
 
+/** What a person is told when the browser gets no reply at all from the server (it is restarting, down, or unreachable). */
+export const SERVER_UNREACHABLE_MESSAGE = 'The server did not answer. It may be restarting after an update, so please wait a minute and try again.';
+
 async function request<T>(path: string, options: RequestInit = {}, accessToken?: string): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...options.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...options.headers,
+      },
+    });
+  } catch (err) {
+    // A deliberate cancel is not a server problem. Anything else here means no reply at all (the browser shows it as a
+    // CORS error when the server is down), which used to surface as a raw "Failed to fetch" and "Something went wrong".
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
+    throw new ApiError(SERVER_UNREACHABLE_MESSAGE, 'SERVER_UNREACHABLE', 0);
+  }
 
   const body = (await res.json().catch(() => null)) as ApiEnvelope<T> | null;
 
@@ -593,6 +604,23 @@ export interface SalesOrderAvailability {
   }[];
 }
 
+export interface ProductPrice {
+  id: string; productId: string; packagingSizeId: string; customerId: string | null;
+  /** A decimal, which the server sends as text. */
+  pricePerBag: string | number; effectiveFrom: string; effectiveTo: string | null; isActive: boolean;
+  product: { id: string; name: string }; packagingSize: { id: string; label: string; sizeKg: number }; customer: { id: string; name: string } | null;
+}
+/** The price in force right now for one product and size: the customer's own where they have one, otherwise the list price. */
+export interface EffectivePrice { productId: string; packagingSizeId: string; pricePerBag: number; source: 'customer' | 'list' }
+
+export const productPricesApi = {
+  list: (accessToken: string) => request<ProductPrice[]>('/product-prices', { method: 'GET', cache: 'no-store' }, accessToken),
+  effective: (accessToken: string, customerId?: string) =>
+    request<EffectivePrice[]>(`/product-prices/effective${customerId ? `?customerId=${encodeURIComponent(customerId)}` : ''}`, { method: 'GET', cache: 'no-store' }, accessToken),
+  create: (accessToken: string, data: { productId: string; packagingSizeId: string; customerId?: string; pricePerBag: number; effectiveFrom: string }) =>
+    request<ProductPrice>('/product-prices', { method: 'POST', body: JSON.stringify(data) }, accessToken),
+};
+
 export const customersApi = {
   list: (accessToken: string, search?: string) =>
     request<Customer[]>(`/customers${search ? `?search=${encodeURIComponent(search)}` : ''}`, { method: 'GET' }, accessToken),
@@ -910,6 +938,10 @@ export interface AssistantAnswer {
   assumptions: string;
   /** Whose activities the answer covers: "Whole company", or the person's own places. */
   jurisdiction?: string;
+  /** Who worked the answer out: Claude (when connected) or the built-in answerer. */
+  engine?: 'claude' | 'built-in';
+  /** The lookups the answer was drawn from. */
+  toolsUsed?: { name: string; label: string; period: string }[];
 }
 
 export type AiConfidence = 'high' | 'medium' | 'low';
@@ -953,9 +985,52 @@ export function isAiInsights(x: unknown): x is AiInsights {
     && o.byGrade.every((g: any) => rates(g?.rates)) && o.byCenter.every((c: any) => rates(c?.rates));
 }
 
+export type AiVerdict = 'more' | 'as_expected' | 'less';
+export interface AiAmounts { riceKg: number; riceBags: number; brokenKg: number; brokenBags: number; hullKg: number; hullBags: number }
+export interface AiRunFeedback {
+  id: string; recordNumber: string; date: string; approved: boolean;
+  centerId: string; centerName: string; gradeLabel: string; kwh: number; paddyKg: number;
+  basis: 'grade' | 'overall' | 'benchmark'; baselineRuns: number;
+  expected: AiAmounts; actual: AiAmounts;
+  variance: { ricePercent: number; brokenPercent: number; hullPercent: number };
+  verdict: AiVerdict; exact: boolean; early: boolean; sentence: string;
+}
+export interface AiScorecard {
+  early: boolean; centerId: string; centerName: string; runs: number; more: number; asExpected: number; less: number;
+  kwh: number; expectedRiceBags: number; actualRiceBags: number; riceVariancePercent: number; verdict: AiVerdict;
+  latest: { date: string; verdict: AiVerdict; ricePercent: number } | null; sentence: string;
+}
+export interface AiLearning {
+  trainedOnRuns: number; lastRunAt: string | null; halfLifeRuns: number; tolerancePercent: number;
+  evaluatedRuns: number; accuracyPercent: number | null; trend: 'learning' | 'improving' | 'steady' | 'worsening';
+  recentErrorPercent: number | null; earlierErrorPercent: number | null;
+  weekly: { weekStart: string; errorPercent: number; runs: number }[];
+  explanation: string;
+}
+export type AiFeedback =
+  | { available: false; reason: string; jurisdiction: AiJurisdiction }
+  | {
+      available: true; generatedAt: string; jurisdiction: AiJurisdiction; days: number; tolerancePercent: number; bagSizes: AiBagSizes;
+      summary: { runs: number; early: number; more: number; asExpected: number; less: number; pendingApproval: number };
+      learning: AiLearning; centers: AiScorecard[]; runs: AiRunFeedback[];
+    };
+
+/** True only for a reply shaped the way the feedback screens need. */
+export function isAiFeedback(x: unknown): x is AiFeedback {
+  const o = x as Record<string, any> | null;
+  if (!o || typeof o !== 'object' || typeof o.available !== 'boolean') return false;
+  if (!o.jurisdiction || typeof o.jurisdiction.companyWide !== 'boolean') return false;
+  if (!o.available) return typeof o.reason === 'string';
+  return !!o.summary && typeof o.summary.runs === 'number' && !!o.learning && typeof o.learning.trainedOnRuns === 'number' && Array.isArray(o.learning.weekly)
+    && Array.isArray(o.centers) && Array.isArray(o.runs) && !!o.bagSizes;
+}
+
 export const aiApi = {
-  ask: (accessToken: string, question: string) =>
-    request<AssistantAnswer>('/ai/assistant/ask', { method: 'POST', body: JSON.stringify({ question }) }, accessToken),
+  ask: (accessToken: string, question: string, history?: { role: 'user' | 'assistant'; text: string }[]) =>
+    request<AssistantAnswer>('/ai/assistant/ask', { method: 'POST', body: JSON.stringify({ question, ...(history?.length ? { history } : {}) }) }, accessToken),
+  /** Each milling run against what the AI expected, per milling center, and how the AI itself is learning. */
+  feedback: (accessToken: string, days = 30, millingCenterId?: string) =>
+    request<AiFeedback>(`/ai/feedback?days=${days}${millingCenterId ? `&millingCenterId=${encodeURIComponent(millingCenterId)}` : ''}`, { method: 'GET', cache: 'no-store' }, accessToken),
   /** What power and paddy turn into, within the signed-in person's jurisdiction (the whole company for the MD and CEO). */
   insights: (accessToken: string) => request<AiInsights>('/ai/insights', { method: 'GET', cache: 'no-store' }, accessToken),
 };
@@ -1740,7 +1815,7 @@ export const settingsRegistryApi = {
 
 export interface SystemOverview {
   generatedAt: string;
-  api: { version: string; commit: string | null; startedAt: string; features: string[]; databaseOk: boolean; databaseMs: number };
+  api: { version: string; commit: string | null; startedAt: string; features: string[]; databaseOk: boolean; databaseMs: number; schema?: { state: 'ok' | 'missing' | 'unknown'; missing: string[] } };
   people: { total: number | null; active: number | null; disabled: number | null; lockedNow: number | null; mustChangePassword: number | null; neverSignedIn: number | null; roles: { code: string; name: string; isSystemRole: boolean; members: number }[] | null };
   organization: { farms: number | null; warehouses: number | null; millingCenters: number | null; machines: number | null; customers: number | null };
   access: { roles: number | null; permissions: number | null };

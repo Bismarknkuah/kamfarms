@@ -56,3 +56,8 @@ The sign-in page offers one-click demo accounts so each role can be tested. They
 A sync step that fails is logged (`[startup] WARNING: ...`) and the API **starts anyway**. Only the schema push is
 required. After a deploy, open `/api/health`: it reports the server `version` and `features`. The Admin dashboard warns in
 plain words when the server is older than the website.
+
+`railway.json` also sets a **health check** on `/api/health`: Railway sends traffic to a new version only once it answers, and a
+version that fails to start never replaces the one that is running. `backend/src/__tests__/app-boot.spec.ts` starts the whole
+server and checks the health route, the headers the website needs, and that the newest routes exist. See `docs/DEPLOYMENT.md`
+for what to do when the sign-in page says the server did not answer.

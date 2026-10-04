@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ReportsService } from '../reports/reports.service';
 import { ReceivablesService } from '../finance/receivables.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -6,6 +6,10 @@ import { AskAssistantDto } from './dto/ask-assistant.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { PERMISSIONS } from '../common/constants/permissions';
 import { AiInsightsService } from './ai-insights.service';
+import { AiAgentService } from './ai-agent.service';
+import { AiToolsService, TOOL_LABEL } from './ai-tools.service';
+import { AuditService } from '../audit/audit.service';
+import { periodFromText } from './ai-periods.util';
 import { hasPermission, jurisdictionOf, productionScope } from './jurisdiction';
 
 export interface AssistantAnswer {
@@ -16,10 +20,20 @@ export interface AssistantAnswer {
   assumptions: string;
   /** Whose activities the answer covers: "Whole company", or the person's own places. */
   jurisdiction: string;
+  /** Who worked the answer out: Claude (when connected) or the built-in answerer. */
+  engine: 'claude' | 'built-in';
+  /** The lookups the answer was drawn from. */
+  toolsUsed?: { name: string; label: string; period: string }[];
 }
 
 const RECOGNIZED_TOPICS = [
   'what 1 kWh of power produces (bags of packaged rice, broken rice and hull)',
+  'whether a milling center gave more, as much as, or less than expected',
+  'production for a period or a milling center',
+  'stock levels at a farm, warehouse or mill',
+  'paddy intake by farm',
+  'runs waiting for approval and unusual readings',
+  'how to do things in the system',
   'current paddy stock',
   'which farm has the highest output',
   'sales performance this month',
@@ -47,13 +61,39 @@ export class AiAssistantService {
     private readonly reports: ReportsService,
     private readonly receivables: ReceivablesService,
     private readonly insights: AiInsightsService,
+    private readonly tools: AiToolsService,
+    private readonly agent: AiAgentService,
+    @Optional() private readonly audit?: AuditService,
   ) {}
 
+  /** Claude answers when it is connected and reachable; otherwise (or if it fails) the built-in answerer does. Every question is recorded in the audit log. */
   async ask(dto: AskAssistantDto, actor: AuthenticatedUser): Promise<AssistantAnswer> {
+    let result: AssistantAnswer;
+    const claude = await this.agent.ask(dto.question, dto.history ?? [], actor);
+    if (claude) {
+      const where = (await this.insights.describeJurisdiction(jurisdictionOf(actor))).label;
+      result = {
+        answer: claude.answer,
+        sourceData: claude.sources.join('; ') || 'N/A',
+        dateRange: claude.periods.join('; ') || 'N/A',
+        confidencePercent: claude.confidencePercent,
+        assumptions: 'Answered by Claude using only the figures the system looked up for you, within your own places. Check important numbers against the screens.',
+        jurisdiction: where,
+        engine: 'claude',
+        toolsUsed: claude.toolsUsed,
+      };
+    } else {
+      result = await this.builtIn(dto, actor);
+    }
+    void this.audit?.record({ userId: actor.id, action: 'ai.ask', entity: 'AiAssistant', afterValue: { question: dto.question.slice(0, 300), engine: result.engine, tools: result.toolsUsed?.map((t) => t.name) ?? [] } })?.catch(() => undefined);
+    return result;
+  }
+
+  private async builtIn(dto: AskAssistantDto, actor: AuthenticatedUser): Promise<AssistantAnswer> {
     const q = dto.question.toLowerCase();
     const j = jurisdictionOf(actor);
     const where = (await this.insights.describeJurisdiction(j)).label;
-    const reply = (a: Omit<AssistantAnswer, 'jurisdiction'>): AssistantAnswer => ({ ...a, jurisdiction: where });
+    const reply = (a: Omit<AssistantAnswer, 'jurisdiction' | 'engine'>): AssistantAnswer => ({ ...a, jurisdiction: where, engine: 'built-in' });
     const noAccess = (what: string) =>
       reply({ answer: `Your role does not include ${what}, so I cannot answer this for you.`, sourceData: 'N/A', dateRange: 'N/A', confidencePercent: 0, assumptions: 'The assistant only shows what you could already open elsewhere in the system.' });
     const companyOnly = (what: string) =>
@@ -222,6 +262,39 @@ export class AiAssistantService {
       });
     }
 
+    // ---- the wider set, each answered by the same permission- and jurisdiction-checked lookups Claude would use
+    const viaTool = async (name: string, args: Record<string, unknown>) => {
+      const r = await this.tools.run(name, args, actor);
+      return reply({
+        answer: r.summary, sourceData: r.source, dateRange: r.period, confidencePercent: r.confidencePercent,
+        assumptions: r.denied ? 'The assistant only shows what you could already open elsewhere in the system.' : 'Worked out from the recorded figures; nothing is estimated unless it says so.',
+        toolsUsed: [{ name, label: TOOL_LABEL[name] ?? name, period: r.period }],
+      });
+    };
+    const helpReply = async (): Promise<AssistantAnswer | null> => {
+      const r = await this.tools.run('system_help', { topic: dto.question }, actor);
+      return r.confidencePercent >= 90
+        ? reply({ answer: r.summary, sourceData: r.source, dateRange: r.period, confidencePercent: r.confidencePercent, assumptions: 'From the KAM-ROMS guide. Ask your administrator if something has been set up differently for you.', toolsUsed: [{ name: 'system_help', label: TOOL_LABEL.system_help, period: 'N/A' }] })
+        : null;
+    };
+    // "How do I record a milling run?" is a how-to question even though it mentions milling, so it is checked first.
+    if (/^(how (do|can|should|would) (i|we|you)|how to|where (do|can|should) (i|we)|what are the steps|steps to)/.test(q.trim())) {
+      const help = await helpReply();
+      if (help) return help;
+    }
+    const period = periodFromText(q) ?? undefined;
+    const center = await this.tools.centerNamedIn(actor, q);
+    if (/(expected|supposed|as expected|more than|less than|under.?deliver|over.?deliver|how (is|are) .*(doing|performing)|perform|compare)/.test(q) && /(mill|cent|run|power|kwh)/.test(q)) return viaTool('output_vs_expected', { period, milling_center: center });
+    if (/(stock|inventory|left in|how much (paddy|rice) (is|are|do we have|have we got))/.test(q)) return viaTool('stock_levels', { location: center });
+    if (/(production|produced|milled|milling|rice did|how much rice|output)/.test(q)) return viaTool('production_summary', { period, milling_center: center });
+    if (/(intake|harvest|received paddy|paddy received|delivered paddy)/.test(q)) return viaTool('paddy_intake', { period });
+    if (/(pending|waiting for approval|awaiting|to approve|needs? approval)/.test(q)) return viaTool('pending_approvals', {});
+    if (/(anomal|unusual|flagged|not adding up|mass balance|watch ?out|problem)/.test(q)) return viaTool('watch_outs', {});
+    if (/(what can i|my access|my role|who am i|what can you (do|answer)|my jurisdiction)/.test(q)) return viaTool('get_my_access', {});
+    if (/(how does|what is|what does|what are|explain|guide|help)/.test(q)) {
+      const help = await helpReply();
+      if (help) return help;
+    }
     return reply({
       answer: `I don't have a mapped answer for that question. Recognized topics: ${RECOGNIZED_TOPICS.join('; ')}.`,
       sourceData: 'N/A',

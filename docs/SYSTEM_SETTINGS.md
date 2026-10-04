@@ -33,6 +33,8 @@ Every setting starts at a **standard** value, which is exactly the number that u
 | AI predictions | Packaged rice bag weight (used to show rice in bags) | 50 kg | 1 to 100 |
 | | Broken rice bag weight | 50 kg | 1 to 100 |
 | | Rice hull bag weight (until enough runs record their hull bags) | 20 kg | 1 to 100 |
+| | Output counted as "as expected" | 5 % | 1 to 30 |
+| | How quickly the AI favours recent runs (0 counts every run equally) | 40 runs | 0 to 500 |
 
 A "serious" limit can never be set below the limit at which something is first flagged, and an alert list can never be left empty.
 

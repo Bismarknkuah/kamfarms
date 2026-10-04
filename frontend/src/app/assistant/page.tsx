@@ -8,6 +8,7 @@ import { ApiError, aiApi, isAiInsights, type AiInsights } from '@/lib/api-client
 import { AiHero } from '@/components/ai/AiHero';
 import { PowerCalculator } from '@/components/ai/PowerCalculator';
 import { YieldTables } from '@/components/ai/YieldTables';
+import { FeedbackPanel } from '@/components/ai/FeedbackPanel';
 import { AssistantPanel } from '@/components/ai/AssistantPanel';
 
 type Load = { kind: 'loading' } | { kind: 'old-server' } | { kind: 'error'; message: string } | { kind: 'ok'; data: AiInsights };
@@ -76,6 +77,7 @@ export default function AssistantPage() {
         {data && !data.available && <Notice icon={ShieldAlert} testId="ai-unavailable" title="Predictions are not part of your role">{data.reason} The question box below still answers what your role can see.</Notice>}
 
         {ready && <PowerCalculator data={ready} />}
+        {ready && accessToken && <FeedbackPanel accessToken={accessToken} companyWide={ready.jurisdiction.companyWide} />}
         {ready && <YieldTables data={ready} />}
 
         {accessToken && <AssistantPanel accessToken={accessToken} />}
@@ -84,6 +86,7 @@ export default function AssistantPage() {
           <details data-testid="ai-how" className="group rounded-3xl border border-paddy-100 bg-white px-6 py-4 text-sm text-ink-700">
             <summary className="flex cursor-pointer list-none items-center justify-between font-display text-lg font-medium text-paddy-900">How these numbers are made <ChevronDown className="h-5 w-5 transition group-open:rotate-180" aria-hidden="true" /></summary>
             <ul className="mt-3 list-disc space-y-1.5 pl-5">
+              <li><strong>The AI keeps learning.</strong> Every approved milling run that recorded its electricity meter teaches it, and recent runs count more than old ones. Runs flagged as not adding up are left out. Each run is judged against what the AI expected before it, which is the feedback shown above.</li>
               <li>Each figure is <strong>all the output divided by all the power</strong> across your approved milling runs that recorded their electricity meter. One odd run cannot swing it.</li>
               <li>The <strong>typical range</strong> shows how much individual runs differ from each other, one spread either side.</li>
               <li>Bags use the weights in System settings under AI predictions: packaged rice {ready.bagSizes.riceKg} kg, broken rice {ready.bagSizes.brokenKg} kg and hull {ready.bagSizes.hullKg} kg ({ready.bagSizes.hullBasis === 'history' ? 'measured from your own runs' : 'a setting, until enough runs record their hull bags'}). Paddy bags are {ready.bagSizes.paddyKg} kg.</li>

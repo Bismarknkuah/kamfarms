@@ -217,6 +217,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   { label: 'Tasks', href: '/tasks', icon: 'square-check', description: 'Things assigned to you, and marking them done.' },
   { label: 'Notifications', href: '/notifications', icon: 'bell', description: 'Alerts that need your attention.' },
+  { label: 'Price list', href: '/prices', icon: 'tag', description: 'What each product and size sells for. The Administrator sets the prices here; sales staff see them. An order cannot be created for a size that has no price.', permission: ['masterdata.manage', 'sales.create', 'sales.approve', 'sales.fulfill', 'sales.view'] },
   { label: 'Users', href: '/users', icon: 'users', description: 'Admin: every account. Supervisors: your team, and tasks to assign them.', permission: ['users.manage', 'tasks.assign'] },
   {
     label: 'Master Data',
@@ -297,7 +298,7 @@ export function hasNavPermission(me: MeResponse, permission?: string | string[])
  * correction requests, My Office, the MD/CEO Oversight page) are left out on purpose.
  */
 export const ADMIN_NAV_SECTIONS: { title: string; hrefs: string[] }[] = [
-  { title: 'Administration', hrefs: ['/dashboard', '/users', '/roles', '/organization', '/master-data', '/settings', '/site-editor', '/audit-log', '/admin'] },
+  { title: 'Administration', hrefs: ['/dashboard', '/users', '/roles', '/organization', '/master-data', '/prices', '/settings', '/site-editor', '/audit-log', '/admin'] },
   { title: 'Company data', hrefs: ['/reports', '/analytics', '/trace', '/inventory', '/farms', '/warehouses', '/shipments', '/sales', '/finance', '/expenses', '/paddy-entries', '/deliveries', '/production', '/packaging', '/quality'] },
   { title: 'Workspace', hrefs: ['/messages', '/tasks', '/notifications', '/assistant'] },
 ];

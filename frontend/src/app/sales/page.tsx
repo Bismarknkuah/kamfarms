@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -16,8 +17,7 @@ import {
   Customer,
   Product,
   PackagingSize,
-  ApiError,
-} from '@/lib/api-client';
+  ApiError, productPricesApi, type EffectivePrice, } from '@/lib/api-client';
 
 function fmtGHS(amount: number) {
   return `GHS ${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
@@ -37,6 +37,18 @@ export default function SalesPage() {
   // Create-order form state
   const [newCustomerId, setNewCustomerId] = useState('');
   const [newItems, setNewItems] = useState([{ productId: '', packagingSizeId: '', bagCount: 1 }]);
+  // The price in force for each product and size, for the customer chosen. Null until it loads, or if the server cannot say
+  // (then nothing is blocked here and the server decides, as it always did).
+  const [prices, setPrices] = useState<EffectivePrice[] | null>(null);
+  useEffect(() => {
+    if (!accessToken) return;
+    let live = true;
+    productPricesApi.effective(accessToken, newCustomerId || undefined).then((r) => { if (live) setPrices(r); }).catch(() => { if (live) setPrices(null); });
+    return () => { live = false; };
+  }, [accessToken, newCustomerId]);
+  const priceFor = (productId: string, packagingSizeId: string) => prices?.find((x) => x.productId === productId && x.packagingSizeId === packagingSizeId) ?? null;
+  const unpricedItems = prices === null ? [] : newItems.filter((i) => i.productId && i.packagingSizeId && !priceFor(i.productId, i.packagingSizeId));
+  const moneyOf = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const [creating, setCreating] = useState(false);
   // "Needs my action" or "All orders". Null means automatic: show what is
   // waiting on this person if there is anything, otherwise everything.
@@ -355,6 +367,14 @@ export default function SalesPage() {
                     placeholder="Bags"
                   />
                   {lineKg !== null && <span className="text-xs text-ink-500">= {lineKg.toLocaleString()} KG</span>}
+                  {item.productId && item.packagingSizeId && prices !== null && (() => {
+                    const price = priceFor(item.productId, item.packagingSizeId);
+                    return price ? (
+                      <span data-testid="item-price" className="text-xs text-ink-700">GHS {moneyOf(price.pricePerBag)} a bag{price.source === 'customer' ? ' (this customer\'s price)' : ''} = <strong>GHS {moneyOf(price.pricePerBag * item.bagCount)}</strong></span>
+                    ) : (
+                      <span data-testid="item-no-price" className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">No price set yet</span>
+                    );
+                  })()}
                   {newItems.length > 1 && (
                     <button type="button" onClick={() => setNewItems((items) => items.filter((_, i) => i !== idx))} className="text-xs text-red-600">
                       Remove
@@ -371,6 +391,11 @@ export default function SalesPage() {
                 }, 0).toLocaleString()} KG
               </p>
             )}
+            {prices !== null && unpricedItems.length === 0 && newItems.some((i) => i.productId && i.packagingSizeId) && (
+              <p className="text-xs font-semibold text-paddy-900" data-testid="order-total">
+                Order total: GHS {moneyOf(newItems.reduce((sum, i) => sum + (priceFor(i.productId, i.packagingSizeId)?.pricePerBag ?? 0) * i.bagCount, 0))}
+              </p>
+            )}
             <button
               type="button"
               onClick={() => setNewItems((items) => [...items, { productId: '', packagingSizeId: '', bagCount: 1 }])}
@@ -380,10 +405,17 @@ export default function SalesPage() {
             </button>
           </div>
 
+          {unpricedItems.length > 0 && (
+            <p role="alert" data-testid="unpriced-notice" className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              {unpricedItems.map((i) => `${products.find((x) => x.id === i.productId)?.name ?? 'This product'} ${packagingSizes.find((x) => x.id === i.packagingSizeId)?.label ?? ''}`.trim()).join(', ')}{' '}
+              {unpricedItems.length === 1 ? 'has' : 'have'} no price yet, so this order cannot be created.{' '}
+              {hasPermission('masterdata.manage') ? <Link href="/prices" className="font-semibold underline">Set the price now</Link> : 'Ask the System Administrator to set it in the Price list.'}
+            </p>
+          )}
           <button
             type="button"
             onClick={onCreate}
-            disabled={creating || !newCustomerId}
+            disabled={creating || !newCustomerId || unpricedItems.length > 0}
             className="mt-4 rounded-full bg-paddy-900 px-5 py-2 text-sm font-medium text-rice-50 disabled:opacity-50"
           >
             {creating ? 'Creating…' : 'Create order'}

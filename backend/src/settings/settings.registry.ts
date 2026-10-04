@@ -65,6 +65,8 @@ export const SETTING_DEFS: SettingDef[] = [
   { key: 'ai.rice_bag_kg', group: 'ai', label: 'Packaged rice bag weight', help: 'One bag of finished rice. The AI predictions use it to show packaged rice in bags.', type: 'number', default: 50, unit: 'kg', min: 1, max: 100, step: 0.5 },
   { key: 'ai.broken_bag_kg', group: 'ai', label: 'Broken rice bag weight', help: 'One bag of broken rice. The AI predictions use it to show broken rice in bags.', type: 'number', default: 50, unit: 'kg', min: 1, max: 100, step: 0.5 },
   { key: 'ai.hull_bag_kg', group: 'ai', label: 'Rice hull bag weight', help: 'One bag of hull. Used only until enough milling runs record their hull bags, after which the AI uses the weight those runs actually show.', type: 'number', default: 20, unit: 'kg', min: 1, max: 100, step: 0.5 },
+  { key: 'ai.expected_tolerance_percent', group: 'ai', label: 'Output counted as "as expected"', help: 'A milling run whose packaged rice is within this many percent of what the AI expected is shown as "as expected". More than that is "more than expected", less is "less than expected".', type: 'number', default: 5, unit: '%', min: 1, max: 30, step: 0.5 },
+  { key: 'ai.learning_half_life_runs', group: 'ai', label: 'How quickly the AI favours recent runs', help: 'A run\'s weight in what the AI expects halves after this many newer runs, so it follows the mill as it changes. Set 0 to count every run equally.', type: 'number', default: 40, unit: 'runs', min: 0, max: 500, step: 1 },
 ];
 
 export const SETTING_BY_KEY: Map<string, SettingDef> = new Map(SETTING_DEFS.map((d) => [d.key, d] as [string, SettingDef]));

@@ -13,6 +13,13 @@ import { AuthenticatedUser } from '../auth/types/authenticated-user';
 export class ProductPricesController {
   constructor(private readonly productPricesService: ProductPricesService) {}
 
+  /** The prices in force now, per product and size, for one customer (or the list prices when none is given). */
+  @Get('effective')
+  @RequirePermission([PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_APPROVE, PERMISSIONS.SALES_FULFILL, PERMISSIONS.SALES_VIEW])
+  effective(@Query('customerId') customerId?: string) {
+    return this.productPricesService.effective(customerId || undefined);
+  }
+
   @Get()
   @RequirePermission([PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_APPROVE, PERMISSIONS.SALES_FULFILL, PERMISSIONS.SALES_VIEW])
   list(@Query('productId') productId?: string, @Query('customerId') customerId?: string) {

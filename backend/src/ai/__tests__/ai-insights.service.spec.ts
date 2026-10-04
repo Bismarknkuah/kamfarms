@@ -134,3 +134,85 @@ describe('AiInsightsService.predictFromEnergy / predictFromPaddy', () => {
     await expect(service.predictFromPaddy({ bags: 1 }, noMilling)).rejects.toThrow(ForbiddenException);
   });
 });
+
+describe('AiInsightsService.feedback: did each run give what was expected?', () => {
+  // newest first, as the database returns them. Eight approved runs of 680 kg of rice, then a better one, then a weaker one waiting for approval.
+  const fbRow = (i: number, over: Record<string, unknown> = {}) => ({
+    id: `r${i}`, recordNumber: `PR-${i}`, date: new Date(Date.UTC(2026, 8, 1 + i)), status: 'APPROVED', massBalanceFlag: false,
+    paddyGradeId: 'g1', millingCenterId: 'c1', paddyProcessedKg: 1000, energyConsumptionKwh: 25, recoveredRiceKg: 680, brokenRiceKg: 120, riceHullKg: 180, riceHullBags: 9, wasteLossKg: 20,
+    paddyGrade: { label: 'Size 4' }, millingCenter: { name: 'Mill A' }, ...over,
+  });
+  const history = () => [
+    fbRow(10, { status: 'SUBMITTED', millingCenterId: 'c2', millingCenter: { name: 'Mill B' }, recoveredRiceKg: 600 }),
+    fbRow(9, { recoveredRiceKg: 750 }),
+    ...[8, 7, 6, 5, 4, 3, 2, 1].map((i) => fbRow(i)),
+  ];
+  const NOW = new Date(Date.UTC(2026, 8, 12)).getTime();
+  beforeEach(() => { jest.spyOn(Date, 'now').mockReturnValue(NOW); });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('tells the MD, per milling center, whether each run gave more than, as much as, or less than expected', async () => {
+    const out: any = await build(history()).service.feedback(MD, { days: 30 });
+    expect(out.available).toBe(true);
+    // 3 early estimates (no history yet) are counted apart; of the 7 real verdicts: 5 as expected, 1 more, 1 less.
+    expect(out.summary).toMatchObject({ runs: 10, early: 3, more: 1, asExpected: 5, less: 1, pendingApproval: 1 });
+    const byName = Object.fromEntries(out.centers.map((c: any) => [c.centerName, c]));
+    expect(byName['Mill A']).toMatchObject({ verdict: 'as_expected', more: 1, early: false }); // one good run among five exact ones
+    expect(byName['Mill B'].verdict).toBe('less');
+    expect(out.centers[0].centerName).toBe('Mill B'); // the one that fell short comes first
+    expect(out.runs[0]).toMatchObject({ recordNumber: 'PR-10', approved: false, verdict: 'less' });
+    expect(out.runs[0].sentence).toMatch(/^Mill B used 25 kWh and was expected to give .* That is less packaged rice than expected/);
+  });
+
+  it('shows the AI\'s own learning: how many approved runs it has learned from, and its accuracy', async () => {
+    const out: any = await build(history()).service.feedback(MD);
+    expect(out.learning.trainedOnRuns).toBe(9); // the submitted run is judged but not learned from
+    expect(out.learning.lastRunAt).toBe(new Date(Date.UTC(2026, 8, 11)).toISOString());
+    expect(out.learning.explanation).toMatch(/learned from 9 approved runs/);
+    expect(out.tolerancePercent).toBe(5);
+  });
+
+  it('judges inside the asker\'s jurisdiction only, and asks the database for nothing outside it', async () => {
+    const { service, prisma } = build(history());
+    await service.feedback(OPS(['wh-1']));
+    expect(prisma.productionRecord.findMany.mock.calls[0][0].where.millingCenter).toEqual({ warehouseId: { in: ['wh-1'] } });
+    const none = build(history());
+    const out: any = await none.service.feedback(OPS([]));
+    expect(none.prisma.productionRecord.findMany).not.toHaveBeenCalled();
+    expect(out.runs).toEqual([]);
+    expect(out.summary.runs).toBe(0);
+  });
+
+  it('refuses a milling center outside the jurisdiction, and a role without milling access', async () => {
+    const { service, prisma } = build(history());
+    prisma.millingCenter.findUnique.mockResolvedValue({ warehouseId: 'wh-OTHER' });
+    await expect(service.feedback(OPS(['wh-1']), { millingCenterId: 'c-other' })).rejects.toThrow(ForbiddenException);
+    const out: any = await build(history()).service.feedback(actorOf('FINANCE_DIRECTOR', [{ scopeType: 'GLOBAL', scopeId: null }], ['ai.view']));
+    expect(out.available).toBe(false);
+    expect(out.reason).toMatch(/does not include milling figures/);
+  });
+
+  it('narrows to one milling center, and to the days asked for', async () => {
+    const { service } = build(history());
+    const one: any = await service.feedback(MD, { millingCenterId: 'c2' });
+    expect(one.centers.map((c: any) => c.centerName)).toEqual(['Mill B']);
+    const recent: any = await build(history()).service.feedback(MD, { days: 3 });
+    expect(recent.summary.runs).toBe(3); // 10, 9 and 8 fall in the last 3 days
+  });
+
+  it('uses the Administrator\'s tolerance and learning speed from System settings', async () => {
+    const lenient: any = await build(history(), { 'ai.expected_tolerance_percent': 20, 'ai.learning_half_life_runs': 10, 'paddy.standard_bag_kg': 50, 'ai.rice_bag_kg': 50, 'ai.broken_bag_kg': 50, 'ai.hull_bag_kg': 20 }).service.feedback(MD);
+    expect(lenient.tolerancePercent).toBe(20);
+    expect(lenient.summary.more).toBe(0); // +10% is within 20%
+    expect(lenient.learning.halfLifeRuns).toBe(10);
+  });
+
+  it('keeps runs flagged as not adding up out of what the AI learns from', async () => {
+    const rows = history(); rows[2] = fbRow(8, { massBalanceFlag: true, recoveredRiceKg: 100 });
+    const out: any = await build(rows).service.feedback(MD);
+    expect(out.learning.trainedOnRuns).toBe(8);
+    const { service, prisma } = build(history());
+    await service.overview(MD);
+    expect(prisma.productionRecord.findMany.mock.calls[0][0].where.massBalanceFlag).toBe(false);
+  });
+});

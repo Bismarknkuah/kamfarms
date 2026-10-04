@@ -1,5 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SchemaCheckService } from '../prisma/schema-check.service';
 import { SettingsService } from '../settings/settings.service';
 import { buildInfo } from '../common/build-info';
 
@@ -16,6 +17,7 @@ export class SystemOverviewService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly settings?: SettingsService,
+    @Optional() private readonly schemaCheck?: SchemaCheckService,
   ) {}
 
   async overview(now: Date = new Date()) {
@@ -68,7 +70,7 @@ export class SystemOverviewService {
 
     return {
       generatedAt: now.toISOString(),
-      api: { ...buildInfo(), databaseOk, databaseMs },
+      api: { ...buildInfo(), databaseOk, databaseMs, schema: await this.schemaStatus() },
       people: { total, active, disabled, lockedNow: locked, mustChangePassword: mustChange, neverSignedIn, roles },
       organization: { farms, warehouses, millingCenters, machines, customers },
       access: { roles: roles ? roles.length : null, permissions },
@@ -83,5 +85,11 @@ export class SystemOverviewService {
       homepage: homepage ? { saved: true, version: homepage.version, updatedAt: new Date(homepage.updatedAt).toISOString(), files } : { saved: false, version: 0, updatedAt: null, files },
       settings: { total: effective ? effective.length : null, changedFromDefault: effective ? effective.filter((e: { isDefault: boolean }) => !e.isDefault).length : null },
     };
+  }
+
+  /** Which tables, if any, the database is missing: shown on the Administrator's Control center. */
+  private async schemaStatus() {
+    const s = (await this.schemaCheck?.check()) ?? { state: 'unknown' as const, expected: 0, missing: [] as string[] };
+    return { state: s.state, missing: s.missing };
   }
 }

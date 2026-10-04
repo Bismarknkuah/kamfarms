@@ -69,6 +69,13 @@ export function AdminControlCenter({ accessToken }: { accessToken: string }) {
           <p className="mt-2">Open Railway, then your API service, then <strong>Deployments</strong>. If the newest deployment says <em>Failed</em>, open its build log and send it to your developer. If it is old, open <strong>Settings</strong> and check the source is the <code>main</code> branch of your repository with automatic deploys switched on.</p>
         </div>
       )}
+      {o?.api.schema?.state === 'missing' && (
+        <div role="alert" className="rounded-2xl border border-red-300 bg-red-50 px-4 py-4 text-sm text-red-950" data-testid="schema-missing">
+          <p className="flex items-center gap-2 font-semibold"><TriangleAlert className="h-4 w-4" aria-hidden="true" /> The database is missing {o.api.schema.missing.length} table{o.api.schema.missing.length === 1 ? '' : 's'} the server needs</p>
+          <p className="mt-1">Screens that use {o.api.schema.missing.length === 1 ? 'it' : 'them'} fail with an error until {o.api.schema.missing.length === 1 ? 'it exists' : 'they exist'}: <strong data-testid="schema-missing-list">{o.api.schema.missing.join(', ')}</strong>.</p>
+          <p className="mt-2">The server creates its tables every time it starts. Open Railway, then your API service, then <strong>Deploy Logs</strong>, and read the lines starting <code>[startup]</code> to see why that step did not finish. Then redeploy. If it keeps failing, send those lines to your developer; <code>docs/DEPLOYMENT.md</code> explains how to create the tables by hand.</p>
+        </div>
+      )}
       {overviewError && overviewError !== 'old-server' && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{overviewError}</p>}
 
       <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="system-status">

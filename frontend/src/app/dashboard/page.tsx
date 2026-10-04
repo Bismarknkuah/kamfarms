@@ -13,6 +13,7 @@ import { roleLabel } from '@/lib/role-labels';
 import { Wheat, Truck, Factory, Package, DollarSign } from 'lucide-react';
 import { WatchlistCard } from '@/components/WatchlistCard';
 import { AdminDashboard } from '@/components/admin/AdminDashboard';
+import { OutputFeedbackCard } from '@/components/OutputFeedbackCard';
 import {
   reportsApi,
   ExecutiveSummary,
@@ -781,6 +782,7 @@ export default function DashboardPage() {
         <>
           {isFinanceDirector && <FinanceDesk accessToken={accessToken} meId={me.id} />}
           {isMdOrCeo && <ReleaseDesk accessToken={accessToken} canApproveDirectorExpenses={hasPermission('finance.approve.director')} />}
+          {isMdOrCeo && <OutputFeedbackCard accessToken={accessToken} />}
           {hasPermission('sales.fulfill') && <DeliveryDesk accessToken={accessToken} onlyWarehouseIds={deliveryScope} />}
           {isSalesOfficer && <MyOrdersDesk accessToken={accessToken} meId={me.id} />}
         </>

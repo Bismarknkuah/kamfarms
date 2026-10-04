@@ -61,12 +61,20 @@ function spreadOf(values: number[], central: number): Range {
   return [Math.max(0, central - sd), central + sd];
 }
 
-export function ratesFromRuns(samples: RunSample[]): YieldRates {
+/**
+ * What 1 kWh gives, from runs listed NEWEST FIRST. With a half-life (in runs) recent runs count more than old ones, so the
+ * figures follow the mill as it changes (a serviced machine, a new operator); a run's weight halves every `halfLifeRuns`
+ * runs back. Without one every run counts equally.
+ */
+export function ratesFromRuns(samples: RunSample[], options: { halfLifeRuns?: number } = {}): YieldRates {
   const runs = samples.filter((s) => s.energyKwh > 0 && s.paddyKg > 0);
   if (runs.length < MIN_RUNS) return benchmarkRates(runs.length);
+  const half = options.halfLifeRuns && options.halfLifeRuns > 0 ? options.halfLifeRuns : 0;
+  const weight = (k: number) => (half ? Math.pow(0.5, k / half) : 1);
   const total = (pick: (s: RunSample) => number) => runs.reduce((t, s) => t + pick(s), 0);
-  const energy = total((s) => s.energyKwh);
-  const per = (pick: (s: RunSample) => number) => total(pick) / energy;
+  const weighted = (pick: (s: RunSample) => number) => runs.reduce((t, s, k) => t + weight(k) * pick(s), 0);
+  const energyW = weighted((s) => s.energyKwh);
+  const per = (pick: (s: RunSample) => number) => weighted(pick) / energyW;
   const perKwh: PerKwh = {
     paddyKg: per((s) => s.paddyKg), riceKg: per((s) => s.riceKg), brokenKg: per((s) => s.brokenKg), hullKg: per((s) => s.hullKg), wasteKg: per((s) => s.wasteKg),
   };
@@ -75,7 +83,7 @@ export function ratesFromRuns(samples: RunSample[]): YieldRates {
     return [round3(lo), round3(hi)];
   };
   return {
-    runs: runs.length, basis: 'history', confidence: confidenceOf(runs.length), energyKwh: round3(energy), paddyKg: round3(total((s) => s.paddyKg)),
+    runs: runs.length, basis: 'history', confidence: confidenceOf(runs.length), energyKwh: round3(total((s) => s.energyKwh)), paddyKg: round3(total((s) => s.paddyKg)),
     perKwh: { paddyKg: round3(perKwh.paddyKg), riceKg: round3(perKwh.riceKg), brokenKg: round3(perKwh.brokenKg), hullKg: round3(perKwh.hullKg), wasteKg: round3(perKwh.wasteKg) },
     typical: { riceKg: range((s) => s.riceKg, perKwh.riceKg), brokenKg: range((s) => s.brokenKg, perKwh.brokenKg), hullKg: range((s) => s.hullKg, perKwh.hullKg) },
   };

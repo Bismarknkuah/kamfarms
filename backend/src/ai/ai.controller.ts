@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AiPredictionsService } from './ai-predictions.service';
 import { AiAssistantService } from './ai-assistant.service';
@@ -59,6 +59,14 @@ export class AiController {
   @RequirePermission(PERMISSIONS.AI_VIEW)
   insights(@CurrentUser() actor: AuthenticatedUser) {
     return this.insightsService.overview(actor);
+  }
+
+  /** Expected against actual for each milling run, per milling center, plus how the AI itself is learning. */
+  @Get('feedback')
+  @RequirePermission(PERMISSIONS.AI_VIEW)
+  feedback(@CurrentUser() actor: AuthenticatedUser, @Query('days') days?: string, @Query('millingCenterId') millingCenterId?: string) {
+    const n = days ? parseInt(days, 10) : NaN;
+    return this.insightsService.feedback(actor, { days: Number.isFinite(n) ? n : 30, millingCenterId: millingCenterId || undefined });
   }
 
   @Post('predict-from-energy')

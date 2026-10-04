@@ -85,3 +85,14 @@ describe('SystemOverviewController', () => {
     expect(new Reflector().get(PERMISSION_KEY, SystemOverviewController.prototype.get)).toBe('settings.manage');
   });
 });
+
+describe('SystemOverviewService: the database check on the Control center', () => {
+  it('reports which tables are missing, so the Administrator can see the cause of a failing screen', async () => {
+    const schemaCheck = { check: jest.fn().mockResolvedValue({ state: 'missing', expected: 80, missing: ['site_content', 'site_media'] }) };
+    const out = await new SystemOverviewService({} as any, undefined, schemaCheck as any).overview();
+    expect(out.api.schema).toEqual({ state: 'missing', missing: ['site_content', 'site_media'] });
+  });
+  it('says unknown, not ok, when no check is available', async () => {
+    expect((await new SystemOverviewService({} as any).overview()).api.schema).toEqual({ state: 'unknown', missing: [] });
+  });
+});

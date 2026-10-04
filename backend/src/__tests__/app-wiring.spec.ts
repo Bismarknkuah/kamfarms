@@ -11,6 +11,9 @@ import { PaddyMillingReceiptsService } from '../production/paddy-milling-receipt
 import { InsightsService } from '../insights/insights.service';
 import { SystemOverviewService } from '../system-overview/system-overview.service';
 import { AiInsightsService } from '../ai/ai-insights.service';
+import { AiAssistantService } from '../ai/ai-assistant.service';
+import { AiToolsService } from '../ai/ai-tools.service';
+import { AiAgentService } from '../ai/ai-agent.service';
 import { ReportCatalogService } from '../reports/report-catalog.service';
 import { ReportsController } from '../reports/reports.controller';
 import { SiteService } from '../site/site.service';
@@ -50,5 +53,12 @@ describe('the whole application wires up', () => {
   it('gives the reports controller the report catalog, and the catalog the watchlist', () => {
     expect((moduleRef.get(ReportsController, { strict: false }) as unknown as { catalog?: unknown }).catalog).toBeInstanceOf(ReportCatalogService);
     expect((moduleRef.get(ReportCatalogService, { strict: false }) as unknown as { insights?: unknown }).insights).toBeInstanceOf(InsightsService);
+  });
+
+  it('connects the question box to its toolkit, its Claude agent and the audit log, so every question is recorded', () => {
+    const assistant = moduleRef.get(AiAssistantService, { strict: false }) as unknown as { tools: unknown; agent: unknown; audit: unknown };
+    expect(assistant.tools).toBeInstanceOf(AiToolsService);
+    expect(assistant.agent).toBeInstanceOf(AiAgentService);
+    expect(assistant.audit).toBeDefined(); // optional in the code, so a missing one would otherwise go unnoticed
   });
 });

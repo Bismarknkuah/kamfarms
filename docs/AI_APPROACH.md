@@ -80,3 +80,6 @@ Every AI route and every answer is limited to the asker's jurisdiction. This is 
 
 See `docs/AI_INSIGHTS.md` for the predictions built on top of this.
 
+## Update: a wider assistant, still grounded
+
+The assistant is no longer limited to a handful of fixed questions. It now works from a set of **lookups** that each check the person's permission and jurisdiction on the server, and answers only from what they return. With an Anthropic key connected, Claude chooses the lookups and phrases the answer for open-ended questions; without one, a built-in answerer handles the common questions. In both cases the rules above hold: no guessing, no figures it did not look up, and the answer says what it is based on. See `docs/AI_INSIGHTS.md`.

@@ -35,7 +35,14 @@ describe('AiAssistantService', () => {
       describeJurisdiction: jest.fn(async (j: any) => ({ companyWide: j.companyWide, label: j.companyWide ? 'Whole company' : 'Warehouse 1', farms: [], warehouses: [] })),
       overview: jest.fn().mockResolvedValue(overview),
     } as unknown as AiInsightsService;
-    return { service: new AiAssistantService(prisma as any, reports, receivables, insights), prisma, reports, receivables, insights };
+    // The wider lookups and Claude are faked here; their own tests cover them. By default Claude is not connected.
+    const tools = {
+      run: jest.fn(async (name: string) => (name === 'system_help' ? { ok: true, summary: 'no guide', source: 'guide', period: 'N/A', confidencePercent: 30 } : { ok: true, summary: 'TOOL-SUMMARY', source: 'SRC', period: 'PERIOD', confidencePercent: 90 })),
+      centerNamedIn: jest.fn().mockResolvedValue(undefined),
+    };
+    const agent = { ask: jest.fn().mockResolvedValue(null) };
+    const audit = { record: jest.fn().mockResolvedValue({}) };
+    return { service: new AiAssistantService(prisma as any, reports, receivables, insights, tools as any, agent as any, audit as any), prisma, reports, receivables, insights, tools, agent, audit };
   }
 
   describe('the whole company (MD, CEO)', () => {
@@ -167,5 +174,72 @@ describe('AiAssistantService', () => {
     expect(r.confidencePercent).toBe(0);
     expect(r.answer).toContain('1 kWh of power produces');
     expect(r.answer).toContain('current paddy stock');
+  });
+});
+
+describe('AiAssistantService: the wider set of questions, and Claude when connected', () => {
+  const build2 = () => {
+    const prisma = { customer: { findMany: jest.fn() }, productionRecord: { findMany: jest.fn(), aggregate: jest.fn() }, inventoryBalance: { findMany: jest.fn() } };
+    const reports = { executiveSummary: jest.fn(), farmReport: jest.fn(), salesReport: jest.fn() } as unknown as ReportsService;
+    const receivables = { topDebtors: jest.fn() } as unknown as ReceivablesService;
+    const insights = { describeJurisdiction: jest.fn(async (j: any) => ({ companyWide: j.companyWide, label: j.companyWide ? 'Whole company' : 'Warehouse 1', farms: [], warehouses: [] })), overview: jest.fn() } as unknown as AiInsightsService;
+    const tools = {
+      run: jest.fn(async (name: string) => (name === 'system_help' ? { ok: true, summary: 'GUIDE-TEXT', source: 'The KAM-ROMS guide', period: 'N/A', confidencePercent: 90 } : { ok: true, summary: 'TOOL-SUMMARY', source: 'SRC', period: 'PERIOD', confidencePercent: 90 })),
+      centerNamedIn: jest.fn().mockResolvedValue(undefined),
+    };
+    const agent = { ask: jest.fn().mockResolvedValue(null) };
+    const audit = { record: jest.fn().mockResolvedValue({}) };
+    return { service: new AiAssistantService(prisma as any, reports, receivables, insights, tools as any, agent as any, audit as any), tools, agent, audit };
+  };
+
+  it.each([
+    ['How is Mill A doing this month against what was expected?', 'output_vs_expected', { period: 'this_month', milling_center: 'Mill A' }],
+    ['Did Mill A deliver what was expected last week?', 'output_vs_expected', { period: 'last_week', milling_center: 'Mill A' }],
+    ['How much rice did we produce last week?', 'production_summary', { period: 'last_week', milling_center: 'Mill A' }],
+    ['How much rice is in stock at Mill A?', 'stock_levels', { location: 'Mill A' }],
+    ['What was the paddy intake last month?', 'paddy_intake', { period: 'last_month' }],
+    ['What is waiting for approval?', 'pending_approvals', {}],
+    ['Are there any unusual readings?', 'watch_outs', {}],
+    ['What can I see here?', 'get_my_access', {}],
+  ])('"%s" is answered by the %s lookup', async (question, tool, args) => {
+    const { service, tools } = build2();
+    tools.centerNamedIn.mockResolvedValue('Mill A');
+    const r = await service.ask({ question: question as string }, MD);
+    expect(tools.run).toHaveBeenCalledWith(tool, args, MD);
+    expect(r).toMatchObject({ answer: 'TOOL-SUMMARY', engine: 'built-in', jurisdiction: 'Whole company', sourceData: 'SRC', confidencePercent: 90 });
+    expect(r.toolsUsed![0].name).toBe(tool);
+  });
+
+  it('answers a "how do I" question from the guide even when it mentions milling', async () => {
+    const { service, tools } = build2();
+    const r = await service.ask({ question: 'How do I record a milling run?' }, MD);
+    expect(tools.run).toHaveBeenCalledWith('system_help', { topic: 'How do I record a milling run?' }, MD);
+    expect(r).toMatchObject({ answer: 'GUIDE-TEXT', toolsUsed: [{ name: 'system_help' }] });
+    expect(tools.run).not.toHaveBeenCalledWith('production_summary', expect.anything(), expect.anything());
+  });
+
+  it('uses Claude when it is connected, and says so, with the lookups it made', async () => {
+    const { service, tools, agent, audit } = build2();
+    agent.ask.mockResolvedValue({ answer: 'Mill A made 33 bags.', toolsUsed: [{ name: 'production_summary', label: 'Production summary', period: 'last week' }], sources: ['Approved milling runs'], periods: ['last week'], confidencePercent: 90 });
+    const history = [{ role: 'user' as const, text: 'earlier' }];
+    const r = await service.ask({ question: 'And Mill B?', history }, MD);
+    expect(agent.ask).toHaveBeenCalledWith('And Mill B?', history, MD);
+    expect(r).toMatchObject({ answer: 'Mill A made 33 bags.', engine: 'claude', jurisdiction: 'Whole company', sourceData: 'Approved milling runs', dateRange: 'last week', confidencePercent: 90 });
+    expect(r.assumptions).toMatch(/Answered by Claude using only the figures the system looked up for you/);
+    expect(tools.run).not.toHaveBeenCalled(); // the built-in answerer was not needed
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u1', action: 'ai.ask', entity: 'AiAssistant', afterValue: { question: 'And Mill B?', engine: 'claude', tools: ['production_summary'] } }));
+  });
+
+  it('falls back to the built-in answerer when Claude is not connected or fails, and records the question either way', async () => {
+    const { service, audit } = build2();
+    const r = await service.ask({ question: 'What is waiting for approval?' }, MD);
+    expect(r.engine).toBe('built-in');
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ afterValue: { question: 'What is waiting for approval?', engine: 'built-in', tools: ['pending_approvals'] } }));
+  });
+
+  it('does not let a failure to record the question break the answer', async () => {
+    const { service, audit } = build2();
+    audit.record.mockRejectedValue(new Error('audit down'));
+    await expect(service.ask({ question: 'What is waiting for approval?' }, MD)).resolves.toMatchObject({ engine: 'built-in' });
   });
 });

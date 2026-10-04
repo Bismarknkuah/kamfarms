@@ -496,3 +496,77 @@ The website (Vercel) and the server, also called the API (Railway), are deployed
 - The System Administrator's dashboard (**Control center**) compares that list with what the website needs, and when the server is behind it says so in plain words and names each part that will not work yet.
 - If the server is behind, open Railway, then the API service, then **Deployments**. A newest deployment marked *Failed* has a build log that says why (a compile error is the usual reason); one that is old means Railway is not building new commits: check **Settings, Source** (the `main` branch of the repository, automatic deploys on).
 - Build the API locally the way Railway does before pushing: `npx prisma generate`, then `npm run build -w backend`. This catches type errors that a quick check can miss.
+
+## When the sign-in page says "The server did not answer"
+
+The website could not get any reply from the API. In the browser console this shows as a **CORS error with
+`net::ERR_FAILED`**. That is not a CORS setting going wrong: the real rule (`backend/src/app.setup.ts`) allows
+`WEB_ORIGIN` and any `kamfarms*.vercel.app` site, and a test starts the whole server to prove it. It means nothing
+answered, usually because the API is restarting after an update or did not come back up.
+
+1. **Open the API's health address in a browser**: your Railway API address followed by `/api/health`.
+   - JSON with `"status":"healthy"` and a `version` means the API is up. Reload the website.
+   - Railway's own "Application failed to respond" page means the API is not running.
+2. **Railway, then the API service, then Deployments.** The newest should say *Active*. If it says *Failed* or
+   *Crashed*, open **Deploy Logs** (not Build Logs) and copy the last 40 lines. Start-up problems are logged as
+   `[startup] ...`.
+3. **A new version cannot take the site down any more.** `railway.json` sets a health check (`/api/health`, up to
+   300 seconds). Railway sends traffic to a new version only once it answers there, and a version that never does is
+   marked failed while the running one stays live.
+4. Start-up takes about a minute or two (schema push, permission sync, then the server). During that time on an old
+   setup the website showed this message; with the health check it should not.
+
+## Connecting Claude to the question box (optional)
+
+The question box works without this, using its built-in answerer. To let it answer open-ended questions:
+
+1. Create an API key in the Anthropic console (console.anthropic.com).
+2. In Railway, open the API service, then **Variables**, and add `ANTHROPIC_API_KEY` with the key. Optionally add `ANTHROPIC_MODEL` to choose a model (the default is `claude-sonnet-5-5`).
+3. Redeploy. Each answer then shows **Answered by Claude** and lists the lookups it made. If the key is wrong or Anthropic cannot be reached, the question box quietly uses the built-in answerer, and the Railway logs say why.
+
+Things to know: questions and the figures returned for them are sent to Anthropic, and use of the key is billed to your Anthropic account. Each person is limited to 40 Claude questions an hour. Remove the variable to switch it off.
+
+## When a screen fails and the Control center says tables are missing
+
+The Administrator's **Control center** (and `/api/health`, under `data.schema`) compares the database with what this version of
+the server needs. If it lists missing tables, any screen that uses them fails (the homepage editor, for example, needs
+`site_content` and `site_media`). The server creates its tables every time it starts (`prisma db push`), so a table that is
+missing means that step did not finish.
+
+1. **Find out why.** Railway, API service, **Deploy Logs**. Read the lines at the start of the newest deployment: the
+   schema push prints what it did or why it failed, and a line starting `[startup] SCHEMA CHECK FAILED` names the missing tables.
+2. **Redeploy.** Most of the time a fresh deploy completes the push.
+3. **Create them by hand, if it keeps failing.** In Railway, open the **Postgres** service, then **Data**, then **Query**, and run the
+   statements below. They only add what is missing and never change existing data. (They are exactly what the schema push would create.)
+
+```sql
+CREATE TABLE IF NOT EXISTS "site_content" (
+  "id" TEXT NOT NULL,
+  "data" JSONB NOT NULL,
+  "version" INTEGER NOT NULL DEFAULT 1,
+  "updated_by_id" TEXT,
+  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "site_content_pkey" PRIMARY KEY ("id")
+);
+CREATE TABLE IF NOT EXISTS "site_media" (
+  "id" TEXT NOT NULL,
+  "kind" TEXT NOT NULL,
+  "mime_type" TEXT NOT NULL,
+  "file_name" TEXT NOT NULL,
+  "size_bytes" INTEGER NOT NULL,
+  "data" BYTEA NOT NULL,
+  "uploaded_by_id" TEXT,
+  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "site_media_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "site_media_created_at_idx" ON "site_media"("created_at");
+```
+
+Reload the Control center afterwards: the alert disappears once every table exists.
+
+## Product prices
+
+An order cannot be created for a product and size that has no price. Set them on **Price list** (menu, Administration). The
+screen shows every product against every size and marks missing prices "Not set". A fresh demo database (`prisma/seed.ts`) gets
+sample list prices; a live database never gets prices invented for it.

@@ -118,8 +118,19 @@ export class SalesOrdersService {
 
     if (override != null) return override;
 
+    // Say WHAT has no price, and who can set one: a Sales Officer cannot fix this themselves.
+    let what = 'this product and size';
+    try {
+      const [product, size] = await Promise.all([
+        this.prisma.product.findUnique({ where: { id: productId }, select: { name: true } }),
+        this.prisma.packagingSize.findUnique({ where: { id: packagingSizeId }, select: { label: true } }),
+      ]);
+      if (product && size) what = `${product.name} ${size.label}`;
+    } catch {
+      /* the message below still makes sense without the names */
+    }
     throw new BadRequestException({
-      message: 'No price is configured for this product/package size, and no price was supplied.',
+      message: `No price is set for ${what} yet, so this order cannot be created. Ask the System Administrator to add the price in Price list, then try again.`,
       errorCode: 'PRICE_NOT_CONFIGURED',
     });
   }

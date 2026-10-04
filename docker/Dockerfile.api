@@ -61,6 +61,8 @@ RUN apk add --no-cache openssl
 COPY --from=build /repo/node_modules node_modules
 COPY --from=build /repo/backend/dist backend/dist
 COPY --from=build /repo/prisma prisma
+# The start-up scripts: the database steps that must run before the API starts.
+COPY docker/prepare.sh docker/start.sh ./docker/
 EXPOSE 4000
 # Real root cause of the 500 errors traced from a Railway deploy log:
 # "No migration found in prisma/migrations" - meaning this repo has
@@ -97,6 +99,5 @@ EXPOSE 4000
 # Seeds, Agrochemicals) live in seed data too, and needed the same
 # kind of narrow, idempotent, every-deploy sync rather than a one-time
 # manual seed run to actually reach the live database.
-# A sync step that fails is logged loudly and the API STARTS ANYWAY. Before, one failing step stopped the whole
-# chain, so the API never came up at all. Only the schema push is required: without the tables there is nothing to serve.
-CMD ["sh", "-c", "npx prisma@5.22.0 db push --schema=prisma/schema.prisma --accept-data-loss --skip-generate && { npx ts-node --transpile-only prisma/sync-permissions.ts || echo '[startup] WARNING: the permission sync failed. Starting the API anyway. Read the lines above.'; } && { npx ts-node --transpile-only prisma/retire-roles.ts || echo '[startup] WARNING: retire-roles failed. Starting the API anyway.'; } && { npx ts-node --transpile-only prisma/sync-expense-categories.ts || echo '[startup] WARNING: the expense category sync failed. Starting the API anyway.'; } && node backend/dist/main.js"]
+# docker/start.sh creates any missing tables, updates permissions, then starts the API. railway.json pins the same command.
+CMD ["sh", "docker/start.sh"]

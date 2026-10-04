@@ -570,3 +570,24 @@ Reload the Control center afterwards: the alert disappears once every table exis
 An order cannot be created for a product and size that has no price. Set them on **Price list** (menu, Administration). The
 screen shows every product against every size and marks missing prices "Not set". A fresh demo database (`prisma/seed.ts`) gets
 sample list prices; a live database never gets prices invented for it.
+
+## Why tables or permissions can be missing: the Railway start command
+
+Creating missing database tables and bringing permissions up to date happens **before the API starts**, in `docker/prepare.sh`
+(run by `docker/start.sh`, which is the image's start command). This project uses `prisma db push`, not migrations.
+
+A **Start Command typed into the Railway dashboard overrides the image's**. Older setups had one:
+`npx prisma migrate deploy --schema=prisma/schema.prisma && node backend/dist/main.js`. That command applies no tables (there are no
+migrations) and syncs no permissions, so the API starts on a database that is missing new tables, and new permissions never reach
+the roles. The signs: a screen failing with "the database is missing a table this version of the system needs", the Control center's
+red database alert, and the MD or CEO getting "forbidden" on the Watchlist.
+
+Three layers now stop this:
+1. `railway.json` pins `startCommand: "sh docker/start.sh"`, and Railway lets the file override the dashboard.
+2. If the server is ever started *without* the script (any other start command), it runs `docker/prepare.sh` itself, on Railway only,
+   before it accepts traffic (`backend/src/startup/startup-tasks.ts`). Set `STARTUP_TASKS=off` to disable this.
+3. To tidy up, clear the dashboard's setting: Railway, API service, **Settings**, **Deploy**, **Custom Start Command**: delete it, then redeploy.
+
+**How to tell it worked.** The Deploy Logs begin with `[startup] 1/4 Applying the database schema...`, then 2/4, 3/4, 4/4, then
+`[startup] Database is ready.`, and later `[startup] Schema check: all N tables are present.` If you see `Starting Nest application` with
+no `[startup]` lines before it, the steps were skipped.

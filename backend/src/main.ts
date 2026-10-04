@@ -1,8 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { configureApp, setupDocs } from './app.setup';
+import { runStartupTasks } from './startup/startup-tasks';
 
 async function bootstrap() {
+  // Normally docker/start.sh has already prepared the database. If the server was started without it (an old start command
+  // in the Railway dashboard, say), do it here first, so the tables and permissions it needs exist.
+  await runStartupTasks();
+
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log'],
   });

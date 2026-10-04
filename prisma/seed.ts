@@ -123,7 +123,7 @@ const ROLE_DEFINITIONS: { code: string; name: string; permissionCodes: string[] 
     permissionCodes: [
       'dashboard.view', 'warehouse.view', 'warehouse.create', 'warehouse.update', 'warehouse.delete',
       'warehouse.inventory.view', 'warehouse.transfer', 'milling.manage', 'inventory.adjust',
-      'sales.fulfill', 'milling.view', 'reports.view', 'reports.export', 'ai.view', 'ai.use',
+      'sales.assign', 'sales.fulfill', 'milling.view', 'reports.view', 'reports.export', 'ai.view', 'ai.use',
       'messages.send', 'tasks.assign', 'tasks.complete', 'expense.view', 'team.manage',
       'masterdata.manage',
     ],

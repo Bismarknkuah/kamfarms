@@ -85,6 +85,9 @@ export class PaddyRequestsService {
   }
 
   async respond(id: string, dto: RespondPaddyRequestDto, actor: AuthenticatedUser) {
+    if (dto.decision === 'DECLINED' && (dto.responseNote ?? '').trim().length < 3) {
+      throw new BadRequestException('A reason is required when declining a request: say why.');
+    }
     const request = await this.findById(id, actor);
     if (request.status !== 'PENDING') {
       throw new BadRequestException(`This request has already been ${request.status.toLowerCase()}.`);

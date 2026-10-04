@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import { findSingleLocationScope } from '@/lib/nav-items';
+import { ReviewDialog } from '@/components/review/ReviewDialog';
+import { ExpenseDetails } from '@/components/review/EntityDetails';
 import { expensesApi, masterDataApi, farmEquipmentApi, farmsApi, warehouseEquipmentApi, warehousesApi, Expense, ExpenseCategory, FarmEquipment, Farm, WarehouseEquipment, Warehouse, ApiError } from '@/lib/api-client';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -204,25 +206,8 @@ export default function ExpensesPage() {
     }
   };
 
-  const onApprove = async (id: string) => {
-    if (!accessToken) return;
-    try {
-      await expensesApi.approve(accessToken, id);
-      load(accessToken);
-    } catch (err) {
-      setPageError(err instanceof ApiError ? err.message : 'Failed to approve.');
-    }
-  };
-
-  const onReject = async (id: string) => {
-    if (!accessToken) return;
-    try {
-      await expensesApi.reject(accessToken, id, 'Reviewed and rejected.');
-      load(accessToken);
-    } catch (err) {
-      setPageError(err instanceof ApiError ? err.message : 'Failed to reject.');
-    }
-  };
+  // Approving and rejecting happen inside the review window, after the details have been read; a rejection always carries a comment.
+  const [reviewing, setReviewing] = useState<Expense | null>(null);
 
   if (loading) return <main className="flex min-h-screen items-center justify-center bg-rice-50"><p className="text-sm text-ink-500">Loading…</p></main>;
   if (error || !me) return <main className="flex min-h-screen items-center justify-center bg-rice-50"><p className="text-sm text-red-600">{error}</p></main>;
@@ -494,10 +479,7 @@ export default function ExpensesPage() {
                 </td>
                 <td className="px-4 py-3">
                   {e.status === 'PENDING' && mayDecide(e) && (
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => onApprove(e.id)} className="rounded-full bg-paddy-900 px-3 py-1 text-xs font-medium text-rice-50">Approve</button>
-                      <button type="button" onClick={() => onReject(e.id)} className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50">Reject</button>
-                    </div>
+                    <button type="button" onClick={() => setReviewing(e)} className="rounded-full bg-paddy-900 px-4 py-1 text-xs font-medium text-rice-50">Review</button>
                   )}
                   {e.status === 'PENDING' && canApproveAny && e.submittedById === me?.id && (
                     <span className="text-xs text-ink-500">The MD or CEO approves expenses you enter</span>
@@ -509,6 +491,16 @@ export default function ExpensesPage() {
           </tbody>
         </table>
       </div>
+      <ReviewDialog
+        open={!!reviewing}
+        title={reviewing ? `Expense ${reviewing.expenseNumber}` : ''}
+        subtitle={reviewing ? `${reviewing.category.name}, GHS ${reviewing.amount.toLocaleString()}` : undefined}
+        details={reviewing ? <ExpenseDetails expense={reviewing} /> : null}
+        rejectPrompt="Why is this expense not approved? The person who entered it will read this."
+        onApprove={async () => { await expensesApi.approve(accessToken!, reviewing!.id); load(accessToken!); }}
+        onReject={async (comment) => { await expensesApi.reject(accessToken!, reviewing!.id, comment); load(accessToken!); }}
+        onClose={() => setReviewing(null)}
+      />
     </DashboardShell>
   );
 }

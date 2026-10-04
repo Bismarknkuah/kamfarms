@@ -1,5 +1,7 @@
 'use client';
 
+import { ReviewDialog } from '@/components/review/ReviewDialog';
+import { PaddyEntryDetails, PaymentDetails, ProductionDetails, ResetRequestDetails } from '@/components/review/EntityDetails';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
@@ -198,14 +200,18 @@ function PaymentQuickAction({ accessToken }: { accessToken: string }) {
 // ── Warehouse Manager: receive a shipment ────────────────────────────
 // ── Approval-queue roles: Farm Supervisor / Warehouse Supervisor / Operations Manager / Finance Director ──
 function ApprovalQueue({
-  accessToken, title, icon, items, onApprove, onReject, renderLabel,
+  title, icon, items, approveLabel = 'Approve', rejectPrompt, onApprove, onReject,
 }: {
-  accessToken: string; title: string; icon: string;
-  items: { id: string; label: string }[];
-  onApprove: (id: string) => void;
-  onReject: (id: string) => void;
-  renderLabel?: never;
+  title: string; icon: string;
+  items: { id: string; label: string; heading: string; details: React.ReactNode }[];
+  approveLabel?: string;
+  rejectPrompt: string;
+  onApprove: (id: string) => Promise<unknown>;
+  onReject: (id: string, comment: string) => Promise<unknown>;
 }) {
+  // Nothing is decided from a bare row: Review opens the details first, and a rejection always carries a comment.
+  const [reviewing, setReviewing] = useState<string | null>(null);
+  const current = items.find((i) => i.id === reviewing) ?? null;
   return (
     <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
       <h2 className="font-display text-lg text-paddy-900">{icon} {title}</h2>
@@ -214,14 +220,22 @@ function ApprovalQueue({
         {items.map((item) => (
           <div key={item.id} className="flex items-center justify-between rounded-lg bg-white px-4 py-2.5 text-sm">
             <span className="text-ink-900">{item.label}</span>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => onApprove(item.id)} className="rounded-full bg-paddy-900 px-3 py-1 text-xs font-medium text-rice-50">Approve</button>
-              <button type="button" onClick={() => onReject(item.id)} className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50">Reject</button>
-            </div>
+            <button type="button" onClick={() => setReviewing(item.id)} className="rounded-full bg-paddy-900 px-4 py-1 text-xs font-medium text-rice-50">Review</button>
           </div>
         ))}
         {items.length === 0 && <p className="text-sm text-ink-500">Nothing waiting - you&rsquo;re caught up.</p>}
       </div>
+      <ReviewDialog
+        open={!!current}
+        title={current?.heading ?? ''}
+        subtitle={current?.label}
+        details={current?.details}
+        approveLabel={approveLabel}
+        rejectPrompt={rejectPrompt}
+        onApprove={() => onApprove(reviewing!)}
+        onReject={(comment) => onReject(reviewing!, comment)}
+        onClose={() => setReviewing(null)}
+      />
     </div>
   );
 }
@@ -232,10 +246,11 @@ function PaddyApprovalQueue({ accessToken }: { accessToken: string }) {
   useEffect(load, [accessToken]);
   return (
     <ApprovalQueue
-      accessToken={accessToken} title="Paddy entries" icon="🌾"
-      items={items.map((e) => ({ id: e.id, label: `${e.weightKg.toLocaleString()} KG - ${new Date(e.entryDate).toLocaleDateString()}` }))}
+      title="Paddy entries" icon="?"
+      rejectPrompt="Why is this entry not approved? The person who entered it will read this."
+      items={items.map((e) => ({ id: e.id, label: `${e.weightKg.toLocaleString()} KG - ${new Date(e.entryDate).toLocaleDateString()}`, heading: `Paddy entry ${e.entryNumber}`, details: <PaddyEntryDetails entry={e} /> }))}
       onApprove={async (id) => { await paddyEntriesApi.approve(accessToken, id); load(); }}
-      onReject={async (id) => { await paddyEntriesApi.reject(accessToken, id, 'Reviewed and rejected from My Office.'); load(); }}
+      onReject={async (id, comment) => { await paddyEntriesApi.reject(accessToken, id, comment); load(); }}
     />
   );
 }
@@ -243,9 +258,8 @@ function PaddyApprovalQueue({ accessToken }: { accessToken: string }) {
 function SalesApprovalQueue({ accessToken }: { accessToken: string }) {
   const [items, setItems] = useState<SalesOrder[]>([]);
   useEffect(() => { salesOrdersApi.list(accessToken, 'SUBMITTED').then(setItems).catch(() => {}); }, [accessToken]);
-  // Orders are reviewed on the order screen, where the stock check and a
-  // real rejection reason are available (a canned reason would tell the
-  // Sales Officer nothing).
+  // Orders are reviewed on the order screen, where the receipts, the stock check and the activity trail are shown before the
+  // decision, and a rejection needs a comment.
   return (
     <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
       <h2 className="font-display text-lg text-paddy-900">{'\u{1F4B0}'} Sales orders</h2>
@@ -269,10 +283,11 @@ function PaymentVerificationQueue({ accessToken }: { accessToken: string }) {
   useEffect(load, [accessToken]);
   return (
     <ApprovalQueue
-      accessToken={accessToken} title="Payments to verify" icon="💳"
-      items={items.map((p) => ({ id: p.id, label: `${p.paymentNumber} - GHS ${p.amount.toLocaleString()}` }))}
+      title="Payments to verify" icon="?" approveLabel="Verify payment"
+      rejectPrompt="Why can this payment not be verified? The person who recorded it will read this."
+      items={items.map((p) => ({ id: p.id, label: `${p.paymentNumber} - GHS ${p.amount.toLocaleString()}`, heading: `Payment ${p.paymentNumber}`, details: <PaymentDetails payment={p} /> }))}
       onApprove={async (id) => { await paymentsApi.verify(accessToken, id); load(); }}
-      onReject={async (id) => { await paymentsApi.reject(accessToken, id, 'Reviewed and rejected from My Office.'); load(); }}
+      onReject={async (id, comment) => { await paymentsApi.reject(accessToken, id, comment); load(); }}
     />
   );
 }
@@ -283,10 +298,11 @@ function ProductionApprovalQueue({ accessToken }: { accessToken: string }) {
   useEffect(load, [accessToken]);
   return (
     <ApprovalQueue
-      accessToken={accessToken} title="Production records" icon="🏭"
-      items={items.map((r) => ({ id: r.id, label: `${r.recordNumber} - ${r.recoveryPercent.toFixed(1)}% recovery` }))}
+      title="Production records" icon="?"
+      rejectPrompt="Why is this run not approved? The operator will read this."
+      items={items.map((r) => ({ id: r.id, label: `${r.recordNumber} - ${r.recoveryPercent.toFixed(1)}% recovery`, heading: `Production run ${r.recordNumber}`, details: <ProductionDetails record={r} /> }))}
       onApprove={async (id) => { await productionApi.approve(accessToken, id); load(); }}
-      onReject={async (id) => { await productionApi.reject(accessToken, id, 'Reviewed and rejected from My Office.'); load(); }}
+      onReject={async (id, comment) => { await productionApi.reject(accessToken, id, comment); load(); }}
     />
   );
 }
@@ -551,40 +567,46 @@ function PaddyRequestQuickAction({ accessToken }: { accessToken: string }) {
 // ETA, or decline with a reason. ─────────────────────────────────────
 function ResetApprovalQueue({ accessToken }: { accessToken: string }) {
   const [items, setItems] = useState<ResetRequest[]>([]);
+  const [reviewing, setReviewing] = useState<string | null>(null);
   const load = () => {
     systemResetApi.list(accessToken).then((all) => setItems(all.filter((r) => !['APPROVED', 'REJECTED', 'EXECUTED', 'CANCELLED'].includes(r.status)))).catch(() => {});
   };
   useEffect(load, [accessToken]);
+  const current = items.find((r) => r.id === reviewing) ?? null;
 
   return (
     <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
-      <h2 className="font-display text-lg text-paddy-900">🔒 System reset requests</h2>
+      <h2 className="font-display text-lg text-paddy-900">? System reset requests</h2>
       <p className="mt-1 text-sm text-ink-500">{items.length} awaiting sign-off - needs both Finance Director and MD before Admin can execute.</p>
       <div className="mt-4 space-y-3">
         {items.map((req) => (
           <div key={req.id} className="rounded-lg bg-white p-4">
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-mono text-xs text-ink-500">{req.requestNumber}</p>
                 <p className="font-medium text-ink-900">{req.scope}</p>
                 <p className="text-sm text-ink-500">{req.reason}</p>
               </div>
-              <button
-                type="button"
-                onClick={async () => { await systemResetApi.approve(accessToken, req.id); load(); }}
-                className="rounded-full bg-paddy-900 px-3 py-1 text-xs font-medium text-rice-50"
-              >
-                Approve
-              </button>
+              <button type="button" onClick={() => setReviewing(req.id)} className="shrink-0 rounded-full bg-paddy-900 px-4 py-1 text-xs font-medium text-rice-50">Review</button>
             </div>
             <div className="mt-2 flex gap-4 text-xs text-ink-500">
-              <span>Finance: {req.financeApprovedBy ? `✓ ${req.financeApprovedBy.firstName}` : 'Pending'}</span>
-              <span>MD: {req.mdApprovedBy ? `✓ ${req.mdApprovedBy.firstName}` : 'Pending'}</span>
+              <span>Finance: {req.financeApprovedBy ? `? ${req.financeApprovedBy.firstName}` : 'Pending'}</span>
+              <span>MD: {req.mdApprovedBy ? `? ${req.mdApprovedBy.firstName}` : 'Pending'}</span>
             </div>
           </div>
         ))}
         {items.length === 0 && <p className="text-sm text-ink-500">Nothing waiting - you&rsquo;re caught up.</p>}
       </div>
+      <ReviewDialog
+        open={!!current}
+        title={current ? `Reset request ${current.requestNumber}` : ''}
+        subtitle={current?.scope}
+        details={current ? <ResetRequestDetails request={current} /> : null}
+        rejectPrompt="Why should this reset not go ahead? The person who asked for it will read this."
+        onApprove={async () => { await systemResetApi.approve(accessToken, reviewing!); load(); }}
+        onReject={async (comment) => { await systemResetApi.reject(accessToken, reviewing!, comment); load(); }}
+        onClose={() => setReviewing(null)}
+      />
     </div>
   );
 }

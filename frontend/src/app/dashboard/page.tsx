@@ -359,15 +359,24 @@ export default function DashboardPage() {
           .catch(() => null),
       );
     }
+    if (hasPermission('sales.assign')) {
+      items.push(
+        salesOrdersApi
+          .list(accessToken, 'RELEASED')
+          .then((orders) => (orders.length > 0 ? { label: 'Released orders waiting for you to choose a warehouse', count: orders.length, href: '/sales' } : null))
+          .catch(() => null),
+      );
+    }
     if (hasPermission('sales.fulfill')) {
       items.push(
         salesOrdersApi
-          .list(accessToken, 'RESERVED')
-          .then((orders) => {
+          .list(accessToken)
+          .then((everything) => {
+            const orders = everything.filter((o) => ['RESERVED', 'PROCESSING', 'ON_TRACK'].includes(o.status));
             const scoped = me?.roles.some((r) => r.scopes.some((sc) => sc.scopeType === 'GLOBAL'))
               ? orders
               : orders.filter((o) => o.allocatedWarehouse && (me?.roles ?? []).some((r) => r.scopes.some((sc) => sc.scopeType === 'WAREHOUSE' && sc.scopeId === o.allocatedWarehouse?.id)));
-            return scoped.length > 0 ? { label: 'Orders released for delivery', count: scoped.length, href: '/sales' } : null;
+            return scoped.length > 0 ? { label: 'Orders at your warehouse to process, send or confirm', count: scoped.length, href: '/sales' } : null;
           })
           .catch(() => null),
       );
@@ -783,8 +792,8 @@ export default function DashboardPage() {
           {isFinanceDirector && <FinanceDesk accessToken={accessToken} meId={me.id} />}
           {isMdOrCeo && <ReleaseDesk accessToken={accessToken} canApproveDirectorExpenses={hasPermission('finance.approve.director')} />}
           {isMdOrCeo && <OutputFeedbackCard accessToken={accessToken} />}
-          {hasPermission('sales.fulfill') && <DeliveryDesk accessToken={accessToken} onlyWarehouseIds={deliveryScope} />}
-          {isSalesOfficer && <MyOrdersDesk accessToken={accessToken} meId={me.id} />}
+          {hasPermission('sales.fulfill') && <DeliveryDesk accessToken={accessToken} onlyWarehouseIds={deliveryScope} canAssign={hasPermission('sales.assign')} />}
+          {isSalesOfficer && <MyOrdersDesk accessToken={accessToken} meId={me.id} firstName={me.firstName} />}
         </>
       )}
 
@@ -1351,8 +1360,8 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <IconStatCard
               icon={Truck} tone="orange" label="Orders pending"
-              value={String(financeOrders.filter((o) => ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RESERVED'].includes(o.status)).length)}
-              trend={`GHS ${financeOrders.filter((o) => ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RESERVED'].includes(o.status)).reduce((s, o) => s + o.totalAmount, 0).toLocaleString()}`}
+              value={String(financeOrders.filter((o) => ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RELEASED', 'RESERVED', 'PROCESSING', 'ON_TRACK'].includes(o.status)).length)}
+              trend={`GHS ${financeOrders.filter((o) => ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RELEASED', 'RESERVED', 'PROCESSING', 'ON_TRACK'].includes(o.status)).reduce((s, o) => s + o.totalAmount, 0).toLocaleString()}`}
             />
             <IconStatCard
               icon={Package} tone="green" label="Sold this month"
@@ -1586,7 +1595,7 @@ export default function DashboardPage() {
                 value={String(mdSalesOrders.filter((o) => o.status === 'SUBMITTED').length)}
                 tone="husk"
               />
-              <StatCard label="Reserved, ready for delivery" value={String(mdSalesOrders.filter((o) => o.status === 'RESERVED').length)} />
+              <StatCard label="With the warehouse side" value={String(mdSalesOrders.filter((o) => ['RELEASED', 'RESERVED', 'PROCESSING', 'ON_TRACK'].includes(o.status)).length)} />
               <StatCard label="Fulfilled this month" value={String(mdSalesOrders.filter((o) => o.status === 'FULFILLED' && isThisMonth(o.createdAt)).length)} tone="paddy" />
               <StatCard
                 label="Total order value this month"
@@ -1831,7 +1840,7 @@ export default function DashboardPage() {
               order's value regardless of whether it closed. */}
           <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <IconStatCard icon={Package} tone="green" label="Delivered" value={String(salesOfficerOrders.filter((o) => o.status === 'FULFILLED').length)} />
-            <IconStatCard icon={Truck} tone="blue" label="Pending" value={String(salesOfficerOrders.filter((o) => ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RESERVED'].includes(o.status)).length)} />
+            <IconStatCard icon={Truck} tone="blue" label="Pending" value={String(salesOfficerOrders.filter((o) => ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RELEASED', 'RESERVED', 'PROCESSING', 'ON_TRACK'].includes(o.status)).length)} />
             <IconStatCard icon={Factory} tone="purple" label="Rejected or cancelled" value={String(salesOfficerOrders.filter((o) => ['REJECTED', 'CANCELLED'].includes(o.status)).length)} />
             <IconStatCard icon={DollarSign} tone="teal" label="Sales value this month" value={`GHS ${salesOfficerOrders.filter((o) => o.status === 'FULFILLED' && o.fulfilledAt && isThisMonth(o.fulfilledAt)).reduce((s, o) => s + o.totalAmount, 0).toLocaleString()}`} />
           </div>
@@ -1845,7 +1854,7 @@ export default function DashboardPage() {
             />
             <StatCard
               label="Pending"
-              value={String(salesOfficerOrders.filter((o) => ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RESERVED'].includes(o.status)).length)}
+              value={String(salesOfficerOrders.filter((o) => ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RELEASED', 'RESERVED', 'PROCESSING', 'ON_TRACK'].includes(o.status)).length)}
               tone="husk"
             />
             <StatCard

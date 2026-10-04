@@ -7,7 +7,7 @@ import type { ExecutiveAnalytics, SalesOrder, TopDebtor } from '@/lib/api-client
 import { IconStatCard } from '@/components/StatCard';
 import { formatGhs, inPeriod } from '@/lib/oversight-utils';
 
-const PIPELINE = ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RESERVED'];
+const PIPELINE = ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'RELEASED', 'RESERVED', 'PROCESSING', 'ON_TRACK'];
 const STATUS_ORDER = [...PIPELINE, 'FULFILLED', 'REJECTED', 'CANCELLED'];
 const label = (s: string) => s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ');
 

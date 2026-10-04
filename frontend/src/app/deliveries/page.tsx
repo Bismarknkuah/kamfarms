@@ -1,5 +1,7 @@
 'use client';
 
+import { ReviewDialog } from '@/components/review/ReviewDialog';
+import { DeliveryReportDetails } from '@/components/review/EntityDetails';
 import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -63,8 +65,8 @@ export default function DeliveriesPage() {
   const [departureTime, setDepartureTime] = useState('');
   const [creatingReport, setCreatingReport] = useState(false);
 
-  const [rejectingId, setRejectingId] = useState<string | null>(null);
-  const [rejectReason, setRejectReason] = useState('');
+  // Approving and rejecting happen inside the review window, after the details have been read; a rejection always carries a comment.
+  const [reviewing, setReviewing] = useState<DeliveryReport | null>(null);
 
   const loadOrders = (token: string) => {
     deliveryOrdersApi.list(token).then(setOrders).catch((err: unknown) => setPageError(err instanceof ApiError ? err.message : 'Failed to load delivery orders.'));
@@ -352,33 +354,10 @@ export default function DeliveriesPage() {
                     Submit for approval
                   </button>
                 )}
-                {r.status === 'SUPERVISOR_REVIEW' && hasPermission('delivery.approve') && (
-                  <button type="button" onClick={() => runAction(() => deliveryReportsApi.approve(accessToken!, r.id))} className="rounded-full bg-paddy-900 px-4 py-1.5 text-xs font-medium text-rice-50">
-                    Approve
+                {r.status === 'SUPERVISOR_REVIEW' && (hasPermission('delivery.approve') || hasPermission('delivery.reject')) && (
+                  <button type="button" onClick={() => setReviewing(r)} className="rounded-full bg-paddy-900 px-4 py-1.5 text-xs font-medium text-rice-50">
+                    Review
                   </button>
-                )}
-                {r.status === 'SUPERVISOR_REVIEW' && hasPermission('delivery.reject') && (
-                  rejectingId === r.id ? (
-                    <div className="flex items-center gap-2">
-                      <input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason…" className="rounded-lg border border-paddy-100 px-2 py-1.5 text-xs" />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!rejectReason.trim()) return;
-                          runAction(() => deliveryReportsApi.reject(accessToken!, r.id, rejectReason));
-                          setRejectingId(null);
-                          setRejectReason('');
-                        }}
-                        className="rounded-full border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700"
-                      >
-                        Confirm reject
-                      </button>
-                    </div>
-                  ) : (
-                    <button type="button" onClick={() => setRejectingId(r.id)} className="rounded-full border border-paddy-100 px-4 py-1.5 text-xs font-medium text-ink-700">
-                      Reject
-                    </button>
-                  )
                 )}
               </div>
             </div>
@@ -386,6 +365,18 @@ export default function DeliveriesPage() {
           {reports?.length === 0 && <div className="rounded-2xl border border-paddy-100 bg-white p-8 text-center text-sm text-ink-500">No delivery reports yet.</div>}
         </div>
       )}
+      <ReviewDialog
+        open={!!reviewing}
+        title={reviewing ? `Delivery report ${reviewing.reportNumber}` : ''}
+        subtitle={reviewing ? `${reviewing.farm.name} to ${reviewing.destinationWarehouse.name}` : undefined}
+        details={reviewing ? <DeliveryReportDetails report={reviewing} /> : null}
+        canApprove={hasPermission('delivery.approve')}
+        canReject={hasPermission('delivery.reject')}
+        rejectPrompt="Why is this report not approved? The person who filed it will read this."
+        onApprove={async () => { await deliveryReportsApi.approve(accessToken!, reviewing!.id); loadReports(accessToken!); }}
+        onReject={async (comment) => { await deliveryReportsApi.reject(accessToken!, reviewing!.id, comment); loadReports(accessToken!); }}
+        onClose={() => setReviewing(null)}
+      />
     </DashboardShell>
   );
 }

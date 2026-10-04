@@ -52,6 +52,7 @@ export const PERMISSIONS = {
   SALES_FULFILL: 'sales.fulfill',
   SALES_VIEW: 'sales.view',
   SALES_RELEASE: 'sales.release',
+  SALES_ASSIGN: 'sales.assign',
   CUSTOMER_MANAGE: 'customer.manage',
 
   PAYMENT_CREATE: 'payment.create',
@@ -147,6 +148,7 @@ export const PERMISSION_CATALOG: { code: string; module: string; description: st
   { code: PERMISSIONS.SALES_FULFILL, module: 'sales', description: 'Fulfill (dispatch) approved sales orders' },
   { code: PERMISSIONS.SALES_VIEW, module: 'sales', description: 'View sales orders and customers (read-only)' },
   { code: PERMISSIONS.SALES_RELEASE, module: 'sales', description: 'Release a Finance-approved sales order to the Warehouse Supervisor for delivery' },
+  { code: PERMISSIONS.SALES_ASSIGN, module: 'sales', description: 'Assign a released sales order to a warehouse' },
   { code: PERMISSIONS.CUSTOMER_MANAGE, module: 'sales', description: 'Manage customers' },
   { code: PERMISSIONS.PAYMENT_CREATE, module: 'finance', description: 'Record payments' },
   { code: PERMISSIONS.PAYMENT_VERIFY, module: 'finance', description: 'Verify payments' },

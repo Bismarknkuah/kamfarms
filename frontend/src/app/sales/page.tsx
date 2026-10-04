@@ -5,10 +5,8 @@ import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import { hasFinancialVisibility } from '@/lib/nav-items';
-import { ChainProgress } from '@/components/sales/ChainProgress';
-import { FinanceDecision, ReleaseForDelivery } from '@/components/sales/Decisions';
-import { MarkDelivered } from '@/components/SalesDesks';
-import { needsMyAction, salesStatusLabel, salesStatusTone, waitingOn } from '@/lib/sales-flow';
+import { OrderDetail } from '@/components/sales/OrderDetail';
+import { ageLabel, isSlow, needsMyAction, salesStatusLabel, salesStatusTone, waitingOn, waitingSince } from '@/lib/sales-flow';
 import {
   salesOrdersApi,
   customersApi,
@@ -73,12 +71,6 @@ export default function SalesPage() {
   const [newCustAddress, setNewCustAddress] = useState('');
   const [possibleDuplicates, setPossibleDuplicates] = useState<Customer[]>([]);
   const [creatingCustomer, setCreatingCustomer] = useState(false);
-
-  // Attaching a receipt to an existing order, for the Managing
-  // Director's review.
-  const [receiptOrderId, setReceiptOrderId] = useState<string | null>(null);
-  const [receiptUrlDraft, setReceiptUrlDraft] = useState('');
-  const [attachingReceipt, setAttachingReceipt] = useState(false);
 
   const loadOrders = (token: string) => {
     salesOrdersApi
@@ -167,22 +159,6 @@ export default function SalesPage() {
       setActionError(err instanceof ApiError ? err.message : 'Failed to add customer.');
     } finally {
       setCreatingCustomer(false);
-    }
-  };
-
-  const onAttachReceipt = async (orderId: string) => {
-    if (!accessToken || !receiptUrlDraft.trim()) return;
-    setAttachingReceipt(true);
-    setActionError(null);
-    try {
-      await salesOrdersApi.attachReceipt(accessToken, orderId, receiptUrlDraft.trim());
-      setReceiptOrderId(null);
-      setReceiptUrlDraft('');
-      loadOrders(accessToken);
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Failed to attach receipt.');
-    } finally {
-      setAttachingReceipt(false);
     }
   };
 
@@ -424,7 +400,7 @@ export default function SalesPage() {
       )}
 
       <div className="mt-6 flex gap-2" role="group" aria-label="Which orders to show">
-        {([['mine', `Needs my action (${mineCount})`], ['all', `All orders (${orders?.length ?? 0})`]] as const).map(([key, label]) => (
+        {([['mine', `Needs my action (${mineCount})`], ['all', `${['sales.approve', 'sales.release', 'sales.assign', 'sales.view'].some(hasPermission) ? 'All orders' : hasPermission('sales.create') ? 'My orders' : 'Orders at my warehouse'} (${orders?.length ?? 0})`]] as const).map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -446,6 +422,7 @@ export default function SalesPage() {
                 <th className="px-4 py-3">Customer</th>
                 {showFinancials && <th className="px-4 py-3">Total</th>}
                 <th className="px-4 py-3">Status</th>
+                <th className="hidden px-4 py-3 md:table-cell">With</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-paddy-100">
@@ -464,121 +441,20 @@ export default function SalesPage() {
                     </span>
                     {isMine(o) && <span className="ml-2 rounded-full bg-paddy-900 px-2 py-0.5 text-[10px] font-medium text-rice-50">Your turn</span>}
                   </td>
+                  <td className="hidden px-4 py-3 text-xs text-ink-500 md:table-cell">
+                    {waitingOn(o.status) ? <>{waitingOn(o.status)}{waitingSince(o) ? <span className={`block ${isSlow(o) ? 'font-medium text-amber-700' : ''}`} data-testid={isSlow(o) ? 'slow-flag' : undefined}>{ageLabel(waitingSince(o))}{isSlow(o) ? ' - waiting a while' : ''}</span> : null}</> : '-'}
+                  </td>
                 </tr>
               ))}
               {orders && visibleOrders?.length === 0 && (
-                <tr><td colSpan={showFinancials ? 4 : 3} className="px-4 py-8 text-center text-ink-500">{activeView === 'mine' ? 'Nothing is waiting on you.' : 'No sales orders yet.'}</td></tr>
+                <tr><td colSpan={showFinancials ? 5 : 4} className="px-4 py-8 text-center text-ink-500">{activeView === 'mine' ? 'Nothing is waiting on you.' : 'No sales orders yet.'}</td></tr>
               )}
             </tbody>
           </table>
         </div>
 
-        {selectedOrder && (
-          <div className="rounded-2xl border border-paddy-100 bg-white p-5">
-            <p className="font-mono text-xs text-ink-500">{selectedOrder.orderNumber}</p>
-            <h3 className="mt-1 font-display text-lg text-paddy-900">{selectedOrder.customer.name}</h3>
-            <p className="text-sm text-ink-500">Sold by {selectedOrder.salesOfficer.firstName} {selectedOrder.salesOfficer.lastName}</p>
-
-            {(selectedOrder.deliveryLocation || selectedOrder.requestedDeliveryDate) && (
-              <div className="mt-2 space-y-0.5 text-xs text-ink-500">
-                {selectedOrder.deliveryLocation && <p>📍 {selectedOrder.deliveryLocation}</p>}
-                {selectedOrder.requestedDeliveryDate && <p>Requested for {new Date(selectedOrder.requestedDeliveryDate).toLocaleDateString()}</p>}
-              </div>
-            )}
-
-            <div className="mt-4 rounded-xl border border-paddy-100 bg-rice-50/50 p-4">
-              <ChainProgress order={selectedOrder} />
-              {selectedOrder.allocatedWarehouse && <p className="mt-3 text-xs text-ink-500">Delivering from {selectedOrder.allocatedWarehouse.name}</p>}
-            </div>
-
-            <div className="mt-4 space-y-1 border-t border-paddy-100 pt-4">
-              {selectedOrder.items.map((item) => (
-                <div key={item.id} className="flex justify-between text-sm">
-                  <span className="text-ink-700">{item.product.name} - {item.packagingSize.label} × {item.bagCount}</span>
-                  {showFinancials && <span className="text-ink-900">{fmtGHS(item.lineTotal)}</span>}
-                </div>
-              ))}
-              {showFinancials && (
-                <div className="flex justify-between border-t border-paddy-100 pt-2 text-sm font-medium">
-                  <span>Total</span>
-                  <span>{fmtGHS(selectedOrder.totalAmount)}</span>
-                </div>
-              )}
-            </div>
-
-            {selectedOrder.rejectionReason && (
-              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
-                Rejected: {selectedOrder.rejectionReason}
-              </p>
-            )}
-
-            {selectedOrder.receiptUrl ? (
-              <p className="mt-3 rounded-lg border border-paddy-100 bg-rice-50 p-3 text-xs text-ink-700">
-                🧾 Receipt attached - <a href={selectedOrder.receiptUrl} target="_blank" rel="noreferrer" className="font-medium text-paddy-700 underline">view it</a>
-              </p>
-            ) : selectedOrder.salesOfficer.id === me.id && hasPermission('sales.create') && (
-              <div className="mt-3 rounded-lg border border-paddy-100 bg-rice-50 p-3">
-                {receiptOrderId === selectedOrder.id ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={receiptUrlDraft}
-                      onChange={(e) => setReceiptUrlDraft(e.target.value)}
-                      placeholder="Link to a photo or document of the receipt (Drive, Dropbox, etc.)"
-                      className="flex-1 rounded-lg border border-paddy-100 px-2 py-1.5 text-xs"
-                    />
-                    <button type="button" onClick={() => onAttachReceipt(selectedOrder.id)} disabled={attachingReceipt || !receiptUrlDraft.trim()} className="rounded-full bg-paddy-900 px-3 py-1.5 text-xs font-medium text-rice-50 disabled:opacity-50">
-                      {attachingReceipt ? 'Attaching…' : 'Attach'}
-                    </button>
-                    <button type="button" onClick={() => setReceiptOrderId(null)} className="text-xs text-ink-500">Cancel</button>
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => { setReceiptOrderId(selectedOrder.id); setReceiptUrlDraft(''); }} className="text-xs font-medium text-paddy-700 underline">
-                    🧾 Attach a receipt for the Finance Director&rsquo;s review
-                  </button>
-                )}
-              </div>
-            )}
-
-            <div className="mt-4 space-y-3 border-t border-paddy-100 pt-4">
-              {selectedOrder.status === 'DRAFT' && hasPermission('sales.create') && (
-                <button
-                  type="button"
-                  onClick={() => runAction(() => salesOrdersApi.submit(accessToken!, selectedOrder.id))}
-                  className="rounded-full bg-paddy-900 px-4 py-1.5 text-xs font-medium text-rice-50"
-                >
-                  Send to the Finance Director
-                </button>
-              )}
-
-              {selectedOrder.status === 'SUBMITTED' && hasPermission('sales.approve') && selectedOrder.submittedById !== me.id && (
-                <FinanceDecision key={selectedOrder.id} order={selectedOrder} accessToken={accessToken!} onDone={() => loadOrders(accessToken!)} />
-              )}
-
-              {selectedOrder.status === 'APPROVED' && hasPermission('sales.release') && (
-                <ReleaseForDelivery key={selectedOrder.id} order={selectedOrder} accessToken={accessToken!} onDone={() => loadOrders(accessToken!)} />
-              )}
-
-              {selectedOrder.status === 'RESERVED' && hasPermission('sales.fulfill') && (
-                <MarkDelivered key={selectedOrder.id} order={selectedOrder} accessToken={accessToken!} onDone={() => loadOrders(accessToken!)} />
-              )}
-
-              {['DRAFT', 'SUBMITTED', 'APPROVED', 'RESERVED'].includes(selectedOrder.status) && hasPermission('sales.create') && (
-                cancelId === selectedOrder.id ? (
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="text-ink-700">Cancel this order? {selectedOrder.status === 'RESERVED' ? 'The reserved stock is freed and the delivery task closed.' : 'Whoever holds it is told.'}</span>
-                    <button type="button" onClick={() => { runAction(() => salesOrdersApi.cancel(accessToken!, selectedOrder.id)); setCancelId(null); }} className="rounded-full border border-red-300 px-3 py-1 font-medium text-red-700">Yes, cancel it</button>
-                    <button type="button" onClick={() => setCancelId(null)} className="text-ink-500">Keep it</button>
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => setCancelId(selectedOrder.id)} className="text-xs font-medium text-red-700 underline">Cancel this order</button>
-                )
-              )}
-
-              {!['FULFILLED', 'REJECTED', 'CANCELLED', 'DRAFT'].includes(selectedOrder.status) && !isMine(selectedOrder) && !hasPermission('sales.create') && (
-                <p className="text-xs text-ink-500">Waiting on the {waitingOn(selectedOrder.status)}. There is nothing for you to do on this order.</p>
-              )}
-            </div>
-          </div>
+        {selectedOrder && accessToken && (
+          <OrderDetail key={selectedOrder.id} summary={selectedOrder} accessToken={accessToken} meId={me.id} hasPermission={hasPermission} showFinancials={showFinancials} onChanged={() => loadOrders(accessToken)} />
         )}
       </div>
     </DashboardShell>

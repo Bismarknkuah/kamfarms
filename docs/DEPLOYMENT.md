@@ -591,3 +591,10 @@ Three layers now stop this:
 **How to tell it worked.** The Deploy Logs begin with `[startup] 1/4 Applying the database schema...`, then 2/4, 3/4, 4/4, then
 `[startup] Database is ready.`, and later `[startup] Schema check: all N tables are present.` If you see `Starting Nest application` with
 no `[startup]` lines before it, the steps were skipped.
+
+## After the sales-chain update
+1. `/api/health` should report version `2026.10.07` or newer, and the Control center should show no database alert.
+2. In **System settings** and **Price list**, set prices for **Broken Rice** and **Rice Hull** if you want to sell them.
+3. Sign in once as the Warehouse Supervisor and as a Warehouse Manager and open **Sales**: the Supervisor should see a "choose a warehouse" desk,
+   the manager only their own warehouse's orders.
+4. See `docs/SALES_CHAIN.md` for the full chain and who sees what.

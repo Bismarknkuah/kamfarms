@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString } from 'class-validator';
+import { MandatoryComment } from '../../common/validators/mandatory-comment';
 
 export class RejectInventoryAdjustmentDto {
-  @ApiProperty() @IsString() reason: string;
+  @ApiProperty({ description: 'Mandatory: whoever rejects must say why.' })
+  @MandatoryComment()
+  reason: string;
 }

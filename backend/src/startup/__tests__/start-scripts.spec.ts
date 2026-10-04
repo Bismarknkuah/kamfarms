@@ -20,7 +20,7 @@ function sandbox(failing: string[] = []) {
 }
 
 describe('docker/prepare.sh: the database steps', () => {
-  it('applies the schema, then updates permissions, retired roles and expense categories, in that order, from the repo root wherever it is started', () => {
+  it('applies the schema, then updates permissions, retired roles, expense categories and the by-product products, in that order, from the repo root wherever it is started', () => {
     const s = sandbox();
     const r = s.run('prepare.sh');
     expect(r.status).toBe(0);
@@ -29,16 +29,17 @@ describe('docker/prepare.sh: the database steps', () => {
       'npx ts-node --transpile-only prisma/sync-permissions.ts',
       'npx ts-node --transpile-only prisma/retire-roles.ts',
       'npx ts-node --transpile-only prisma/sync-expense-categories.ts',
+      'npx ts-node --transpile-only prisma/sync-products.ts',
     ]);
-    expect(r.stdout).toContain('[startup] 1/4 Applying the database schema (this creates any missing tables)');
+    expect(r.stdout).toContain('[startup] 1/5 Applying the database schema (this creates any missing tables)');
     expect(r.stdout).toContain('[startup] Database is ready.');
   });
 
-  it.each(['sync-permissions', 'retire-roles', 'sync-expense-categories'])('carries on, with a warning, if %s fails: the server must still start', (step) => {
+  it.each(['sync-permissions', 'retire-roles', 'sync-expense-categories', 'sync-products'])('carries on, with a warning, if %s fails: the server must still start', (step) => {
     const s = sandbox([step]);
     const r = s.run('prepare.sh');
     expect(r.status).toBe(0);
-    expect(s.calls()).toHaveLength(4); // the steps after it still ran
+    expect(s.calls()).toHaveLength(5); // the steps after it still ran
     expect(r.stdout).toMatch(/\[startup\] WARNING: .* failed\. Continuing\./);
   });
 
@@ -58,8 +59,8 @@ describe('docker/start.sh: the API\'s start command', () => {
     const r = s.run('start.sh');
     expect(r.status).toBe(0);
     const calls = s.calls();
-    expect(calls).toHaveLength(5);
-    expect(calls[4]).toBe('node backend/dist/main.js DONE=1');
+    expect(calls).toHaveLength(6);
+    expect(calls[5]).toBe('node backend/dist/main.js DONE=1');
   });
 
   it('does not start the server if the schema could not be applied', () => {

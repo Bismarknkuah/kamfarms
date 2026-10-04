@@ -1,9 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, MinLength } from 'class-validator';
+import { MandatoryComment } from '../../common/validators/mandatory-comment';
 
 export class RejectPaddyEntryDto {
-  @ApiProperty({ description: 'Mandatory - rejections without a reason are not allowed.' })
-  @IsString()
-  @MinLength(3, { message: 'A rejection reason is required.' })
+  @ApiProperty({ description: 'Mandatory: whoever rejects must say why.' })
+  @MandatoryComment()
   reason: string;
 }

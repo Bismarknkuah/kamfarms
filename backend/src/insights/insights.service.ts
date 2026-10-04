@@ -81,7 +81,7 @@ export class InsightsService {
         select: { id: true, adjustmentNumber: true, locationType: true, locationId: true, adjustmentBags: true, approvedAt: true },
       }),
       db.salesOrder.findMany({
-        where: { status: 'RESERVED', allocatedWarehouseId: { not: null } },
+        where: { status: { in: ['RESERVED', 'PROCESSING', 'ON_TRACK'] }, allocatedWarehouseId: { not: null } },
         select: { id: true, orderNumber: true, allocatedWarehouseId: true, approvedAt: true, tasks: { select: { createdAt: true } } },
       }),
       db.paddyEntry.findMany({

@@ -885,7 +885,7 @@ export function PaddyRequestApprovalQueue({ accessToken }: { accessToken: string
     setDeclining(true);
     setFormError(null);
     try {
-      await paddyRequestsApi.respond(accessToken, requestId, 'DECLINED', declineReason || undefined);
+      await paddyRequestsApi.respond(accessToken, requestId, 'DECLINED', declineReason.trim());
       setDecliningId(null);
       setDeclineReason('');
       load();
@@ -944,9 +944,9 @@ export function PaddyRequestApprovalQueue({ accessToken }: { accessToken: string
               </div>
             ) : decliningId === r.id ? (
               <div className="mt-3 space-y-2 border-t border-paddy-100 pt-3">
-                <input value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} placeholder="Reason for declining (optional)" className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
+                <input value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} placeholder="Why are you declining? (required, the requester will read it)" aria-required="true" className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => onDecline(r.id)} disabled={declining} className="rounded-full bg-red-600 px-5 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+                  <button type="button" onClick={() => onDecline(r.id)} disabled={declining || declineReason.trim().length < 3} className="rounded-full bg-red-600 px-5 py-1.5 text-xs font-medium text-white disabled:opacity-50">
                     {declining ? 'Sending…' : 'Confirm decline'}
                   </button>
                   <button type="button" onClick={() => setDecliningId(null)} className="rounded-full border border-paddy-100 px-5 py-1.5 text-xs font-medium text-ink-700">Cancel</button>
@@ -1140,6 +1140,8 @@ export function InventoryAdjustmentQueue({ accessToken }: { accessToken: string 
   const [editKg, setEditKg] = useState('');
   const [editBags, setEditBags] = useState('');
   const [editReason, setEditReason] = useState('');
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectComment, setRejectComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -1179,7 +1181,9 @@ export function InventoryAdjustmentQueue({ accessToken }: { accessToken: string 
     setSubmitting(true);
     setFormError(null);
     try {
-      await inventoryAdjustmentsApi.reject(accessToken, id, 'Reviewed and rejected.');
+      await inventoryAdjustmentsApi.reject(accessToken, id, rejectComment.trim());
+      setRejectingId(null);
+      setRejectComment('');
       load();
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : 'Failed to reject.');
@@ -1204,7 +1208,7 @@ export function InventoryAdjustmentQueue({ accessToken }: { accessToken: string 
                 <p className="mt-1 text-xs text-ink-500">System shows {a.systemQuantityKg.toLocaleString()} KG / {a.systemBagCount} bags - requesting {a.adjustmentKg > 0 ? '+' : ''}{a.adjustmentKg.toLocaleString()} KG / {a.adjustmentBags > 0 ? '+' : ''}{a.adjustmentBags} bags
                 </p>
               </div>
-              {editingId !== a.id && (
+              {editingId !== a.id && rejectingId !== a.id && (
                 <div className="flex gap-2">
                   <button type="button" onClick={() => onApprove(a.id, false)} disabled={submitting} className="rounded-full bg-paddy-900 px-3 py-1 text-xs font-medium text-rice-50 disabled:opacity-50">
                     Approve
@@ -1212,12 +1216,24 @@ export function InventoryAdjustmentQueue({ accessToken }: { accessToken: string 
                   <button type="button" onClick={() => onStartEdit(a)} className="rounded-full border border-paddy-100 px-3 py-1 text-xs font-medium text-paddy-900 hover:bg-paddy-50">
                     Edit &amp; approve
                   </button>
-                  <button type="button" onClick={() => onReject(a.id)} disabled={submitting} className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50">
+                  <button type="button" onClick={() => { setRejectingId(a.id); setRejectComment(''); }} disabled={submitting} className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50">
                     Reject
                   </button>
                 </div>
               )}
             </div>
+
+            {rejectingId === a.id && (
+              <div className="mt-3 space-y-2 border-t border-paddy-100 pt-3">
+                <label htmlFor={`adj-reject-${a.id}`} className="block text-xs font-medium text-ink-700">Your comment <span className="text-red-700">(required)</span></label>
+                <textarea id={`adj-reject-${a.id}`} value={rejectComment} onChange={(e) => setRejectComment(e.target.value)} rows={2} maxLength={500} aria-required="true" placeholder="Why is this correction not approved? The person who asked for it will read this." className="w-full rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
+                <p className="text-xs text-ink-500">A comment is required when rejecting: write at least 3 characters.</p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => onReject(a.id)} disabled={submitting || rejectComment.trim().length < 3} className="rounded-full bg-red-700 px-5 py-1.5 text-xs font-medium text-white disabled:opacity-50">{submitting ? 'Sending...' : 'Confirm rejection'}</button>
+                  <button type="button" onClick={() => setRejectingId(null)} className="rounded-full border border-paddy-100 px-5 py-1.5 text-xs font-medium text-ink-700">Back</button>
+                </div>
+              </div>
+            )}
 
             {editingId === a.id && (
               <div className="mt-3 space-y-2 border-t border-paddy-100 pt-3">

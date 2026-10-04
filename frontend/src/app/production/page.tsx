@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import { GradeChips, BagStepper, RunningTotal, YieldPredictionCard } from '@/components/DataEntryKit';
+import { ReviewDialog } from '@/components/review/ReviewDialog';
+import { ProductionDetails } from '@/components/review/EntityDetails';
 import { productionApi, machinesApi, warehousesApi, paddyGradesApi, paddyMillingReceiptsApi, ProductionRecord, Machine, MachineDetail, Warehouse, PaddyGrade, YieldPrediction, PaddyMillingReceipt, ApiError } from '@/lib/api-client';
 
 const MACHINE_STATUS_STYLES: Record<string, string> = {
@@ -166,15 +168,8 @@ export default function ProductionPage() {
     }
   };
 
-  const onApprove = async (id: string) => {
-    if (!accessToken) return;
-    try {
-      await productionApi.approve(accessToken, id);
-      loadRecords(accessToken);
-    } catch (err) {
-      setPageError(err instanceof ApiError ? err.message : 'Failed to approve.');
-    }
-  };
+  // Approving and rejecting happen inside the review window, after the details have been read; a rejection always carries a comment.
+  const [reviewing, setReviewing] = useState<ProductionRecord | null>(null);
 
   const openMachine = async (machineId: string) => {
     if (!accessToken) return;
@@ -590,8 +585,8 @@ export default function ProductionPage() {
                   </td>
                   <td className="px-4 py-3">
                     {r.status === 'SUBMITTED' && hasPermission('production.approve') && (
-                      <button type="button" onClick={() => onApprove(r.id)} className="rounded-full border border-husk-500 px-3 py-1 text-xs font-medium text-paddy-900 hover:bg-husk-500 hover:text-white">
-                        Approve
+                      <button type="button" onClick={() => setReviewing(r)} className="rounded-full bg-paddy-900 px-4 py-1 text-xs font-medium text-rice-50">
+                        Review
                       </button>
                     )}
                   </td>
@@ -685,6 +680,16 @@ export default function ProductionPage() {
           )}
         </div>
       </div>
+      <ReviewDialog
+        open={!!reviewing}
+        title={reviewing ? `Production run ${reviewing.recordNumber}` : ''}
+        subtitle={reviewing ? `${reviewing.millingCenter.name}, ${reviewing.recoveryPercent.toFixed(1)}% recovery` : undefined}
+        details={reviewing ? <ProductionDetails record={reviewing} /> : null}
+        rejectPrompt="Why is this run not approved? The operator will read this."
+        onApprove={async () => { await productionApi.approve(accessToken!, reviewing!.id); loadRecords(accessToken!); }}
+        onReject={async (comment) => { await productionApi.reject(accessToken!, reviewing!.id, comment); loadRecords(accessToken!); }}
+        onClose={() => setReviewing(null)}
+      />
     </DashboardShell>
   );
 }

@@ -3,10 +3,10 @@
  * of it. The website knows which of these features it needs; the Admin dashboard compares the two and says plainly
  * when the server is behind.
  */
-export const API_VERSION = '2026.10.07';
+export const API_VERSION = '2026.10.08';
 
 /** One entry per capability the website relies on that only exists in newer servers. Add to this list with the feature. */
-export const API_FEATURES = ['site-content', 'insights', 'settings-registry', 'system-overview', 'reports-catalog', 'admin-access', 'ai-predictions', 'ai-feedback'] as const;
+export const API_FEATURES = ['site-content', 'insights', 'settings-registry', 'system-overview', 'reports-catalog', 'admin-access', 'ai-predictions', 'ai-feedback', 'sales-chain'] as const;
 
 const STARTED_AT = new Date();
 

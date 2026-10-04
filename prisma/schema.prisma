@@ -133,7 +133,10 @@ enum SalesOrderStatus {
   APPROVED
   PARTIALLY_APPROVED
   REJECTED
-  RESERVED
+  RELEASED   // the Managing Director released it; the Warehouse Supervisor assigns a warehouse next
+  RESERVED   // assigned to a warehouse, stock held there; the warehouse starts next
+  PROCESSING // the warehouse is picking and packing it
+  ON_TRACK   // dispatched, on its way to the customer
   FULFILLED
   CANCELLED
 }
@@ -1602,6 +1605,8 @@ model SalesOrder {
   reservations StockReservation[]
   invoices     Invoice[]
   tasks        Task[]
+  events       SalesOrderEvent[]
+  receipts     SalesReceipt[]
 
   @@index([customerId])
   @@index([status])
@@ -2264,4 +2269,42 @@ model SiteMedia {
 
   @@index([createdAt])
   @@map("site_media")
+}
+
+/// One line in a sales order's activity trail: who did what, in which role, when, and what they said.
+/// Written at every step so anyone who may see the order can see exactly who has handled it.
+model SalesOrderEvent {
+  id           String     @id @default(uuid())
+  salesOrderId String     @map("sales_order_id")
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  type         String     // CREATED, SUBMITTED, APPROVED, REJECTED, RELEASED, ASSIGNED, REASSIGNED, PROCESSING, ON_TRACK, DELIVERED, CANCELLED, RECEIPT_ADDED, RECEIPT_REMOVED
+  fromStatus   String?    @map("from_status")
+  toStatus     String?    @map("to_status")
+  actorId      String?    @map("actor_id")
+  actorName    String     @map("actor_name") // kept as written, so the trail still reads correctly if the person is renamed or removed later
+  actorRole    String?    @map("actor_role")
+  comment      String?
+  meta         Json?
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@index([salesOrderId, createdAt])
+  @@map("sales_order_events")
+}
+
+/// A payment receipt (photo or PDF) uploaded from a phone or computer and kept with the order, for the approvers to open.
+model SalesReceipt {
+  id             String     @id @default(uuid())
+  salesOrderId   String     @map("sales_order_id")
+  salesOrder     SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  fileName       String     @map("file_name")
+  mimeType       String     @map("mime_type")
+  sizeBytes      Int        @map("size_bytes")
+  data           Bytes
+  note           String?
+  uploadedById   String     @map("uploaded_by_id")
+  uploadedByName String     @map("uploaded_by_name")
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  @@index([salesOrderId])
+  @@map("sales_receipts")
 }

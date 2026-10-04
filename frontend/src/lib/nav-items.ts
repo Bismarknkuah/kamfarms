@@ -169,7 +169,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: '/sales',
     icon: 'dollar-sign',
     description: 'Follow an order from request to delivery: create it, review it, release it, or deliver it.',
-    permission: ['sales.create', 'sales.approve', 'sales.release', 'sales.fulfill', 'sales.view'],
+    permission: ['sales.create', 'sales.approve', 'sales.release', 'sales.assign', 'sales.fulfill', 'sales.view'],
     // Warehouse Manager holds sales.fulfill (marking an approved order
     // fulfilled once the goods physically go out) - a real, confirmed
     // bug found during a full audit: this nav item was hidden for them

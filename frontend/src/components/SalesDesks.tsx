@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { ApiError, Expense, Payment, SalesOrder, expensesApi, paymentsApi, salesOrdersApi } from '@/lib/api-client';
-import { ageLabel, salesStatusLabel, salesStatusTone, waitingSince } from '@/lib/sales-flow';
-import { FinanceDecision, ReleaseForDelivery } from '@/components/sales/Decisions';
+import { WAREHOUSE_STAGES, WITH_WAREHOUSE_SIDE, ageLabel, salesStatusLabel, salesStatusTone, waitingSince } from '@/lib/sales-flow';
+import { AssignWarehouse, FinanceDecision, ReleaseForDelivery, WarehouseSteps } from '@/components/sales/Decisions';
+import { OrderEvidence } from '@/components/sales/OrderEvidence';
 
 /*
  * The "desks": what each person in the sales chain sees first on their
@@ -152,7 +153,7 @@ export function FinanceDesk({ accessToken, meId }: { accessToken: string; meId: 
         {loaded && <span className="text-xs text-ink-500">{total === 0 ? 'You are all caught up' : `${total} item${total === 1 ? '' : 's'} waiting`}</span>}
       </div>
       <div className="space-y-4">
-        <Section title="Sales orders to review" hint="Approve one and it goes to the Managing Director to be released for delivery." count={toReview.length}>
+        <Section title="Sales orders to review" hint="Open one to see its receipts and history. Approve it and it goes to the Managing Director." count={toReview.length}>
           <ErrorLine text={orders.error} />
           {orders.data && !orders.error && toReview.length === 0 && <Empty text="No orders are waiting for your review." />}
           {toReview.map((o) => (
@@ -167,8 +168,8 @@ export function FinanceDesk({ accessToken, meId }: { accessToken: string; meId: 
               <p className="text-xs text-ink-500">
                 Sold by {fullName(o.salesOfficer)}
                 {o.deliveryLocation ? ` · delivery to ${o.deliveryLocation}` : ''}
-                {o.receiptUrl && <> · <a href={o.receiptUrl} target="_blank" rel="noreferrer" className="font-medium text-paddy-700 underline">view the receipt</a></>}
               </p>
+              <OrderEvidence orderId={o.id} accessToken={accessToken} />
               <FinanceDecision order={o} accessToken={accessToken} onDone={() => { setOpen(null); orders.reload(); }} />
             </Row>
           ))}
@@ -211,20 +212,20 @@ export function FinanceDesk({ accessToken, meId }: { accessToken: string; meId: 
 
 export function ReleaseDesk({ accessToken, canApproveDirectorExpenses }: { accessToken: string; canApproveDirectorExpenses: boolean }) {
   const approved = useLoad(useCallback(() => salesOrdersApi.list(accessToken, 'APPROVED'), [accessToken]), 'approved orders');
-  const out = useLoad(useCallback(() => salesOrdersApi.list(accessToken, 'RESERVED'), [accessToken]), 'orders out for delivery');
+  const out = useLoad(useCallback(() => salesOrdersApi.list(accessToken), [accessToken]), 'orders with the warehouse side');
   const expenses = useLoad(useCallback(() => (canApproveDirectorExpenses ? expensesApi.list(accessToken, 'PENDING') : Promise.resolve([] as Expense[])), [accessToken, canApproveDirectorExpenses]), 'expenses');
   const [open, setOpen] = useState<string | null>(null);
   const toggle = (id: string) => setOpen((cur) => (cur === id ? null : id));
 
   const toRelease = (approved.data ?? []).filter((o) => o.status === 'APPROVED');
-  const delivering = (out.data ?? []).filter((o) => o.status === 'RESERVED');
+  const delivering = (out.data ?? []).filter((o) => WITH_WAREHOUSE_SIDE.includes(o.status));
   const financeDirectorExpenses = (expenses.data ?? []).filter((e) => e.status === 'PENDING' && e.submittedByFinanceDirector);
 
   return (
     <div className="mb-8">
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Awaiting your release</p>
       <div className="space-y-4">
-        <Section title="Approved by Finance, ready to release" hint="Choose the warehouse and hand the delivery to the Warehouse Supervisor." count={toRelease.length}>
+        <Section title="Approved by Finance, ready to release" hint="Check the details and receipts, then release it. The Warehouse Supervisor chooses the warehouse." count={toRelease.length}>
           <ErrorLine text={approved.error} />
           {approved.data && !approved.error && toRelease.length === 0 && <Empty text="No approved orders are waiting for you." />}
           {toRelease.map((o) => (
@@ -241,6 +242,7 @@ export function ReleaseDesk({ accessToken, canApproveDirectorExpenses }: { acces
                 {o.deliveryLocation ? ` · delivery to ${o.deliveryLocation}` : ''}
                 {o.requestedDeliveryDate ? ` · wanted by ${new Date(o.requestedDeliveryDate).toLocaleDateString()}` : ''}
               </p>
+              <OrderEvidence orderId={o.id} accessToken={accessToken} />
               <ReleaseForDelivery order={o} accessToken={accessToken} onDone={() => { setOpen(null); approved.reload(); out.reload(); }} />
             </Row>
           ))}
@@ -254,16 +256,16 @@ export function ReleaseDesk({ accessToken, canApproveDirectorExpenses }: { acces
           </Section>
         )}
 
-        <Section title="Out for delivery" hint="Released to the Warehouse Supervisor and not yet delivered." count={delivering.length}>
+        <Section title="With the warehouse side" hint="Released by you and not yet delivered: where each one is." count={delivering.length}>
           <ErrorLine text={out.error} />
-          {out.data && !out.error && delivering.length === 0 && <Empty text="Nothing is out for delivery right now." />}
+          {out.data && !out.error && delivering.length === 0 && <Empty text="Nothing is with the warehouse side right now." />}
           {delivering.map((o) => (
             <Link key={o.id} href={`/sales?order=${o.id}`} className="flex items-center justify-between gap-3 rounded-xl border border-paddy-100 px-4 py-3 hover:bg-rice-50">
               <span className="min-w-0">
                 <span className="block truncate text-sm font-medium text-ink-900">{o.orderNumber}, {o.customer.name}</span>
-                <span className="block truncate text-xs text-ink-500">From {o.allocatedWarehouse?.name ?? 'a warehouse'} · {itemsLine(o)}</span>
+                <span className="block truncate text-xs text-ink-500">{o.allocatedWarehouse ? `At ${o.allocatedWarehouse.name}` : 'Not yet assigned to a warehouse'} · {itemsLine(o)}</span>
               </span>
-              <span className="shrink-0 text-xs text-ink-500">released {ageLabel(waitingSince(o))} ago</span>
+              <span className="shrink-0 text-right text-xs text-ink-500"><span className={`rounded-full px-2 py-0.5 font-medium ${salesStatusTone(o.status)}`}>{salesStatusLabel(o.status)}</span>{waitingSince(o) && <span className="mt-1 block">{ageLabel(waitingSince(o))} here</span>}</span>
             </Link>
           ))}
         </Section>
@@ -272,88 +274,71 @@ export function ReleaseDesk({ accessToken, canApproveDirectorExpenses }: { acces
   );
 }
 
-/* ───────────────────────── Warehouse Supervisor / Manager ───────────────────────── */
+/* ------------------------- Warehouse Supervisor / Manager ------------------ */
 
-export function MarkDelivered({ order, accessToken, onDone }: { order: SalesOrder; accessToken: string; onDone: () => void }) {
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const go = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await salesOrdersApi.fulfill(accessToken, order.id);
-      onDone();
-    } catch (e) {
-      setError(messageOf(e));
-      setConfirming(false);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="space-y-2">
-      {confirming ? (
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-ink-700">Has the customer received all of it? This takes the stock out of the warehouse.</span>
-          <button type="button" disabled={busy} onClick={go} className="rounded-full bg-paddy-900 px-4 py-1.5 text-xs font-medium text-rice-50 disabled:opacity-50">{busy ? 'Saving…' : 'Yes, delivered'}</button>
-          <button type="button" onClick={() => setConfirming(false)} className="text-xs text-ink-500">Not yet</button>
-        </div>
-      ) : (
-        <button type="button" onClick={() => setConfirming(true)} className="rounded-full bg-paddy-900 px-4 py-1.5 text-xs font-medium text-rice-50">Mark delivered</button>
-      )}
-      <ErrorLine text={error} />
-    </div>
-  );
-}
-
-export function DeliveryDesk({ accessToken, onlyWarehouseIds }: { accessToken: string; onlyWarehouseIds?: string[] | null }) {
-  const released = useLoad(useCallback(() => salesOrdersApi.list(accessToken, 'RESERVED'), [accessToken]), 'deliveries');
+export function DeliveryDesk({ accessToken, onlyWarehouseIds, canAssign = false }: { accessToken: string; onlyWarehouseIds?: string[] | null; canAssign?: boolean }) {
+  const all = useLoad(useCallback(() => salesOrdersApi.list(accessToken), [accessToken]), 'warehouse orders');
   const [open, setOpen] = useState<string | null>(null);
-  const rows = (released.data ?? []).filter(
-    (o) => o.status === 'RESERVED' && (!onlyWarehouseIds || (!!o.allocatedWarehouse && onlyWarehouseIds.includes(o.allocatedWarehouse.id))),
-  );
+  const toggle = (id: string) => setOpen((cur) => (cur === id ? null : id));
+  const inScope = (o: SalesOrder) => !onlyWarehouseIds || (!!o.allocatedWarehouse && onlyWarehouseIds.includes(o.allocatedWarehouse.id));
+  const toAssign = canAssign ? (all.data ?? []).filter((o) => o.status === 'RELEASED') : [];
+  const atWarehouse = (all.data ?? []).filter((o) => WAREHOUSE_STAGES.includes(o.status) && inScope(o));
+  const reload = () => { setOpen(null); all.reload(); };
 
   return (
     <div className="mb-8">
-      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Deliveries to make</p>
-      <Section title="Released by the Managing Director" hint="The stock is already reserved for each of these. Deliver, then mark it delivered." count={rows.length}>
-        <ErrorLine text={released.error} />
-        {released.data && !released.error && rows.length === 0 && <Empty text="No deliveries are waiting." />}
-        {rows.map((o) => (
-          <Row
-            key={o.id}
-            open={open === o.id}
-            onToggle={() => setOpen((cur) => (cur === o.id ? null : o.id))}
-            title={`${o.orderNumber}, ${o.customer.name}`}
-            subtitle={`From ${o.allocatedWarehouse?.name ?? 'a warehouse'} · to ${o.deliveryLocation ?? 'the address on the order'}`}
-            trailing={<span>released {ageLabel(waitingSince(o))} ago</span>}
-          >
-            <p className="text-sm text-ink-700">{itemsLine(o)}</p>
-            {o.requestedDeliveryDate && <p className="text-xs text-ink-500">Wanted by {new Date(o.requestedDeliveryDate).toLocaleDateString()}</p>}
-            {o.tasks && o.tasks[0] && <p className="text-xs text-ink-500">Released by {fullName(o.tasks[0].createdBy)}. <Link href="/tasks" className="font-medium text-paddy-700 underline">See the task</Link></p>}
-            <MarkDelivered order={o} accessToken={accessToken} onDone={() => { setOpen(null); released.reload(); }} />
-          </Row>
-        ))}
-      </Section>
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Orders to move</p>
+      <div className="space-y-4">
+        {canAssign && (
+          <Section title="Released by the Managing Director: choose a warehouse" hint="Each one needs a warehouse to prepare and send it. Its stock is held there once you choose." count={toAssign.length}>
+            <ErrorLine text={all.error} />
+            {all.data && !all.error && toAssign.length === 0 && <Empty text="No released orders are waiting for a warehouse." />}
+            {toAssign.map((o) => (
+              <Row key={o.id} open={open === o.id} onToggle={() => toggle(o.id)} title={`${o.orderNumber}, ${o.customer.name}`} subtitle={`${itemsLine(o)} · to ${o.deliveryLocation ?? 'the address on the order'}`} trailing={<span>{ageLabel(waitingSince(o))} waiting</span>}>
+                {o.requestedDeliveryDate && <p className="text-xs text-ink-500">Wanted by {new Date(o.requestedDeliveryDate).toLocaleDateString()}</p>}
+                <AssignWarehouse order={o} accessToken={accessToken} onDone={reload} />
+              </Row>
+            ))}
+          </Section>
+        )}
+
+        <Section title="At the warehouse" hint="Start processing, move it on track once it has left, then confirm delivery." count={atWarehouse.length}>
+          {!canAssign && <ErrorLine text={all.error} />}
+          {all.data && !all.error && atWarehouse.length === 0 && <Empty text="No orders are waiting at your warehouse." />}
+          {atWarehouse.map((o) => (
+            <Row
+              key={o.id}
+              open={open === o.id}
+              onToggle={() => toggle(o.id)}
+              title={`${o.orderNumber}, ${o.customer.name}`}
+              subtitle={`${o.allocatedWarehouse?.name ?? 'a warehouse'} · to ${o.deliveryLocation ?? 'the address on the order'}`}
+              trailing={<span className={`rounded-full px-2 py-0.5 font-medium ${salesStatusTone(o.status)}`}>{salesStatusLabel(o.status)}</span>}
+            >
+              <p className="text-sm text-ink-700">{itemsLine(o)}</p>
+              {o.requestedDeliveryDate && <p className="text-xs text-ink-500">Wanted by {new Date(o.requestedDeliveryDate).toLocaleDateString()}</p>}
+              <WarehouseSteps order={o} accessToken={accessToken} onDone={reload} />
+            </Row>
+          ))}
+        </Section>
+      </div>
     </div>
   );
 }
 
 /* ───────────────────────── Sales Officer ───────────────────────── */
 
-export function MyOrdersDesk({ accessToken, meId }: { accessToken: string; meId: string }) {
+export function MyOrdersDesk({ accessToken, meId, firstName }: { accessToken: string; meId: string; firstName?: string }) {
   const all = useLoad(useCallback(() => salesOrdersApi.list(accessToken), [accessToken]), 'your orders');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const mine = (all.data ?? []).filter((o) => o.salesOfficer.id === meId);
-  const count = (status: string) => mine.filter((o) => o.status === status).length;
+  const count = (statuses: string[]) => mine.filter((o) => statuses.includes(o.status)).length;
   const stages = [
-    { status: 'DRAFT', hint: 'not sent yet' },
-    { status: 'SUBMITTED', hint: 'Finance Director' },
-    { status: 'APPROVED', hint: 'Managing Director' },
-    { status: 'RESERVED', hint: 'on its way' },
+    { key: 'DRAFT', label: 'Not sent yet', statuses: ['DRAFT'], hint: 'your drafts' },
+    { key: 'SUBMITTED', label: 'With Finance', statuses: ['SUBMITTED'], hint: 'Finance Director' },
+    { key: 'APPROVED', label: 'With the MD', statuses: ['APPROVED'], hint: 'Managing Director' },
+    { key: 'WAREHOUSE', label: 'With the warehouse', statuses: WITH_WAREHOUSE_SIDE, hint: 'being prepared or on its way' },
   ];
   const recentCutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
   const drafts = mine.filter((o) => o.status === 'DRAFT');
@@ -372,15 +357,31 @@ export function MyOrdersDesk({ accessToken, meId }: { accessToken: string; meId:
     }
   };
 
+  const moving = mine.filter((o) => WITH_WAREHOUSE_SIDE.includes(o.status) || ['SUBMITTED', 'APPROVED'].includes(o.status)).length;
+  const needsYou = drafts.length + rejected.length;
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+  const deliveredThisMonth = mine.filter((o) => o.status === 'FULFILLED' && o.fulfilledAt && new Date(o.fulfilledAt).getTime() >= monthStart).length;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
   return (
     <div className="mb-8">
+      {all.data && (
+        <div className="mb-4 rounded-2xl bg-paddy-900 px-5 py-4 text-rice-50" data-testid="officer-greeting">
+          <p className="font-display text-xl">{greeting}{firstName ? `, ${firstName}` : ''}.</p>
+          <p className="mt-1 text-sm text-rice-50/80">
+            {moving === 0 && needsYou === 0 ? 'No orders are in motion yet. Ready when you are.' : `${moving} order${moving === 1 ? ' is' : 's are'} moving through the chain${needsYou > 0 ? `, and ${needsYou} ${needsYou === 1 ? 'needs' : 'need'} you` : ''}.`}
+            {deliveredThisMonth > 0 ? ` ${deliveredThisMonth} delivered this month. Well done.` : ''}
+          </p>
+        </div>
+      )}
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soil-500">Where your orders are</p>
       <ErrorLine text={all.error} />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stages.map((s) => (
-          <Link key={s.status} href="/sales" className="rounded-2xl border border-paddy-100 bg-white p-4 hover:bg-rice-50">
-            <p className="text-xs text-ink-500">{salesStatusLabel(s.status)}</p>
-            <p className="mt-1 font-display text-2xl text-paddy-900">{all.data ? count(s.status) : '…'}</p>
+          <Link key={s.key} href="/sales" className="rounded-2xl border border-paddy-100 bg-white p-4 hover:bg-rice-50">
+            <p className="text-xs text-ink-500">{s.label}</p>
+            <p className="mt-1 font-display text-2xl text-paddy-900">{all.data ? count(s.statuses) : '…'}</p>
             <p className="text-xs text-ink-500">{s.hint}</p>
           </Link>
         ))}

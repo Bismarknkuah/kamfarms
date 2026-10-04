@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
+import { ReviewDialog } from '@/components/review/ReviewDialog';
+import { PaddyEntryDetails } from '@/components/review/EntityDetails';
 import { paddyEntriesApi, farmsApi, paddyGradesApi, PaddyEntry, Farm, PaddyGrade, PaddyEntryComment, ApiError } from '@/lib/api-client';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -19,8 +21,8 @@ export default function PaddyEntriesPage() {
   const [grades, setGrades] = useState<PaddyGrade[]>([]);
   const [pageError, setPageError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [rejectingId, setRejectingId] = useState<string | null>(null);
-  const [rejectReason, setRejectReason] = useState('');
+  // Approving and rejecting happen inside the review window, after the details have been read; a rejection always carries a comment.
+  const [reviewing, setReviewing] = useState<PaddyEntry | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [comments, setComments] = useState<PaddyEntryComment[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -199,33 +201,10 @@ export default function PaddyEntriesPage() {
                           Submit
                         </button>
                       )}
-                      {e.status === 'SUBMITTED' && hasPermission('paddy.approve') && (
-                        <button type="button" onClick={() => runAction(() => paddyEntriesApi.approve(accessToken!, e.id))} className="rounded-full border border-husk-500 px-3 py-1 text-xs font-medium text-paddy-900 hover:bg-husk-500 hover:text-white">
-                          Approve
+                      {e.status === 'SUBMITTED' && (hasPermission('paddy.approve') || hasPermission('paddy.reject')) && (
+                        <button type="button" onClick={() => setReviewing(e)} className="rounded-full bg-paddy-900 px-4 py-1 text-xs font-medium text-rice-50">
+                          Review
                         </button>
-                      )}
-                      {e.status === 'SUBMITTED' && hasPermission('paddy.reject') && (
-                        rejectingId === e.id ? (
-                          <div className="flex items-center gap-1">
-                            <input value={rejectReason} onChange={(ev) => setRejectReason(ev.target.value)} placeholder="Reason…" className="w-28 rounded-lg border border-paddy-100 px-2 py-1 text-xs" />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (!rejectReason.trim()) return;
-                                runAction(() => paddyEntriesApi.reject(accessToken!, e.id, rejectReason));
-                                setRejectingId(null);
-                                setRejectReason('');
-                              }}
-                              className="rounded-full border border-red-300 px-2 py-1 text-xs font-medium text-red-700"
-                            >
-                              Confirm
-                            </button>
-                          </div>
-                        ) : (
-                          <button type="button" onClick={() => setRejectingId(e.id)} className="rounded-full border border-paddy-100 px-3 py-1 text-xs font-medium text-ink-700">
-                            Reject
-                          </button>
-                        )
                       )}
                     </div>
                   </td>
@@ -312,6 +291,18 @@ export default function PaddyEntriesPage() {
           </tbody>
         </table>
       </div>
+      <ReviewDialog
+        open={!!reviewing}
+        title={reviewing ? `Paddy entry ${reviewing.entryNumber}` : ''}
+        subtitle={reviewing ? `${reviewing.farm.name}, ${reviewing.weightKg.toLocaleString()} KG` : undefined}
+        details={reviewing ? <PaddyEntryDetails entry={reviewing} /> : null}
+        canApprove={hasPermission('paddy.approve')}
+        canReject={hasPermission('paddy.reject')}
+        rejectPrompt="Why is this entry not approved? The person who entered it will read this."
+        onApprove={async () => { await paddyEntriesApi.approve(accessToken!, reviewing!.id); loadEntries(accessToken!); }}
+        onReject={async (comment) => { await paddyEntriesApi.reject(accessToken!, reviewing!.id, comment); loadEntries(accessToken!); }}
+        onClose={() => setReviewing(null)}
+      />
     </DashboardShell>
   );
 }

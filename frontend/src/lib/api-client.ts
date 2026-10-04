@@ -28,7 +28,7 @@ async function request<T>(path: string, options: RequestInit = {}, accessToken?:
     res = await fetch(`${API_URL}${path}`, {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
+        ...(typeof FormData !== 'undefined' && options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         ...options.headers,
       },
@@ -47,6 +47,21 @@ async function request<T>(path: string, options: RequestInit = {}, accessToken?:
   }
 
   return body.data;
+}
+
+/** A file from the server (a receipt), fetched with the person's own sign-in: it is not public, so it cannot be a plain image link. */
+async function fetchBlob(path: string, accessToken: string): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  } catch {
+    throw new ApiError(SERVER_UNREACHABLE_MESSAGE, 'SERVER_UNREACHABLE', 0);
+  }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { message?: string; errorCode?: string } | null;
+    throw new ApiError(body?.message ?? 'The file could not be opened.', body?.errorCode ?? null, res.status);
+  }
+  return res.blob();
 }
 
 export interface LoginResponse {
@@ -576,6 +591,11 @@ export interface SalesOrder {
   totalAmount: number;
   deliveryLocation: string | null;
   receiptUrl: string | null;
+  /** Who did what, in order: the order's activity trail. Complete when one order is opened; a list carries only the latest stage change. */
+  events?: SalesOrderEvent[];
+  /** Uploaded payment receipts (the files themselves are fetched one at a time). Present when one order is opened. */
+  receipts?: SalesReceiptInfo[];
+  _count?: { receipts: number };
   requestedDeliveryDate: string | null;
   notes: string | null;
   rejectionReason: string | null;
@@ -591,6 +611,30 @@ export interface SalesOrder {
    * "who released this, and when" is known. */
   tasks?: { id: string; title: string; status: string; createdAt: string; createdBy: { firstName: string; lastName: string } }[];
   items: SalesOrderItem[];
+}
+
+export interface SalesOrderEvent {
+  id: string;
+  type: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  actorId: string | null;
+  actorName: string;
+  actorRole: string | null;
+  comment: string | null;
+  meta: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface SalesReceiptInfo {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  note: string | null;
+  uploadedById: string;
+  uploadedByName: string;
+  createdAt: string;
 }
 
 export interface SalesOrderAvailability {
@@ -644,17 +688,36 @@ export const salesOrdersApi = {
   /** The Finance Director's decision. Purely financial: no warehouse involved. */
   approve: (accessToken: string, id: string, note?: string) =>
     request<SalesOrder>(`/sales-orders/${id}/approve`, { method: 'POST', body: JSON.stringify(note ? { note } : {}) }, accessToken),
-  /** The Managing Director's / CEO's step: choose the warehouse and hand the delivery to the Warehouse Supervisor. */
-  release: (accessToken: string, id: string, data: { allocatedWarehouseId?: string; note?: string }) =>
+  /** The Managing Director's / CEO's step: release the approved order. The Warehouse Supervisor chooses the warehouse next. */
+  release: (accessToken: string, id: string, data: { note?: string } = {}) =>
     request<SalesOrder>(`/sales-orders/${id}/release`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
+  /** The Warehouse Supervisor's step: which warehouse prepares and sends it (or, before it starts, moves it to another). */
+  assignWarehouse: (accessToken: string, id: string, data: { warehouseId: string; note?: string }) =>
+    request<SalesOrder>(`/sales-orders/${id}/assign-warehouse`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
+  startProcessing: (accessToken: string, id: string, note?: string) =>
+    request<SalesOrder>(`/sales-orders/${id}/start-processing`, { method: 'POST', body: JSON.stringify(note ? { note } : {}) }, accessToken),
+  /** "On track": it has left the warehouse. */
+  dispatch: (accessToken: string, id: string, data: { driverName?: string; vehicleNumber?: string; expectedDeliveryAt?: string; note?: string }) =>
+    request<SalesOrder>(`/sales-orders/${id}/dispatch`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
+  /** A payment receipt, uploaded as a file from a phone or computer. */
+  uploadReceipt: (accessToken: string, id: string, file: Blob, fileName: string, note?: string) => {
+    const form = new FormData();
+    form.append('file', file, fileName);
+    if (note) form.append('note', note);
+    return request<SalesOrder>(`/sales-orders/${id}/receipts`, { method: 'POST', body: form }, accessToken);
+  },
+  receiptFile: (accessToken: string, id: string, receiptId: string) => fetchBlob(`/sales-orders/${id}/receipts/${receiptId}/file`, accessToken),
+  removeReceipt: (accessToken: string, id: string, receiptId: string) =>
+    request<SalesOrder>(`/sales-orders/${id}/receipts/${receiptId}`, { method: 'DELETE' }, accessToken),
   availability: (accessToken: string, id: string) =>
     request<SalesOrderAvailability>(`/sales-orders/${id}/availability`, { method: 'GET' }, accessToken),
-  cancel: (accessToken: string, id: string) =>
-    request<SalesOrder>(`/sales-orders/${id}/cancel`, { method: 'POST' }, accessToken),
+  cancel: (accessToken: string, id: string, reason?: string) =>
+    request<SalesOrder>(`/sales-orders/${id}/cancel`, { method: 'POST', body: JSON.stringify(reason ? { reason } : {}) }, accessToken),
   reject: (accessToken: string, id: string, reason: string) =>
     request<SalesOrder>(`/sales-orders/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }, accessToken),
-  fulfill: (accessToken: string, id: string) =>
-    request<SalesOrder>(`/sales-orders/${id}/fulfill`, { method: 'POST' }, accessToken),
+  /** Confirms the delivery: the stock leaves the warehouse. */
+  fulfill: (accessToken: string, id: string, note?: string) =>
+    request<SalesOrder>(`/sales-orders/${id}/fulfill`, { method: 'POST', body: JSON.stringify(note ? { note } : {}) }, accessToken),
 };
 
 // ── Finance ────────────────────────────────────────────────────────

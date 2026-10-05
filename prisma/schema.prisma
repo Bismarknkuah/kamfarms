@@ -1187,6 +1187,57 @@ model PaddyTransfer {
   @@map("paddy_transfers")
 }
 
+enum MillTransferDirection {
+  TO_MILL
+  TO_WAREHOUSE
+}
+
+enum MillTransferStatus {
+  PENDING_APPROVAL
+  IN_TRANSIT
+  RECEIVED
+  REJECTED
+  CANCELLED
+}
+
+/// Paddy sent from a warehouse to its milling center (the Warehouse Supervisor approves; the mill counts it in), or finished products (packaged rice,
+/// broken rice, rice hull) sent from the mill to its warehouse (the Operations Manager approves; the warehouse counts them in). Stock leaves the source
+/// when it is approved and joins the destination when it is counted in.
+model MillTransfer {
+  id              String                @id @default(uuid())
+  transferNumber  String                @unique @map("transfer_number") // MT-2026-000123
+  direction       MillTransferDirection
+  warehouseId     String                @map("warehouse_id")
+  millingCenterId String                @map("milling_center_id")
+  /// What is being sent: [{ key, kind, paddyGradeId?, productId?, packagingSizeId?, label, bags, kg }]
+  lines           Json
+  totalBags       Int                   @map("total_bags")
+  totalKg         Decimal               @map("total_kg") @db.Decimal(14, 2)
+  driverName      String?               @map("driver_name")
+  vehiclePlate    String?               @map("vehicle_plate")
+  notes           String?
+  status          MillTransferStatus    @default(PENDING_APPROVAL)
+  requestedById   String                @map("requested_by_id")
+  requestedAt     DateTime              @default(now()) @map("requested_at")
+  approvedById    String?               @map("approved_by_id")
+  approvedAt      DateTime?             @map("approved_at")
+  /// Why it was not approved, or why it was cancelled.
+  decisionNote    String?               @map("decision_note")
+  receivedById    String?               @map("received_by_id")
+  receivedAt      DateTime?             @map("received_at")
+  /// What was counted in: [{ key, bags, kg }]
+  receivedLines   Json?                 @map("received_lines")
+  receiveNote     String?               @map("receive_note")
+  varianceKg      Decimal?              @map("variance_kg") @db.Decimal(14, 2)
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([warehouseId])
+  @@index([millingCenterId])
+  @@map("mill_transfers")
+}
+
 model PaddyRequest {
   id                String             @id @default(uuid())
   requestNumber     String             @unique @map("request_number") // PR-REQ-2026-000123

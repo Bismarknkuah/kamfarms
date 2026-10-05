@@ -18,6 +18,10 @@ import { InventoryLedgerModule } from './inventory-ledger/inventory-ledger.modul
 import { PaddyModule } from './paddy/paddy.module';
 import { LogisticsModule } from './logistics/logistics.module';
 import { SupplyModule } from './supply/supply.module';
+import { ControlCenterModule } from './control-center/control-center.module';
+import { DispatchTrackingModule } from './dispatch-tracking/dispatch-tracking.module';
+import { SearchModule } from './search/search.module';
+import { MillDispatchModule } from './mill-dispatch/mill-dispatch.module';
 import { MachinesModule } from './machines/machines.module';
 import { ProductionModule } from './production/production.module';
 import { PackagingModule } from './packaging/packaging.module';
@@ -62,6 +66,10 @@ import { SystemOverviewModule } from './system-overview/system-overview.module';
     PaddyModule,
     LogisticsModule,
     SupplyModule,
+    ControlCenterModule,
+    DispatchTrackingModule,
+    SearchModule,
+    MillDispatchModule,
     MachinesModule,
     ProductionModule,
     PackagingModule,

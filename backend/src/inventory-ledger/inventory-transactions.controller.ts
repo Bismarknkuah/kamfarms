@@ -45,7 +45,7 @@ export class InventoryTransactionsController {
   }
 
   @Get('trace-references')
-  @RequirePermission([PERMISSIONS.AUDIT_VIEW, PERMISSIONS.FARM_INVENTORY_VIEW, PERMISSIONS.WAREHOUSE_INVENTORY_VIEW, PERMISSIONS.MILLING_VIEW])
+  @RequirePermission(PERMISSIONS.TRACE_VIEW)
   async traceReferences(@Query('referenceNumber') referenceNumber: string) {
     if (!referenceNumber) return { referencedByProductionRecords: [], referencedByPackagingBatches: [], referencedBySalesOrders: [] };
     return this.ledger.traceReferences(referenceNumber);

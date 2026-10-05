@@ -633,3 +633,29 @@ Adds one table (`paddy_transfers`), three columns and one status value on `suppl
 2. Try it: Warehouse Supervisor, Deliveries, Send paddy to another warehouse; then the other warehouse's Manager, Deliveries, Paddy arrived.
 
 See `docs/PADDY_REQUESTS.md`.
+
+
+## Version 2026.10.14: control centers, Track dispatch, quick search
+
+**No database changes.** Two new permissions, `trace.view` and `dispatch.track`, are added and granted by the start-up permission sync (see `docs/SEARCH_AND_TRACE.md`,
+`docs/DISPATCH_TRACKING.md`). `/api/health` should then show `2026.10.14`. After deploying:
+
+1. Open **Roles** and confirm `trace.view` is held by the Finance Director, MD, CEO, Sales Officer and Warehouse Supervisor, and `dispatch.track` by the Farm Manager, Farm
+   Director, Warehouse Manager, Warehouse Supervisor, MD and CEO. People who used Trace before (Auditor, Warehouse Manager, farm and operations roles) no longer see it.
+2. Dispatches that are still "In transit" can now be confirmed by the receiving Warehouse Manager on **Track dispatch** ("Truck received").
+3. The "Quick access" row under the top bar is gone for every role, and the search sits in the middle of the bar with the bell, messages and your name at the right.
+4. Each control center role has a "Your area" line. Anyone who has no farm, warehouse or mill assigned sees it say so: assign their place under Users.
+
+See `docs/CONTROL_CENTERS.md`.
+
+## Version 2026.10.15: mill dispatch
+
+Adds one table (`mill_transfers`) and four permissions (`milldispatch.view`, `.request`, `.approve`, `.receive`), added by the start-up steps. `/api/health` should then show `2026.10.15`. See `docs/MILL_DISPATCH.md`.
+
+**Two behaviour changes to know before you deploy:**
+
+1. **Packaged rice no longer goes into the warehouse stock when it is packaged.** It waits at the mill until the Operations Officer sends it, the Operations Manager approves, and the Warehouse Manager counts it in.
+   To keep the old behaviour, set **Packaged rice waits at the mill until it is sent** to `0` in Settings (Production).
+2. Production approval uses the paddy the mill holds before taking any from the warehouse.
+
+After deploying: make sure each milling center has an Operations Officer (scoped to it) and the Operations Manager exists, and each warehouse has a Warehouse Manager and a Warehouse Supervisor (Users).

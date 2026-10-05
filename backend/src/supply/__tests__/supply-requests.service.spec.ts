@@ -476,3 +476,48 @@ describe('the mill confirms the paddy has reached it', () => {
     expect((await h.service.receivedAtMill('sr1', {}, actor('oo-1'))).status).toBe('RECEIVED');
   });
 });
+
+describe('the control center\'s "waiting for you" figure is the Paddy requests desk\'s "Your move"', () => {
+  const STOCK = { FARM: { [FARM_A]: { [G4]: 50, [G5]: 10 } }, WAREHOUSE: { [WH1]: { [G4]: 40, [G5]: 9 }, [WH2]: { [G4]: 40, [G5]: 9 } } };
+  const waiting = async (h: ReturnType<typeof build>, ...who: string[]) => Promise.all(who.map(async (id) => (await h.service.counts(actor(id))).waiting));
+  const open = async (h: ReturnType<typeof build>, ...who: string[]) => Promise.all(who.map(async (id) => (await h.service.counts(actor(id))).open));
+
+  it('a warehouse\'s request waits for its supervisor, then for the Farm Director, and for nobody else; another warehouse sees nothing of it', async () => {
+    const h = build({ stock: STOCK });
+    await h.service.create(ask(), actor('wm-1'));
+    expect(await waiting(h, 'ws-1', 'fd-1', 'wm-1', 'md-1', 'ws-2')).toEqual([1, 0, 0, 0, 0]);
+    expect(await open(h, 'ws-1', 'fd-1', 'wm-1', 'md-1', 'ws-2')).toEqual([1, 1, 1, 1, 0]); // the other warehouse's supervisor is not shown it at all
+    await h.service.forward('sr1', {}, actor('ws-1'));
+    expect(await waiting(h, 'ws-1', 'fd-1', 'md-1')).toEqual([0, 1, 0]);
+  });
+
+  it('a mill\'s request waits for the Operations Manager, then the warehouse supervisor, then the mill, and another mill\'s officer sees nothing of it', async () => {
+    const h = build({ stock: STOCK });
+    await h.service.create({ millingCenterId: MC1, lines: [{ paddyGradeId: G4, bagCount: 10 }, { paddyGradeId: G5, bagCount: 2 }], neededBy: '2026-10-09' } as any, actor('oo-1'));
+    expect(await waiting(h, 'om-1', 'ws-1', 'oo-1')).toEqual([1, 0, 0]);
+    await h.service.forward('sr1', {}, actor('om-1'));
+    expect(await waiting(h, 'om-1', 'ws-1', 'oo-1')).toEqual([0, 1, 0]);
+    await h.service.ready('sr1', {}, actor('ws-1'));
+    expect(await waiting(h, 'ws-1', 'oo-1', 'om-1', 'oo-2')).toEqual([0, 1, 1, 0]); // ready: now it is the mill's to confirm
+    expect(await open(h, 'oo-2')).toEqual([0]);
+    await h.service.receivedAtMill('sr1', {}, actor('oo-1'));
+    expect(await waiting(h, 'oo-1', 'om-1')).toEqual([0, 0]); expect(await open(h, 'oo-1', 'om-1')).toEqual([0, 0]); // received: finished, no longer open
+  });
+
+  it('a request given to another warehouse waits for THAT warehouse\'s supervisor until the paddy is on its way', async () => {
+    const h = build({ stock: STOCK });
+    await h.service.create(ask(), actor('wm-1')); await h.service.forward('sr1', {}, actor('ws-1')); await h.service.assign('sr1', { sourceWarehouseId: WH2 }, actor('fd-1'));
+    expect(await waiting(h, 'ws-2', 'fd-1', 'ws-1')).toEqual([1, 0, 0]);
+    h.transfers.push({ id: 'pt1', transferNumber: 'PT-2026-000001', supplyRequestNumber: 'SR-2026-000001', status: 'IN_TRANSIT', fromWarehouseId: WH2, toWarehouseId: WH1, totalBags: 20, lines: [], receivedLines: null });
+    expect(await waiting(h, 'ws-2')).toEqual([0]);
+  });
+
+  it('a mill\'s request goes back to the warehouse supervisor when the paddy they asked the Farm Director for has arrived, not before', async () => {
+    const h = build({ stock: { WAREHOUSE: { [WH1]: { [G4]: 4, [G5]: 2 } }, FARM: {} } });
+    await h.service.create({ millingCenterId: MC1, lines: [{ paddyGradeId: G4, bagCount: 10 }], neededBy: '2026-10-09' } as any, actor('oo-1')); await h.service.forward('sr1', {}, actor('om-1'));
+    await h.service.askFarmDirector('sr1', {}, actor('ws-1'));
+    expect(await waiting(h, 'ws-1', 'fd-1')).toEqual([0, 1]);   // waiting on the Farm Director, who has the shortfall request
+    h.rows[1].status = 'ASSIGNED'; h.rows[1].dispatchRequestRef = 'RQ-9'; h.cards.set('RQ-9', { stage: 'ARRIVED', label: 'x', dispatches: [], arrivedAt: '2026-10-06T09:00:00Z' });
+    expect(await waiting(h, 'ws-1', 'fd-1')).toEqual([1, 0]);   // it has arrived: the supervisor presses "Paddy is ready"
+  });
+});

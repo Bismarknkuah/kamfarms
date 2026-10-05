@@ -81,6 +81,20 @@ export const NAV_ITEMS: NavItem[] = [
     onlyForRoles: ['WAREHOUSE_MANAGER', 'WAREHOUSE_SUPERVISOR', 'ADMIN'],
   },
   {
+    label: 'Track dispatch',
+    href: '/track-dispatch',
+    icon: 'truck',
+    description: 'Where every dispatch is, who handled it and when, and the day it was supposed to arrive.',
+    permission: 'dispatch.track',
+  },
+  {
+    label: 'Mill dispatch',
+    href: '/mill-dispatch',
+    icon: 'factory',
+    description: 'Paddy sent from the warehouse to the milling center, and finished products sent back, each with the supervisor\'s approval and counted in at the other end.',
+    permission: 'milldispatch.view',
+  },
+  {
     label: 'Log paddy intake',
     href: '/log-paddy-intake',
     icon: 'wheat',
@@ -113,7 +127,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: '/trace',
     icon: 'search',
     description: 'Enter a batch number and see its complete history - every transaction, forward and backward.',
-    permission: ['audit.view', 'farm.inventory.view', 'warehouse.inventory.view', 'milling.view', 'sales.create'],
+    permission: 'trace.view',
   },
   {
     label: 'Reports',
@@ -299,6 +313,14 @@ export function hasNavPermission(me: MeResponse, permission?: string | string[])
   return canDo(me, permission);
 }
 
+/** The pages a person other than the Administrator is offered in the menu: exactly the rule the sidebar applies. */
+export function visibleNavItems(me: MeResponse): NavItem[] {
+  const codes = me.roles.map((r) => r.code);
+  return NAV_ITEMS.filter(
+    (item) => hasNavPermission(me, item.permission) && !item.hideForRoles?.some((c) => codes.includes(c)) && (!item.onlyForRoles || item.onlyForRoles.some((c) => codes.includes(c))),
+  );
+}
+
 /**
  * The System Administrator does not get the flat list the other roles share. Their menu is in three groups, with the
  * things only they run first. Each entry is resolved against NAV_ITEMS, so a page's label, icon and description are
@@ -356,29 +378,3 @@ export const FINANCIAL_VISIBILITY_ROLES = new Set(['SALES_OFFICER', 'FINANCE_DIR
 export function hasFinancialVisibility(me: MeResponse): boolean {
   return me.roles.some((r) => FINANCIAL_VISIBILITY_ROLES.has(r.code));
 }
-
-/** The "multi task bar" - a small, persistent set of quick-action
- * shortcuts shown on every page for each role, so the one or two
- * things a person does most often don't require hunting through the
- * full sidebar every time. Deliberately references NAV_ITEMS by href
- * only, never duplicating a label/icon/permission here - the actual
- * rendering re-derives everything from NAV_ITEMS and re-checks
- * permission before showing anything, so a mistake in this map can
- * never surface a link the person doesn't actually have access to.
- * Kept to 3-4 items per role: the point is quick access to the
- * genuinely common actions, not a second copy of the sidebar.
- */
-export const QUICK_ACTIONS_BY_ROLE: Record<string, string[]> = {
-  FARM_MANAGER: ['/log-paddy-intake', '/dispatch-quick', '/stock-correction', '/tasks'],
-  FARM_DIRECTOR: ['/warehouse-requests', '/farms', '/reports', '/tasks'],
-  WAREHOUSE_MANAGER: ['/warehouse-requests', '/site-deliveries', '/shipments', '/deliveries', '/inventory'],
-  WAREHOUSE_SUPERVISOR: ['/warehouse-requests', '/site-deliveries', '/sales', '/tasks', '/shipments'],
-  OPERATIONS_OFFICER: ['/warehouse-requests', '/production', '/inventory', '/tasks'],
-  OPERATIONS_MANAGER: ['/warehouse-requests', '/production', '/reports', '/tasks'],
-  SALES_OFFICER: ['/sales', '/messages', '/tasks'],
-  FINANCE_DIRECTOR: ['/sales', '/expenses', '/finance', '/reports'],
-  MD: ['/oversight', '/sales', '/analytics', '/audit-log', '/finance'],
-  CEO: ['/oversight', '/sales', '/analytics', '/audit-log', '/finance'],
-  AUDITOR: ['/audit-log', '/analytics', '/reports'],
-  ADMIN: ['/users', '/roles', '/settings', '/site-editor', '/admin'],
-};

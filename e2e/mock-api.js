@@ -35,19 +35,21 @@ const GLOBAL = [{ scopeType: 'GLOBAL', scopeId: null }];
 const WH1 = '11111111-1111-4111-8111-111111111111', WH2 = '22222222-2222-4222-8222-222222222222';
 const ALL_PERMS = ['dashboard.view', 'sales.create', 'sales.approve', 'sales.release', 'sales.assign', 'sales.fulfill', 'sales.view', 'finance.view', 'finance.approve', 'finance.approve.director', 'expense.view', 'expense.create', 'paddy.approve', 'paddy.reject', 'paddy.create', 'production.approve', 'delivery.approve', 'delivery.reject', 'payment.verify', 'reset.approve', 'inventory.adjust', 'masterdata.manage', 'customer.manage', 'paddy.submit', 'delivery.create', 'farm.inventory.view', 'users.manage', 'warehouse.transfer', 'packaging.create', 'warehouse.receive', 'supply.view', 'supply.request', 'supply.forward', 'supply.fulfil'];
 const USERS = {
-  sales1: { id: 'u-sales1', email: 'sales.1@kam.local', firstName: 'Nana', lastName: 'Yeboah', role: 'SALES_OFFICER', scopes: GLOBAL, perms: ['dashboard.view', 'sales.create', 'customer.manage', 'payment.create', 'reports.view', 'reports.export', 'messages.send', 'tasks.complete'] },
-  sales2: { id: 'u-sales2', email: 'sales.2@kam.local', firstName: 'Akosua', lastName: 'Frimpong', role: 'SALES_OFFICER', scopes: GLOBAL, perms: ['dashboard.view', 'sales.create', 'customer.manage', 'payment.create', 'reports.view', 'reports.export', 'messages.send', 'tasks.complete'] },
-  fd: { id: 'u-fd', email: 'financedirector@kam.local', firstName: 'Kwesi', lastName: 'Appiah', role: 'FINANCE_DIRECTOR', scopes: GLOBAL, perms: ['dashboard.view', 'sales.approve', 'sales.view', 'finance.view', 'finance.approve', 'expense.view', 'payment.verify'] },
-  md: { id: 'u-md', email: 'md@kam.local', firstName: 'Kwame', lastName: 'Asante', role: 'MD', scopes: GLOBAL, perms: ['supply.view', 'dashboard.view', 'sales.release', 'sales.view', 'finance.view', 'finance.approve.director', 'ai.view', 'ai.use', 'milling.view'] },
-  ceo: { id: 'u-ceo', email: 'ceo@kam.local', firstName: 'Ama', lastName: 'Owusu', role: 'CEO', scopes: GLOBAL, perms: ['dashboard.view', 'sales.release', 'sales.view', 'finance.view', 'ai.view', 'ai.use', 'milling.view'] },
-  ops: { id: 'u-ops', email: 'operationsmanager.1@kam.local', firstName: 'Kojo', lastName: 'Antwi', role: 'OPERATIONS_MANAGER', scopes: GLOBAL, perms: ['supply.view', 'supply.request', 'supply.forward', 'dashboard.view', 'milling.view', 'production.approve', 'reports.view', 'ai.view', 'ai.use'] },
-  sup: { id: 'u-sup', email: 'warehousesupervisor@kam.local', firstName: 'Efua', lastName: 'Darko', role: 'WAREHOUSE_SUPERVISOR', scopes: GLOBAL, perms: ['supply.view', 'supply.request', 'supply.forward', 'supply.fulfil', 'dashboard.view', 'sales.assign', 'sales.fulfill', 'warehouse.view', 'warehouse.transfer', 'warehouse.receive'] },
-  sup2: { id: 'u-sup2', email: 'warehousesupervisor.2@kam.local', firstName: 'Yaw', lastName: 'Boateng', role: 'WAREHOUSE_SUPERVISOR', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH2 }], perms: ['supply.view', 'supply.request', 'supply.forward', 'supply.fulfil', 'dashboard.view', 'warehouse.view', 'warehouse.transfer', 'warehouse.receive'] },
-  wm1: { id: 'u-wm1', email: 'warehousemanager.1@kam.local', firstName: 'Kwabena', lastName: 'Adjei', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH1 }], perms: ['supply.view', 'supply.request', 'dashboard.view', 'sales.fulfill', 'warehouse.view', 'warehouse.receive', 'farm.inventory.view'] },
-  wm2: { id: 'u-wm2', email: 'warehousemanager.2@kam.local', firstName: 'Abena', lastName: 'Gyasi', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH2 }], perms: ['supply.view', 'supply.request', 'dashboard.view', 'sales.fulfill', 'warehouse.view', 'warehouse.receive'] },
-  fsup: { id: 'u-fsup', email: 'farmdirector@kam.local', firstName: 'Efua', lastName: 'Mensah', role: 'FARM_DIRECTOR', scopes: GLOBAL, perms: ['supply.view', 'supply.fulfil', 'dashboard.view', 'delivery.create', 'delivery.view', 'delivery.approve', 'delivery.reject', 'farm.inventory.view', 'paddy.approve', 'tasks.assign', 'tasks.complete'] },
-  fm: { id: 'u-fm', email: 'farmmanager@kam.local', firstName: 'Yaa', lastName: 'Owusu', role: 'FARM_MANAGER', scopes: [{ scopeType: 'FARM', scopeId: '33333333-3333-4333-8333-333333333333' }], perms: ['dashboard.view', 'paddy.create', 'paddy.submit', 'delivery.create', 'delivery.view', 'farm.inventory.view', 'tasks.complete'] },
+  sales1: { id: 'u-sales1', email: 'sales.1@kam.local', firstName: 'Nana', lastName: 'Yeboah', role: 'SALES_OFFICER', scopes: GLOBAL, perms: ['trace.view', 'dashboard.view', 'sales.create', 'customer.manage', 'payment.create', 'reports.view', 'reports.export', 'messages.send', 'tasks.complete'] },
+  sales2: { id: 'u-sales2', email: 'sales.2@kam.local', firstName: 'Akosua', lastName: 'Frimpong', role: 'SALES_OFFICER', scopes: GLOBAL, perms: ['trace.view', 'dashboard.view', 'sales.create', 'customer.manage', 'payment.create', 'reports.view', 'reports.export', 'messages.send', 'tasks.complete'] },
+  fd: { id: 'u-fd', email: 'financedirector@kam.local', firstName: 'Kwesi', lastName: 'Appiah', role: 'FINANCE_DIRECTOR', scopes: GLOBAL, perms: ['trace.view', 'dashboard.view', 'sales.approve', 'sales.view', 'finance.view', 'finance.approve', 'expense.view', 'payment.verify'] },
+  md: { id: 'u-md', email: 'md@kam.local', firstName: 'Kwame', lastName: 'Asante', role: 'MD', scopes: GLOBAL, perms: ['farm.view', 'warehouse.view', 'trace.view', 'dispatch.track', 'supply.view', 'dashboard.view', 'sales.release', 'sales.view', 'finance.view', 'finance.approve.director', 'ai.view', 'ai.use', 'milling.view'] },
+  ceo: { id: 'u-ceo', email: 'ceo@kam.local', firstName: 'Ama', lastName: 'Owusu', role: 'CEO', scopes: GLOBAL, perms: ['trace.view', 'dispatch.track', 'dashboard.view', 'sales.release', 'sales.view', 'finance.view', 'ai.view', 'ai.use', 'milling.view'] },
+  ops: { id: 'u-ops', email: 'operationsmanager.1@kam.local', firstName: 'Kojo', lastName: 'Antwi', role: 'OPERATIONS_MANAGER', scopes: GLOBAL, perms: ['inventory.adjust', 'supply.view', 'supply.request', 'supply.forward', 'dashboard.view', 'milling.view', 'production.approve', 'reports.view', 'ai.view', 'ai.use'] },
+  sup: { id: 'u-sup', email: 'warehousesupervisor@kam.local', firstName: 'Efua', lastName: 'Darko', role: 'WAREHOUSE_SUPERVISOR', scopes: GLOBAL, perms: ['trace.view', 'dispatch.track', 'inventory.adjust', 'supply.view', 'supply.request', 'supply.forward', 'supply.fulfil', 'dashboard.view', 'sales.assign', 'sales.fulfill', 'warehouse.view', 'warehouse.transfer'] },
+  sup2: { id: 'u-sup2', email: 'warehousesupervisor.2@kam.local', firstName: 'Yaw', lastName: 'Boateng', role: 'WAREHOUSE_SUPERVISOR', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH2 }], perms: ['trace.view', 'dispatch.track', 'sales.assign', 'sales.fulfill', 'inventory.adjust', 'supply.view', 'supply.request', 'supply.forward', 'supply.fulfil', 'dashboard.view', 'warehouse.view', 'warehouse.transfer'] },
+  wm1: { id: 'u-wm1', email: 'warehousemanager.1@kam.local', firstName: 'Kwabena', lastName: 'Adjei', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH1 }], perms: ['dispatch.track', 'supply.view', 'supply.request', 'dashboard.view', 'sales.fulfill', 'warehouse.view', 'warehouse.receive', 'farm.inventory.view'] },
+  wm2: { id: 'u-wm2', email: 'warehousemanager.2@kam.local', firstName: 'Abena', lastName: 'Gyasi', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH2 }], perms: ['dispatch.track', 'supply.view', 'supply.request', 'dashboard.view', 'sales.fulfill', 'warehouse.view', 'warehouse.receive'] },
+  fsup: { id: 'u-fsup', email: 'farmdirector@kam.local', firstName: 'Efua', lastName: 'Mensah', role: 'FARM_DIRECTOR', scopes: GLOBAL, perms: ['dispatch.track', 'inventory.adjust', 'supply.view', 'supply.fulfil', 'dashboard.view', 'delivery.create', 'delivery.view', 'delivery.approve', 'delivery.reject', 'farm.inventory.view', 'paddy.approve', 'tasks.assign', 'tasks.complete'] },
+  fm: { id: 'u-fm', email: 'farmmanager@kam.local', firstName: 'Yaa', lastName: 'Owusu', role: 'FARM_MANAGER', scopes: [{ scopeType: 'FARM', scopeId: '33333333-3333-4333-8333-333333333333' }], perms: ['dispatch.track', 'dashboard.view', 'paddy.create', 'paddy.submit', 'delivery.create', 'delivery.view', 'farm.inventory.view', 'tasks.complete'] },
   oo: { id: 'u-oo', email: 'operationsofficer@kam.local', firstName: 'Ama', lastName: 'Frimpong', role: 'OPERATIONS_OFFICER', scopes: [{ scopeType: 'MILLING_CENTER', scopeId: '66666666-6666-4666-8666-666666666666' }], perms: ['dashboard.view', 'milling.view', 'production.create', 'supply.view', 'supply.request'] },
+  fsup2: { id: 'u-fsup2', email: 'farmdirector.2@kam.local', firstName: 'Kofi', lastName: 'Ansah', role: 'FARM_DIRECTOR', scopes: [{ scopeType: 'FARM', scopeId: '33333333-3333-4333-8333-333333333333' }], perms: ['dispatch.track', 'inventory.adjust', 'supply.view', 'supply.fulfil', 'dashboard.view', 'delivery.create', 'delivery.view', 'delivery.approve', 'delivery.reject', 'farm.inventory.view', 'paddy.approve', 'tasks.assign', 'tasks.complete'] },
+  ops2: { id: 'u-ops2', email: 'operationsmanager.2@kam.local', firstName: 'Esi', lastName: 'Quaye', role: 'OPERATIONS_MANAGER', scopes: [{ scopeType: 'MILLING_CENTER', scopeId: '66666666-6666-4666-8666-666666666666' }], perms: ['inventory.adjust', 'supply.view', 'supply.request', 'supply.forward', 'dashboard.view', 'milling.view', 'production.approve', 'reports.view', 'ai.view', 'ai.use'] },
   admin: { id: 'u-admin', email: 'admin@kam.local', firstName: 'System', lastName: 'Administrator', role: 'ADMIN', scopes: GLOBAL, perms: ALL_PERMS },
 };
 const actorOf = (k) => { const u = USERS[k]; return { id: u.id, email: u.email, firstName: u.firstName, lastName: u.lastName, permissionCodes: new Set(u.perms), roles: [{ roleId: u.role, roleCode: u.role, permissions: u.perms, scopes: u.scopes }] }; };
@@ -513,12 +515,100 @@ sRoute('get', '/api/paddy-transfers', null, (d, a) => ptService.list(a));
 sRoute('post', '/api/paddy-transfers', SendPaddyTransferDto, (d, a) => ptService.send(d, a));
 sRoute('post', '/api/paddy-transfers/:id/receive', ReceivePaddyTransferDto, (d, a, req) => ptService.receive(req.params.id, d, a));
 sRoute('post', '/api/paddy-transfers/:id/cancel', CancelPaddyTransferDto, (d, a, req) => ptService.cancel(req.params.id, d, a));
+// ---- the control center: the real service, behind a stand-in database ----
+const { ControlCenterService } = require(B + '/control-center/control-center.service');
+const MC2 = '88888888-8888-4888-8888-888888888888';
+const prevSeedCc = seedX;
+seedX = function () {
+  prevSeedCc();
+  const o = (status, wh, n, customer, by = 'u-sales1') => ({ id: `ord-${n}`, orderNumber: `SO-2026-${String(n).padStart(6, '0')}`, status, allocatedWarehouseId: wh, salesOfficerId: by, submittedById: by, customer: { name: customer }, createdAt: new Date(2026, 9, n) });
+  X.cc = {
+    orders: [o('SUBMITTED', null, 1, 'Adom Foods'), o('SUBMITTED', null, 2, 'Boateng Stores'), o('APPROVED', null, 3, 'Adom Rice Mill'), o('APPROVED', null, 4, 'Cocoa Hub'), o('APPROVED', null, 5, 'Darko Trading'), o('RELEASED', null, 6, 'Adom Foods'), o('RESERVED', WH1, 7, 'Esi Provisions'), o('PROCESSING', WH1, 8, 'Adom Foods'), o('RESERVED', WH2, 9, 'Fosu Mills'), o('FULFILLED', WH1, 10, 'Gyasi Rice'), o('DRAFT', null, 11, 'Adom Secret Traders', 'u-sales2')],
+    payments: [{ status: 'PENDING_VERIFICATION' }, { status: 'PENDING_VERIFICATION' }, { status: 'PENDING_VERIFICATION' }, { status: 'VERIFIED' }],
+    expenses: [{ status: 'PENDING', submittedById: 'staff-1', farmId: FARM, warehouseId: null }, { status: 'PENDING', submittedById: 'staff-2', farmId: null, warehouseId: WH1 }, { status: 'PENDING', submittedById: 'u-fd', farmId: null, warehouseId: null }, { status: 'APPROVED', submittedById: 'staff-1', farmId: FARM, warehouseId: null }],
+    paddyEntries: [{ status: 'SUBMITTED', farmId: FARM }, { status: 'SUBMITTED', farmId: FARM }, { status: 'SUBMITTED', farmId: FARM_B }, { status: 'APPROVED', farmId: FARM }],
+    reports: [{ status: 'SUPERVISOR_REVIEW', farmId: FARM }, { status: 'SUPERVISOR_REVIEW', farmId: FARM_B }, { status: 'APPROVED', farmId: FARM }],
+    adjustments: [{ status: 'PENDING', locationType: 'FARM', locationId: FARM }, { status: 'PENDING', locationType: 'WAREHOUSE', locationId: WH1 }, { status: 'PENDING', locationType: 'WAREHOUSE', locationId: WH2 }],
+    production: [{ status: 'SUBMITTED', millingCenterId: MC1 }, { status: 'SUBMITTED', millingCenterId: MC2 }, { status: 'APPROVED', millingCenterId: MC1 }],
+    shipments: [{ receivedAt: null, warehouseId: WH1 }, { receivedAt: null, warehouseId: WH1 }, { receivedAt: null, warehouseId: WH2 }, { receivedAt: '2026-10-04', warehouseId: WH1 }],
+    stockTransfers: [{ status: 'DISPATCHED', destWarehouseId: WH1 }, { status: 'DISPATCHED', destWarehouseId: WH2 }, { status: 'RECEIVED', destWarehouseId: WH1 }],
+  };
+};
+seedX();
+const matchC = (r, w = {}) => Object.entries(w).every(([k, v]) => (k === 'AND' ? v.every((c) => matchC(r, c)) : k === 'OR' ? v.some((c) => matchC(r, c)) : v && typeof v === 'object' && !(v instanceof Date) ? ('in' in v ? v.in.includes(r[k]) : true) && ('not' in v ? r[k] !== v.not : true) : r[k] === v));
+const ccTable = (key) => ({ count: async ({ where } = {}) => X.cc[key].filter((r) => matchC(r, where)).length });
+const ccPrisma = {
+  salesOrder: ccTable('orders'), payment: ccTable('payments'), expense: ccTable('expenses'), paddyEntry: ccTable('paddyEntries'), deliveryReport: ccTable('reports'),
+  inventoryAdjustment: ccTable('adjustments'), productionRecord: ccTable('production'), shipment: ccTable('shipments'), stockTransfer: ccTable('stockTransfers'),
+  paddyTransfer: { count: async ({ where } = {}) => X.transfers.filter((r) => matchC(r, where)).length },
+  task: { count: async ({ where } = {}) => X.tasks.filter((r) => matchC(r, where)).length },
+  user: { findMany: async () => Object.values(USERS).filter((u) => u.role === 'FINANCE_DIRECTOR').map((u) => ({ id: u.id })) },
+  farm: { findMany: async ({ where }) => FARMS_ALL().filter((f) => where.id.in.includes(f.id)).map((f) => ({ id: f.id, name: f.name })) },
+  warehouse: { findMany: async ({ where }) => Object.keys(WAREHOUSES).filter((id) => where.id.in.includes(id)).map((id) => ({ id, name: WAREHOUSES[id] })) },
+  millingCenter: { findMany: async ({ where }) => [{ id: MC1, name: 'Tamale Mill' }, { id: MC2, name: 'Kumasi Mill' }].filter((x) => where.id.in.includes(x.id)) },
+};
+const ccService = new ControlCenterService(ccPrisma, supplyService);
+sRoute('get', '/api/control-center', null, (d, a) => ccService.forActor(a));
 app.get('/__transfers', (req, res) => res.json(X.transfers));
 app.get('/__millreceipts', (req, res) => res.json(X.millReceipts));
 app.get('/__whstock', (req, res) => res.json({ warehouses: X.whStock, road: X.road, txns: X.txns }));
 app.get('/api/notifications', (req, res) => { const k = who(req); const mine = X.notes.filter((n) => k && n.userIds.includes(USERS[k].id)); ok(res, mine.map((n, i) => ({ id: `n${i}`, title: n.title, body: n.body, isRead: false, createdAt: new Date().toISOString(), entityType: n.entityType, entityId: n.entityId, type: n.type }))); });
 app.get('/__supply', (req, res) => res.json(X.supply));
 app.get('/__orders', (req, res) => res.json(X.orders));
+// ---- dispatch tracking and quick search: the real services, behind stand-in tables with real timestamps ----
+const { DispatchTrackingService } = require(B + '/dispatch-tracking/dispatch-tracking.service');
+const { SearchService } = require(B + '/search/search.service');
+const { ShipmentsService } = require(B + '/logistics/shipments.service');
+const { ReceiveDispatchDto } = require(B + '/logistics/dto/receive-dispatch.dto');
+const prevSeedTrk = seedX;
+seedX = function () {
+  prevSeedTrk();
+  const H = 3600e3, now = Date.now(), ago = (h) => new Date(now - h * H);
+  const dayStart = (d) => { const t = new Date(now + d * 24 * H); return new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate())); };
+  const ord = (id, n, farmId, wh, grade, bags, createdH, neededDays, status = 'FULFILLED') => ({ id, orderNumber: `DO-2026-00920${n}`, requestRef: `RQ-2026-00910${n}`, farmId, destinationWarehouseId: wh, createdById: 'u-fsup', createdAt: ago(createdH), requestedDate: dayStart(neededDays), paddyGradeId: grade, bagCount: bags, status });
+  const rep = (id, n, order, farmId, wh, grade, bags, ref, status, subH, apprH) => ({ id, reportNumber: `DR-2026-00930${n}`, dispatchRef: ref, deliveryOrderId: order, farmId, destinationWarehouseId: wh, paddyGradeId: grade, actualBagCount: bags, status, submittedById: 'u-fm', submittedAt: ago(subH), approvedById: 'u-fsup', approvedAt: ago(apprH), vehicleId: 'veh1', driverId: 'drv1', createdAt: ago(subH + 1) });
+  const shp = (id, report, wh, grade, bags, depH, recH = null, recBy = null, recBags = null) => ({ id, deliveryReportId: report, paddyGradeId: grade, expectedBags: bags, receivedBags: recBags, departedAt: ago(depH), receivedAt: recH === null ? null : ago(recH), receivedById: recBy, warehouseId: wh, createdAt: ago(depH) });
+  // A: two sizes on one truck, still on the road and long overdue. B: delivered on time. C: delivered late because the approval sat for days. R: asked for, not loaded.
+  X.trk = {
+    orders: [ord('trk-oA4', 1, FARM, WH1, G4, 17, 144, -4), ord('trk-oA5', 1, FARM, WH1, G5, 3, 144, -4), ord('trk-oB', 2, FARM_B, WH2, G4, 10, 96, -1), ord('trk-oC', 3, FARM, WH2, G4, 12, 156, -5), ord('trk-oR', 5, FARM_B, WH1, G5, 20, 24, 2, 'PENDING')],
+    reports: [rep('trk-rA4', 1, 'trk-oA4', FARM, WH1, G4, 17, 'DS-2026-000101', 'APPROVED', 132, 120), rep('trk-rA5', 2, 'trk-oA5', FARM, WH1, G5, 3, 'DS-2026-000101', 'APPROVED', 132, 120), rep('trk-rB', 3, 'trk-oB', FARM_B, WH2, G4, 10, 'DS-2026-000102', 'RECONCILED', 91, 84), rep('trk-rC', 4, 'trk-oC', FARM, WH2, G4, 12, 'DS-2026-000103', 'RECONCILED', 150, 70)],
+    shipments: [shp('trk-sA4', 'trk-rA4', WH1, G4, 17, 119.5), shp('trk-sA5', 'trk-rA5', WH1, G5, 3, 119.5), shp('trk-sB', 'trk-rB', WH2, G4, 10, 83, 48, 'u-wm2', 10), shp('trk-sC', 'trk-rC', WH2, G4, 12, 69, 24, 'u-wm2', 12)],
+  };
+  X.cc.stockTransfers.forEach((t, i) => Object.assign(t, { id: `trk-rt${i + 1}`, transferNumber: `TRF-2026-00000${i + 1}`, sourceWarehouseId: t.destWarehouseId === WH1 ? WH2 : WH1, productId: 'prod1', packagingSizeId: 'ps1', bagCount: 20, requestedById: 'u-sup', dispatchedAt: ago(30), createdAt: ago(30), receivedById: t.status === 'RECEIVED' ? 'u-wm1' : null, receivedAt: t.status === 'RECEIVED' ? ago(6) : null, receivedBagCount: t.status === 'RECEIVED' ? 20 : null }));
+};
+seedX();
+const matchX = (r, w = {}) => Object.entries(w).every(([k, v]) => (k === 'OR' ? v.some((c) => matchX(r, c)) : k === 'AND' ? v.every((c) => matchX(r, c)) : v && typeof v === 'object' && !(v instanceof Date)
+  ? ('contains' in v ? String(r[k] ?? '').toLowerCase().includes(String(v.contains).toLowerCase()) : ('in' in v || 'notIn' in v || 'not' in v) ? (('in' in v ? v.in.includes(r[k]) : true) && ('notIn' in v ? !v.notIn.includes(r[k]) : true) && ('not' in v ? r[k] !== v.not : true)) : matchX(r[k] ?? {}, v))
+  : r[k] === v));
+const trkTable = (rows) => ({ findMany: async ({ where, take } = {}) => rows().filter((r) => matchX(r, where)).slice(0, take ?? 1e9) });
+const trkPrisma = {
+  deliveryReport: trkTable(() => X.trk.reports), deliveryOrder: trkTable(() => X.trk.orders), shipment: trkTable(() => X.trk.shipments), paddyTransfer: trkTable(() => X.transfers), stockTransfer: trkTable(() => X.cc.stockTransfers),
+  user: { findMany: async ({ where }) => Object.values(USERS).filter((u) => where.id.in.includes(u.id)).map((u) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName })) },
+  farm: { findMany: async ({ where }) => FARMS_ALL().filter((f) => where.id.in.includes(f.id)).map((f) => ({ id: f.id, name: f.name })) },
+  warehouse: { findMany: async ({ where }) => Object.keys(WAREHOUSES).filter((id) => where.id.in.includes(id)).map((id) => ({ id, name: WAREHOUSES[id] })) },
+  paddyGrade: { findMany: async () => GRADES2.map((g) => ({ id: g.id, label: g.label })) },
+  vehicle: { findMany: async () => [{ id: 'veh1', plateNumber: 'GT-9000-21' }] }, driver: { findMany: async () => [{ id: 'drv1', name: 'Kofi Mensah' }] },
+  product: { findMany: async () => [{ id: 'prod1', name: 'Premium Rice 25kg' }] }, supplyRequest: { findMany: async () => [] },
+};
+const trackingService = new DispatchTrackingService(trkPrisma);
+sRoute('get', '/api/dispatch-tracking', null, (d, a, req) => trackingService.list(a, { status: req.query.status ?? 'all', q: req.query.q }));
+// the whole truck counted in: the REAL receiveDispatch (its checks and its scope rule), over a stand-in "receive one size"
+const shipSvc = Object.create(ShipmentsService.prototype);
+shipSvc.prisma = { shipment: { findMany: async ({ where }) => { const refs = where.deliveryReport.OR.flatMap((o) => Object.values(o)); const reps = X.trk.reports.filter((r) => refs.includes(r.dispatchRef) || refs.includes(r.reportNumber)); return X.trk.shipments.filter((s) => reps.some((r) => r.id === s.deliveryReportId)); } } };
+shipSvc.receive = async (id, dto, a) => { const s = X.trk.shipments.find((x) => x.id === id); Object.assign(s, { receivedAt: new Date(), receivedBags: dto.receivedBags, receivedById: a.id }); X.trk.reports.find((r) => r.id === s.deliveryReportId).status = 'RECONCILED'; return s; };
+sRoute('post', '/api/shipments/dispatch/:ref/receive', ReceiveDispatchDto, (d, a, req) => shipSvc.receiveDispatch(req.params.ref, d, a));
+app.get('/__trk', (req, res) => res.json(X.trk));
+const searchPrisma = {
+  salesOrder: { findMany: async ({ where, take, orderBy }) => X.cc.orders.filter((r) => matchX(r, where)).sort((a, b) => (orderBy?.createdAt === 'desc' ? b.createdAt - a.createdAt : 0)).slice(0, take) },
+  farm: { findMany: async ({ where, take }) => FARMS_ALL().map((f) => ({ id: f.id, name: f.name, location: null, code: null })).filter((r) => matchX(r, where)).slice(0, take) },
+  warehouse: { findMany: async ({ where, take }) => Object.keys(WAREHOUSES).map((id) => ({ id, name: WAREHOUSES[id], location: LOCATIONS[id] ?? null, code: null })).filter((r) => matchX(r, where)).slice(0, take) },
+  millingCenter: { findMany: async ({ where, take }) => [{ id: MC1, name: 'Tamale Mill', code: 'TM1' }, { id: MC2, name: 'Kumasi Mill', code: 'KM1' }].filter((r) => matchX(r, where)).slice(0, take) },
+};
+const searchService = new SearchService(searchPrisma, trackingService, supplyService);
+sRoute('get', '/api/search', null, (d, a, req) => searchService.search(a, String(req.query.q ?? '')));
+// ---- the overview figures the Farm Supervisor's and Operations Manager's home pages draw (empty lists would make those widgets fail) ----
+app.get('/api/reports/farm-overview', (req, res) => ok(res, { paddy: { received: [{ gradeLabel: 'Size 4', bags: 120, kg: 6000 }], available: [{ gradeLabel: 'Size 4', bags: 83, kg: 4150 }, { gradeLabel: 'Size 5', bags: 97, kg: 4850 }], dispatched: [] } }));
+app.get('/api/reports/production-overview', (req, res) => ok(res, { processed: [], recoveredRiceKg: 0, brokenRiceKg: 0, riceHullKg: 0, recoveryPercent: 0, energyConsumedKwh: 0 }));
 // ---- anything else the pages ask for: empty, so they load ----
 app.get('/api/*', (req, res) => ok(res, []));
 app.all('/api/*', (req, res) => ok(res, {}));

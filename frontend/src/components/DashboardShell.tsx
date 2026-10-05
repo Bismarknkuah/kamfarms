@@ -47,7 +47,7 @@ import {
 import { MeResponse, authApi } from '@/lib/api-client';
 import { clearRefreshToken, readRefreshToken } from '@/lib/session';
 import { InstallPrompt } from './InstallPrompt';
-import { NAV_ITEMS, adminNavSections, hasNavPermission, QUICK_ACTIONS_BY_ROLE, type NavItem } from '@/lib/nav-items';
+import { NAV_ITEMS, adminNavSections, hasNavPermission, type NavItem } from '@/lib/nav-items';
 import { isAdministrator } from '@/lib/access';
 import { CallOverlay } from './CallOverlay';
 import { TopBar } from './TopBar';
@@ -137,19 +137,6 @@ export function DashboardShell({ me, children }: { me: MeResponse; children: Rea
           !item.hideForRoles?.some((code) => myRoleCodes.includes(code)) &&
           (!item.onlyForRoles || item.onlyForRoles.some((code) => myRoleCodes.includes(code))),
       );
-  // The "multi task bar" - quick shortcuts for the actions each role
-  // does most often. Re-derived from visibleItems, never the raw map
-  // directly: a role's quick-action hrefs are only ever shown here if
-  // that exact item already passed the real permission check above,
-  // so a mistake in QUICK_ACTIONS_BY_ROLE can never leak a link the
-  // person doesn't actually have access to. Deduplicated (MD and CEO
-  // share several hrefs) and capped so this stays a quick strip, not
-  // a second sidebar.
-  const quickActionHrefs = Array.from(new Set(myRoleCodes.flatMap((code) => QUICK_ACTIONS_BY_ROLE[code] ?? [])));
-  const quickActions = quickActionHrefs
-    .map((href) => visibleItems.find((item) => item.href === href))
-    .filter((item): item is NonNullable<typeof item> => Boolean(item))
-    .slice(0, 6);
   const initials = `${me.firstName[0] ?? ''}${me.lastName[0] ?? ''}`.toUpperCase();
 
   const onLogout = async () => {
@@ -300,29 +287,6 @@ export function DashboardShell({ me, children }: { me: MeResponse; children: Rea
         )}
 
         {accessToken && <TopBar me={me} accessToken={accessToken} />}
-
-        {quickActions.length > 0 && (
-          <div className="border-b border-paddy-100 bg-white px-4 py-2 sm:px-6">
-            <div className="mx-auto flex max-w-6xl items-center gap-2 overflow-x-auto">
-              <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-soil-500">Quick access</span>
-              {quickActions.map((item) => {
-                const active = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                      active ? 'border-paddy-900 bg-paddy-900 text-rice-50' : 'border-paddy-100 text-paddy-900 hover:bg-paddy-50'
-                    }`}
-                  >
-                    <NavIcon name={item.icon} className="h-3.5 w-3.5 shrink-0" />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">
           <div className="mx-auto max-w-6xl">{children}</div>

@@ -1534,6 +1534,9 @@ export const deliveryReportsApi = {
 };
 
 export const shipmentsApi = {
+  /** A whole truck counted in at once: one count per size. */
+  receiveDispatch: (accessToken: string, ref: string, data: { lines: { paddyGradeId: string; receivedBags: number }[]; receivedCondition?: string; notes?: string }) =>
+    request<{ dispatchRef: string; countedIn: number; alreadyCountedIn: number }>(`/shipments/dispatch/${encodeURIComponent(ref)}/receive`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
   list: (accessToken: string, filters: { warehouseId?: string; farmId?: string; inTransitOnly?: boolean } = {}) => {
     const params = new URLSearchParams();
     if (filters.warehouseId) params.set('warehouseId', filters.warehouseId);
@@ -2129,4 +2132,57 @@ export const paddyTransfersApi = {
   send: (accessToken: string, data: SendPaddyInput) => request<PaddyTransferView>('/paddy-transfers', { method: 'POST', body: JSON.stringify(data) }, accessToken),
   receive: (accessToken: string, id: string, data: { lines: { paddyGradeId: string; bags: number }[]; notes?: string }) => request<PaddyTransferView>(`/paddy-transfers/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
   cancel: (accessToken: string, id: string, reason?: string) => request<PaddyTransferView>(`/paddy-transfers/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }, accessToken),
+};
+
+export interface ControlCenterTile { key: string; label: string; hint: string; href: string; count: number; tone: 'warn' | 'plain' }
+export interface ControlCenterView {
+  role: string;
+  jurisdiction: { everything: boolean; farms: { id: string; name: string }[]; warehouses: { id: string; name: string }[]; millingCenters: { id: string; name: string }[] };
+  tiles: ControlCenterTile[];
+}
+export const controlCenterApi = {
+  get: (accessToken: string) => request<ControlCenterView>('/control-center', { method: 'GET', cache: 'no-store' }, accessToken),
+};
+
+export interface JourneyStep { key: string; label: string; role: string; who: string | null; at: string | null; state: 'done' | 'current' | 'upcoming'; waitedHours: number | null; detail: string | null }
+export interface DispatchJourney {
+  id: string; kind: 'FARM_DISPATCH' | 'PADDY_TRANSFER' | 'RICE_TRANSFER'; ref: string; requestRef: string | null; status: 'REQUESTED' | 'IN_REVIEW' | 'IN_TRANSIT' | 'DELIVERED'; label: string;
+  from: { name: string }; to: { id: string; name: string }; lines: { paddyGradeId: string | null; label: string; bags: number; receivedBags: number | null }[]; totalBags: number; vehicle: string | null; driver: string | null;
+  neededBy: string | null; deliveredAt: string | null; late: { hours: number; delivered: boolean } | null;
+  slowest: { label: string; who: string | null; role: string; hours: number; running: boolean } | null;
+  steps: JourneyStep[]; lastActivity: string | null;
+  action: { type: 'CONFIRM_TRUCK'; key: string } | { type: 'OPEN'; href: string; label: string } | null;
+}
+export interface DispatchTrackingView { journeys: DispatchJourney[]; counts: { open: number; delivered: number; late: number } }
+export const dispatchTrackingApi = {
+  list: (accessToken: string, status: 'open' | 'delivered' | 'all' = 'all') => request<DispatchTrackingView>(`/dispatch-tracking?status=${status}`, { method: 'GET', cache: 'no-store' }, accessToken),
+};
+
+export interface SearchResult { id: string; title: string; subtitle: string; href: string }
+export interface SearchGroup { key: string; label: string; results: SearchResult[] }
+export const searchApi = {
+  search: (accessToken: string, q: string) => request<{ q: string; groups: SearchGroup[] }>(`/search?q=${encodeURIComponent(q)}`, { method: 'GET', cache: 'no-store' }, accessToken),
+};
+
+export interface MillDispatchLine { key: string; kind: 'PADDY' | 'PACKAGED_RICE' | 'BROKEN_RICE' | 'RICE_HULL'; label: string; bags: number; kg: number; receivedBags: number | null; receivedKg: number | null }
+export interface MillDispatchView {
+  id: string; transferNumber: string; direction: 'TO_MILL' | 'TO_WAREHOUSE'; status: 'PENDING_APPROVAL' | 'IN_TRANSIT' | 'RECEIVED' | 'REJECTED' | 'CANCELLED'; label: string;
+  warehouse: { id: string; name: string }; millingCenter: { id: string; name: string }; from: string; to: string; lines: MillDispatchLine[]; totalBags: number; totalKg: number;
+  driverName: string | null; vehiclePlate: string | null; notes: string | null; requestedBy: string; requestedAt: string; approvedBy: string | null; approvedAt: string | null; decisionNote: string | null;
+  receivedBy: string | null; receivedAt: string | null; receiveNote: string | null; varianceKg: number | null; approverRole: string; receiverRole: string;
+  canApprove: boolean; canReceive: boolean; canCancel: boolean; steps: { label: string; who: string | null; at: string | null; state: 'done' | 'current' | 'upcoming' | 'stopped' }[];
+}
+export interface MillDispatchOptions {
+  toMill: { places: { warehouse: { id: string; name: string }; mills: { id: string; name: string }[]; paddy: { paddyGradeId: string; label: string; bags: number }[] }[] } | null;
+  toWarehouse: { mills: { id: string; name: string; warehouse: { id: string; name: string }; packaged: { productId: string; packagingSizeId: string; label: string; bags: number; kg: number }[]; broken: { productId: string; kg: number } | null; hull: { productId: string; kg: number } | null }[] } | null;
+}
+export interface MillDispatchInput { direction: 'TO_MILL' | 'TO_WAREHOUSE'; millingCenterId: string; lines: { kind: string; paddyGradeId?: string; productId?: string; packagingSizeId?: string; bags?: number; kg?: number }[]; driverName?: string; vehiclePlate?: string; notes?: string }
+export const millDispatchApi = {
+  list: (accessToken: string) => request<MillDispatchView[]>('/mill-dispatches', { method: 'GET', cache: 'no-store' }, accessToken),
+  options: (accessToken: string) => request<MillDispatchOptions>('/mill-dispatches/options', { method: 'GET', cache: 'no-store' }, accessToken),
+  request: (accessToken: string, data: MillDispatchInput) => request<MillDispatchView>('/mill-dispatches', { method: 'POST', body: JSON.stringify(data) }, accessToken),
+  approve: (accessToken: string, id: string, note?: string) => request<MillDispatchView>(`/mill-dispatches/${id}/approve`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
+  reject: (accessToken: string, id: string, reason: string) => request<MillDispatchView>(`/mill-dispatches/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }, accessToken),
+  cancel: (accessToken: string, id: string, note?: string) => request<MillDispatchView>(`/mill-dispatches/${id}/cancel`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
+  receive: (accessToken: string, id: string, data: { lines: { key: string; bags?: number; kg?: number }[]; notes?: string }) => request<MillDispatchView>(`/mill-dispatches/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
 };

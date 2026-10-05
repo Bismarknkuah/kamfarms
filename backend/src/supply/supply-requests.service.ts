@@ -74,6 +74,26 @@ export class SupplyRequestsService {
     return this.toViews(rows);
   }
 
+  /**
+   * For the control center: how many requests wait for THIS person's move, and how many are still open among the ones they can see. "Their move" is
+   * the rule the Paddy requests desk uses for its "Your move" list, so the two numbers can never disagree.
+   */
+  async counts(actor: AuthenticatedUser): Promise<{ waiting: number; open: number }> {
+    const views = await this.board(actor);
+    const admin = isAdmin(actor);
+    const roles = rolesOf(actor);
+    const warehouses = scopedLocationIds(actor, 'WAREHOUSE');
+    const mills = scopedLocationIds(actor, 'MILLING_CENTER');
+    const within = (scope: { isGlobal: boolean; ids: string[] }, id: string) => scope.isGlobal || scope.ids.includes(id);
+    // A mill request the Warehouse Supervisor has already asked the Farm Director about waits for that paddy to arrive.
+    const waitingOnFarms = (v: SupplyView) => v.kind === 'MILL' && !!v.childNumber && !['RECEIVED', 'DECLINED', 'CANCELLED'].includes(v.childStage ?? '');
+    const mine = (v: SupplyView) =>
+      (v.status === 'SUBMITTED' && holds(actor, PERMISSIONS.SUPPLY_FORWARD) && mayReview(actor, v.kind)) ||
+      (v.status === 'FORWARDED' && holds(actor, PERMISSIONS.SUPPLY_FULFIL) && maySupply(actor, v.kind) && !waitingOnFarms(v)) ||
+      (v.status === 'ASSIGNED' && !!v.sourceWarehouse && !v.transfer && (admin || roles.includes('WAREHOUSE_SUPERVISOR')) && within(warehouses, v.sourceWarehouse.id)) ||
+      (v.kind === 'MILL' && v.status === 'READY' && (admin || roles.includes('OPERATIONS_OFFICER') || roles.includes('OPERATIONS_MANAGER')) && !!v.millingCenter && within(mills, v.millingCenter.id));
+    return { waiting: views.filter(mine).length, open: views.filter((v) => ['SUBMITTED', 'FORWARDED', 'ASSIGNED', 'READY'].includes(v.status)).length };
+  }
   // ---------------------------------------------------------------- asking
   async create(dto: CreateSupplyRequestDto, actor: AuthenticatedUser) {
     let kind: 'WAREHOUSE' | 'MILL';

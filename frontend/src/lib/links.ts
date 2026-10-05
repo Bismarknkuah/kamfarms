@@ -16,6 +16,7 @@ export function notificationHref(n: { entityType?: string | null; entityId?: str
   const id = n.entityId ?? '';
   switch (n.entityType) {
     case 'SupplyRequest': return `/warehouse-requests?request=${encodeURIComponent(id)}`;
+    case 'MillDispatch': return `/mill-dispatch?dispatch=${encodeURIComponent(id)}`;
     case 'PaddyTransfer': return `/site-deliveries?transfer=${encodeURIComponent(id)}`;
     case 'Task': return '/tasks';
     case 'DeliveryReport':

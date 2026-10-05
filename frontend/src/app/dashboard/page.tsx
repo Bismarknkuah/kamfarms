@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DispatchDesk } from '@/components/dispatch/DispatchDesk';
 import { SupplyDesk } from '@/components/supply/SupplyDesk';
+import { ControlCenter, hasControlCenter } from '@/components/ControlCenter';
 import { DashboardShell } from '@/components/DashboardShell';
 import { hasFinancialVisibility } from '@/lib/nav-items';
 import { YieldPredictionCard } from '@/components/DataEntryKit';
@@ -769,6 +770,8 @@ export default function DashboardPage() {
         </h1>
         <p className="text-sm text-ink-500">{me.roles.map((r) => roleLabel(r.code)).join(', ')}</p>
       </div>
+
+      {accessToken && hasControlCenter(me) && <div className="mb-8"><ControlCenter accessToken={accessToken} me={me} /></div>}
 
       {attention.length > 0 && (
         <div className="mb-8 overflow-hidden rounded-2xl bg-paddy-900">

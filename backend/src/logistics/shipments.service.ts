@@ -3,7 +3,8 @@ import { LocationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { InventoryLedgerService } from '../inventory-ledger/inventory-ledger.service';
-import { scopedLocationIds } from '../common/utils/scope.util';
+import { scopedLocationIds, assertScope } from '../common/utils/scope.util';
+import { ReceiveDispatchDto } from './dto/receive-dispatch.dto';
 import { ReceiveShipmentDto } from './dto/receive-shipment.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { SettingsService, settingNumber } from '../settings/settings.service';
@@ -138,6 +139,29 @@ export class ShipmentsService {
    * and the difference (spec section 13's "variance record") is captured
    * as an explicit STOCK_ADJUSTMENT ledger transaction with a reason, never
    * silently absorbed. All inside one DB transaction. */
+  /**
+   * The warehouse counts in a WHOLE truck at once: one count per size. Everything is checked before anything is changed; each size is then counted in
+   * with the ordinary receive, so stock moves exactly as it always has. A size that was already counted in is left alone, so if something fails half
+   * way, pressing it again finishes the rest instead of counting anything twice.
+   */
+  async receiveDispatch(ref: string, dto: ReceiveDispatchDto, actor: AuthenticatedUser) {
+    const shipments = await this.prisma.shipment.findMany({ where: { deliveryReport: { OR: [{ dispatchRef: ref }, { reportNumber: ref }] } } as any, orderBy: { createdAt: 'asc' } });
+    if (shipments.length === 0) throw new NotFoundException('No truck was found with that reference.');
+    for (const s of shipments) assertScope(actor, 'WAREHOUSE', s.warehouseId, 'the warehouse this truck is going to');
+    const todo = shipments.filter((s) => !s.receivedAt);
+    if (todo.length === 0) throw new BadRequestException('This truck has already been counted in.');
+    const counts = new Map(dto.lines.map((l) => [l.paddyGradeId, l.receivedBags]));
+    if (counts.size !== dto.lines.length) throw new BadRequestException('A size is on the list twice.');
+    for (const id of counts.keys()) if (!shipments.some((s) => s.paddyGradeId === id)) throw new BadRequestException('That size was not on this truck.');
+    for (const s of todo) if (!counts.has(s.paddyGradeId)) throw new BadRequestException('Say how many bags arrived for every size on the truck.');
+    const counted: string[] = [];
+    for (const s of todo) {
+      await this.receive(s.id, { receivedBags: counts.get(s.paddyGradeId) as number, receivedCondition: dto.receivedCondition, notes: dto.notes } as ReceiveShipmentDto, actor);
+      counted.push(s.id);
+    }
+    return { dispatchRef: ref, countedIn: counted.length, alreadyCountedIn: shipments.length - todo.length };
+  }
+
   async receive(id: string, dto: ReceiveShipmentDto, actor: AuthenticatedUser) {
     const shipment = await this.findById(id, actor);
     if (shipment.receivedAt) {

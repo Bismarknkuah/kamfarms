@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ShipmentsService } from './shipments.service';
+import { ReceiveDispatchDto } from './dto/receive-dispatch.dto';
 import { ReceiveShipmentDto } from './dto/receive-shipment.dto';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { PERMISSIONS } from '../common/constants/permissions';
@@ -36,6 +37,11 @@ export class ShipmentsController {
   findOne(@Param('id') id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.shipmentsService.findById(id, actor);
   }
+
+  /** A whole truck at once: one count per size. */
+  @Post('dispatch/:ref/receive')
+  @RequirePermission(PERMISSIONS.WAREHOUSE_RECEIVE)
+  receiveDispatch(@Param('ref') ref: string, @Body() dto: ReceiveDispatchDto, @CurrentUser() actor: AuthenticatedUser) { return this.shipmentsService.receiveDispatch(ref, dto, actor); }
 
   @Post(':id/receive')
   @RequirePermission(PERMISSIONS.WAREHOUSE_RECEIVE)

@@ -6,6 +6,7 @@ import { PERMISSIONS, PERMISSION_CATALOG } from '../constants/permissions';
 import { DispatchTrackingController } from '../../dispatch-tracking/dispatch-tracking.controller';
 import { InventoryTransactionsController } from '../../inventory-ledger/inventory-transactions.controller';
 import { ShipmentsController } from '../../logistics/shipments.controller';
+import { MillDispatchController } from '../../mill-dispatch/mill-dispatch.controller';
 
 const required = (proto: any, method: string) => Reflect.getMetadata(PERMISSION_KEY, proto[method]);
 
@@ -42,5 +43,26 @@ describe('who holds the two permissions', () => {
   });
   it('nobody lost a permission they had: the Warehouse Supervisor still sends and the Warehouse Manager still counts in', () => {
     expect(holders('seed.ts', 'warehouse.transfer')).toContain('WAREHOUSE_SUPERVISOR'); expect(holders('seed.ts', 'warehouse.receive')).toContain('WAREHOUSE_MANAGER');
+  });
+});
+
+describe('mill dispatch: who may ask, approve and count in', () => {
+  it('each route needs its own permission', () => {
+    const c = MillDispatchController.prototype;
+    expect(required(c, 'list')).toBe('milldispatch.view'); expect(required(c, 'options')).toBe('milldispatch.request'); expect(required(c, 'request')).toBe('milldispatch.request');
+    expect(required(c, 'approve')).toBe('milldispatch.approve'); expect(required(c, 'reject')).toBe('milldispatch.approve'); expect(required(c, 'receive')).toBe('milldispatch.receive');
+    expect(required(c, 'cancel')).toEqual(['milldispatch.request', 'milldispatch.approve']);
+  });
+  it('asking: the Warehouse Manager and the Operations Officer; approving: the Warehouse Supervisor and the Operations Manager; counting in: the Operations Officer and the Warehouse Manager', () => {
+    for (const f of ['seed.ts', 'sync-permissions.ts']) {
+      expect(holders(f, 'milldispatch.request')).toEqual(['OPERATIONS_OFFICER', 'WAREHOUSE_MANAGER']);
+      expect(holders(f, 'milldispatch.approve')).toEqual(['OPERATIONS_MANAGER', 'WAREHOUSE_SUPERVISOR']);
+      expect(holders(f, 'milldispatch.receive')).toEqual(['OPERATIONS_OFFICER', 'WAREHOUSE_MANAGER']);
+      expect(holders(f, 'milldispatch.view')).toEqual(['CEO', 'MD', 'OPERATIONS_MANAGER', 'OPERATIONS_OFFICER', 'WAREHOUSE_MANAGER', 'WAREHOUSE_SUPERVISOR']);
+    }
+  });
+  it('nobody can both ask for and approve the same kind of dispatch by role', () => {
+    const ask = holders('seed.ts', 'milldispatch.request'); const approve = holders('seed.ts', 'milldispatch.approve');
+    expect(ask.filter((r) => approve.includes(r))).toEqual([]);
   });
 });

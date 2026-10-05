@@ -647,3 +647,15 @@ See `docs/PADDY_REQUESTS.md`.
 4. Each control center role has a "Your area" line. Anyone who has no farm, warehouse or mill assigned sees it say so: assign their place under Users.
 
 See `docs/CONTROL_CENTERS.md`.
+
+## Version 2026.10.15: mill dispatch
+
+Adds one table (`mill_transfers`) and four permissions (`milldispatch.view`, `.request`, `.approve`, `.receive`), added by the start-up steps. `/api/health` should then show `2026.10.15`. See `docs/MILL_DISPATCH.md`.
+
+**Two behaviour changes to know before you deploy:**
+
+1. **Packaged rice no longer goes into the warehouse stock when it is packaged.** It waits at the mill until the Operations Officer sends it, the Operations Manager approves, and the Warehouse Manager counts it in.
+   To keep the old behaviour, set **Packaged rice waits at the mill until it is sent** to `0` in Settings (Production).
+2. Production approval uses the paddy the mill holds before taking any from the warehouse.
+
+After deploying: make sure each milling center has an Operations Officer (scoped to it) and the Operations Manager exists, and each warehouse has a Warehouse Manager and a Warehouse Supervisor (Users).

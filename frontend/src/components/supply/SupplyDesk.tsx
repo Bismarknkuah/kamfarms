@@ -55,7 +55,10 @@ export function SupplyDesk({ accessToken, me, hasPermission, variant = 'page', f
 
   // A mill request the Warehouse Supervisor has already asked the Farm Director about is waiting for the paddy to arrive: it is theirs again when it has.
   const waitingOnFarms = (c: SupplyView) => c.kind === 'MILL' && !!c.childNumber && !['RECEIVED', 'DECLINED', 'CANCELLED'].includes(c.childStage ?? '');
-  const needsMe = (c: SupplyView) => (c.status === 'SUBMITTED' && hasPermission('supply.forward') && mayReview(c)) || (c.status === 'FORWARDED' && hasPermission('supply.fulfil') && maySupply(c) && !waitingOnFarms(c));
+  // Another warehouse was asked to send it: its supervisor sends it (on the Deliveries desk). A mill whose paddy is ready confirms it has reached the mill.
+  const sendsFor = (c: SupplyView) => { const ids = idsOf('WAREHOUSE'); return c.status === 'ASSIGNED' && !!c.sourceWarehouse && !c.transfer && (isAdmin || roles.includes('WAREHOUSE_SUPERVISOR')) && (ids === null || ids.includes(c.sourceWarehouse.id)); };
+  const mayCount = (c: SupplyView) => { const ids = idsOf('MILLING_CENTER'); return c.kind === 'MILL' && c.status === 'READY' && (isAdmin || roles.includes('OPERATIONS_OFFICER') || roles.includes('OPERATIONS_MANAGER')) && (ids === null || (!!c.millingCenter && ids.includes(c.millingCenter.id))); };
+  const needsMe = (c: SupplyView) => (c.status === 'SUBMITTED' && hasPermission('supply.forward') && mayReview(c)) || (c.status === 'FORWARDED' && hasPermission('supply.fulfil') && maySupply(c) && !waitingOnFarms(c)) || sendsFor(c) || mayCount(c);
   // a mill request waiting for the Warehouse Supervisor shows the warehouse's stock beside it straight away
   useEffect(() => {
     (cards ?? []).filter((c) => c.kind === 'MILL' && c.status === 'FORWARDED' && needsMe(c) && !sources[c.id]).forEach((c) => {
@@ -78,7 +81,7 @@ export function SupplyDesk({ accessToken, me, hasPermission, variant = 'page', f
   const mine = (cards ?? []).filter(needsMe);
   const mineIds = new Set(mine.map((c) => c.id));
   const open = (cards ?? []).filter((c) => !mineIds.has(c.id) && !['RECEIVED', 'READY', 'DECLINED', 'CANCELLED'].includes(c.stage));
-  const done = (cards ?? []).filter((c) => ['RECEIVED', 'READY', 'DECLINED', 'CANCELLED'].includes(c.stage)).slice(0, variant === 'page' ? 10 : 3);
+  const done = (cards ?? []).filter((c) => !mineIds.has(c.id) && ['RECEIVED', 'READY', 'DECLINED', 'CANCELLED'].includes(c.stage)).slice(0, variant === 'page' ? 10 : 3);
   const compact = variant !== 'page';
 
   const check = (s: { label: string; has: number; needed: number; enough: boolean }) => (
@@ -111,6 +114,12 @@ export function SupplyDesk({ accessToken, me, hasPermission, variant = 'page', f
             {hasPermission('delivery.create') && <a href={`/deliveries?request=${encodeURIComponent(c.dispatch.requestRef)}`} className="ml-2 font-medium text-paddy-700 underline">Open the dispatch</a>}
           </p>
         )}
+        {c.transfer && (
+          <p className="mt-2 rounded-lg bg-paddy-50/60 px-3 py-1.5 text-xs text-ink-700" data-testid="supply-transfer">
+            {c.sourceWarehouse?.name ?? 'The warehouse'} is sending it{c.transfer.driverName || c.transfer.vehiclePlate ? `: ${[c.transfer.driverName && `driver ${c.transfer.driverName}`, c.transfer.vehiclePlate && `vehicle ${c.transfer.vehiclePlate}`].filter(Boolean).join(', ')}` : ''}
+            {(hasPermission('warehouse.transfer') || hasPermission('warehouse.receive')) && <a href={`/site-deliveries?transfer=${encodeURIComponent(c.transfer.id)}`} className="ml-2 font-medium text-paddy-700 underline">Open the delivery</a>}
+          </p>
+        )}
         {c.childNumber && <p className="mt-2 text-xs text-ink-500">The Farm Director was asked for the rest ({c.childNumber}).</p>}
         <div className="mt-3 flex gap-1" role="progressbar" aria-valuemin={0} aria-valuemax={c.steps.length} aria-valuenow={c.steps.filter((s) => s.state === 'done').length} aria-label="How far this request has come">
           {c.steps.map((s, i) => <span key={i} title={s.label} className={`h-1.5 flex-1 rounded-full ${s.state === 'done' ? 'bg-paddy-700' : s.state === 'current' ? 'animate-pulse bg-husk-500' : s.state === 'stopped' ? 'bg-red-500' : 'bg-ink-500/15'}`} />)}
@@ -124,7 +133,7 @@ export function SupplyDesk({ accessToken, me, hasPermission, variant = 'page', f
         )}
         {second && c.kind === 'WAREHOUSE' && (
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <button type="button" data-testid="act-choose-farm" onClick={() => choose(c)} className="rounded-full bg-paddy-900 px-6 py-3 text-base font-medium text-rice-50">Choose a farm</button>
+            <button type="button" data-testid="act-choose-farm" onClick={() => choose(c)} className="rounded-full bg-paddy-900 px-6 py-3 text-base font-medium text-rice-50">Choose where it comes from</button>
             <button type="button" data-testid="act-decline" onClick={() => { setDeclining(c.id); setReason(''); }} className="rounded-full border-2 border-red-300 px-5 py-3 text-sm font-medium text-red-700">Not possible</button>
           </div>
         )}
@@ -140,6 +149,20 @@ export function SupplyDesk({ accessToken, me, hasPermission, variant = 'page', f
             {src.farms.length === 0 && <li className="text-sm text-ink-500">No farms to choose from.</li>}
           </ul>
         )}
+        {second && c.kind === 'WAREHOUSE' && choosing === c.id && src?.kind === 'WAREHOUSE' && src.warehouses.length > 0 && (
+          <div className="mt-4" data-testid="warehouse-options">
+            <p className="text-sm font-medium text-ink-700">Or from a warehouse that has paddy</p>
+            <ul className="mt-2 space-y-2">
+              {src.warehouses.map((w) => (
+                <li key={w.warehouseId} data-testid="warehouse-option" data-warehouse={w.warehouseName} data-can-cover={w.canCover ? 'yes' : 'no'} className={`rounded-2xl border-2 p-3 ${w.canCover ? 'border-paddy-700' : 'border-ink-500/20'}`}>
+                  <p className="font-medium text-ink-900">{w.warehouseName}{w.supervisors.length > 0 && <span className="text-xs font-normal text-ink-500"> · supervisor {w.supervisors.join(', ')}</span>}</p>
+                  <div className="mt-1.5 flex flex-wrap gap-2">{w.bySize.map(check)}</div>
+                  <button type="button" data-testid="act-ask-warehouse" disabled={!w.canCover} onClick={() => run(() => supplyApi.assign(accessToken, c.id, { sourceWarehouseId: w.warehouseId }), `${w.warehouseName} will send it. ${w.supervisors[0] ?? 'Its supervisor'} has the task.`)} className="mt-2 rounded-full bg-paddy-900 px-5 py-2.5 text-sm font-medium text-rice-50 disabled:bg-ink-500/30">{w.canCover ? `Ask ${w.warehouseName} to send it` : 'Not enough here'}</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {second && c.kind === 'MILL' && (
           <div className="mt-3">
             {src?.kind === 'MILL' ? <div className="flex flex-wrap gap-2" data-testid="mill-stock"><span className="w-full text-xs text-ink-500">In {src.warehouse.name} now:</span>{src.bySize.map(check)}</div> : <p className="text-xs text-ink-500">Checking the stock...</p>}
@@ -148,6 +171,16 @@ export function SupplyDesk({ accessToken, me, hasPermission, variant = 'page', f
               {src?.kind === 'MILL' && !src.canCover && !c.childNumber && <button type="button" data-testid="act-ask-director" onClick={() => run(() => supplyApi.askFarmDirector(accessToken, c.id), 'The Farm Director was asked for what is missing.')} className="rounded-full bg-paddy-900 px-6 py-3 text-base font-medium text-rice-50">Ask the Farm Director for the rest</button>}
               <button type="button" data-testid="act-decline" onClick={() => { setDeclining(c.id); setReason(''); }} className="rounded-full border-2 border-red-300 px-5 py-3 text-sm font-medium text-red-700">Not possible</button>
             </div>
+          </div>
+        )}
+        {sendsFor(c) && (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <a href={`/site-deliveries?send=${encodeURIComponent(c.requestNumber)}`} data-testid="act-send-paddy" className="rounded-full bg-paddy-900 px-6 py-3 text-base font-medium text-rice-50">Send the paddy</a>
+          </div>
+        )}
+        {mayCount(c) && (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button type="button" data-testid="act-received" onClick={() => run(() => supplyApi.received(accessToken, c.id), 'Done: the paddy is recorded as received at the mill.')} className="rounded-full bg-paddy-900 px-6 py-3 text-base font-medium text-rice-50">Paddy received at the mill</button>
           </div>
         )}
         {declining === c.id && (

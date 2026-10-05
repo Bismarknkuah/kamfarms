@@ -73,6 +73,14 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'supply.view',
   },
   {
+    label: 'Deliveries',
+    href: '/site-deliveries',
+    icon: 'truck',
+    description: 'Paddy coming to your warehouse from another warehouse, and the paddy you send out.',
+    permission: ['warehouse.transfer', 'warehouse.receive'],
+    onlyForRoles: ['WAREHOUSE_MANAGER', 'WAREHOUSE_SUPERVISOR', 'ADMIN'],
+  },
+  {
     label: 'Log paddy intake',
     href: '/log-paddy-intake',
     icon: 'wheat',
@@ -299,7 +307,7 @@ export function hasNavPermission(me: MeResponse, permission?: string | string[])
  */
 export const ADMIN_NAV_SECTIONS: { title: string; hrefs: string[] }[] = [
   { title: 'Administration', hrefs: ['/dashboard', '/users', '/roles', '/organization', '/master-data', '/prices', '/settings', '/site-editor', '/audit-log', '/admin'] },
-  { title: 'Company data', hrefs: ['/reports', '/analytics', '/trace', '/inventory', '/farms', '/warehouses', '/shipments', '/sales', '/finance', '/expenses', '/paddy-entries', '/deliveries', '/production', '/packaging', '/quality'] },
+  { title: 'Company data', hrefs: ['/reports', '/analytics', '/trace', '/inventory', '/farms', '/warehouses', '/shipments', '/site-deliveries', '/sales', '/finance', '/expenses', '/paddy-entries', '/deliveries', '/production', '/packaging', '/quality'] },
   { title: 'Workspace', hrefs: ['/messages', '/tasks', '/notifications', '/assistant'] },
 ];
 
@@ -363,8 +371,8 @@ export function hasFinancialVisibility(me: MeResponse): boolean {
 export const QUICK_ACTIONS_BY_ROLE: Record<string, string[]> = {
   FARM_MANAGER: ['/log-paddy-intake', '/dispatch-quick', '/stock-correction', '/tasks'],
   FARM_DIRECTOR: ['/warehouse-requests', '/farms', '/reports', '/tasks'],
-  WAREHOUSE_MANAGER: ['/warehouse-requests', '/shipments', '/deliveries', '/inventory'],
-  WAREHOUSE_SUPERVISOR: ['/warehouse-requests', '/sales', '/tasks', '/shipments'],
+  WAREHOUSE_MANAGER: ['/warehouse-requests', '/site-deliveries', '/shipments', '/deliveries', '/inventory'],
+  WAREHOUSE_SUPERVISOR: ['/warehouse-requests', '/site-deliveries', '/sales', '/tasks', '/shipments'],
   OPERATIONS_OFFICER: ['/warehouse-requests', '/production', '/inventory', '/tasks'],
   OPERATIONS_MANAGER: ['/warehouse-requests', '/production', '/reports', '/tasks'],
   SALES_OFFICER: ['/sales', '/messages', '/tasks'],

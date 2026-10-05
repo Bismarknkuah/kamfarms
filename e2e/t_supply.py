@@ -17,7 +17,7 @@ with sync_playwright() as pw:
 
     # =============== 1. A warehouse asks for paddy: Size 4 and Size 5 are already there ===============
     ctx, w = as_user(b, 'wm1'); w.goto(BASE + '/warehouse-requests'); w.get_by_test_id('supply-desk').wait_for()
-    w.get_by_test_id('open-supply-form').click(); f = w.get_by_test_id('supply-form'); f.wait_for(); f.get_by_test_id('supply-target-fixed').wait_for()
+    w.get_by_test_id('open-supply-form').click(); f = w.get_by_test_id('supply-form'); f.wait_for(); f.get_by_test_id('supply-target-fixed').wait_for(); f.get_by_label('Bags of Size 4').wait_for(); w.wait_for_timeout(300)
     check('BOTH sizes are already on the form, with a big minus, a number and a plus', f.get_by_test_id('size-row').count() == 2 and [r.get_attribute('data-size') for r in f.get_by_test_id('size-row').all()] == ['Size 4', 'Size 5'])
     check('their own warehouse is already chosen: there is no list to pick from', 'Tamale Warehouse' in txt(f.get_by_test_id('supply-target-fixed')) and f.get_by_test_id('kind-mill').count() == 0)
     w.get_by_test_id('supply-send').click(); w.wait_for_timeout(300)
@@ -77,17 +77,17 @@ with sync_playwright() as pw:
     check('the request now says it is on the road, with the driver and vehicle', 'On the road to Tamale Warehouse' in txt(c.get_by_test_id('supply-stage')) and 'driver Kofi Mensah' in txt(c.get_by_test_id('supply-dispatch')) and 'vehicle GT-9000-21' in txt(c.get_by_test_id('supply-dispatch')), txt(c))
     d.get_by_test_id('open-where').click(); wh = d.get_by_test_id('whereabouts'); wh.get_by_test_id('where-place').first.wait_for()
     totals = [txt(t) for t in wh.get_by_test_id('where-total').all()]
-    check('"Where is the paddy?" adds it up by size across farms, the road and the warehouse', len(totals) == 2 and 'all size 4' in totals[0].lower() and '112' in totals[0] and 'all size 5' in totals[1].lower() and '103' in totals[1], totals)
+    check('"Where is the paddy?" adds it up by size across farms, the road and the warehouse', len(totals) == 2 and 'all size 4' in totals[0].lower() and '152' in totals[0] and 'all size 5' in totals[1].lower() and '112' in totals[1], totals)
     road = wh.locator('[data-testid=where-place][data-type=ROAD]').first
     check('the truck is on the road ONCE, with both sizes and who is driving', 'Nkawkaw Farm to Tamale Warehouse' in txt(road) and 'Driver Kofi Mensah, vehicle GT-9000-21' in txt(road) and '17' in txt(road) and '3' in txt(road))
-    check('the farm\'s stock has gone down by what was sent (83 and 97), the warehouse holds 12 and 3', '83' in txt(wh.locator('[data-testid=where-place][data-type=FARM]').first) and '97' in txt(wh.locator('[data-testid=where-place][data-type=FARM]').first) and '12' in txt(wh.locator('[data-testid=where-place][data-type=WAREHOUSE]').first))
+    check('the farm\'s stock has gone down by what was sent (83 and 97), the warehouse holds 12 and 3', '83' in txt(wh.locator('[data-testid=where-place][data-type=FARM]').first) and '97' in txt(wh.locator('[data-testid=where-place][data-type=FARM]').first) and '12' in txt(wh.locator('[data-testid=where-place][data-type=WAREHOUSE]', has_text='Tamale Warehouse').first))
     check('no page errors for the Farm Director', not d.errors, d.errors[:2]); ctx.close()
     ctx, w = as_user(b, 'wm1'); w.goto(BASE + '/warehouse-requests'); c = sc(w, NUM); c.wait_for()
     check('the warehouse that asked sees the same: on the road, and which farm is sending it', 'On the road to Tamale Warehouse' in txt(c.get_by_test_id('supply-stage')) and 'Nkawkaw Farm is sending it' in txt(c.get_by_test_id('supply-dispatch')))
     ctx.close()
 
     # =============== 6. The mill asks: Operations Officer, Operations Manager, then the Warehouse Supervisor checks the stock ===============
-    ctx, o = as_user(b, 'oo'); o.goto(BASE + '/warehouse-requests'); o.get_by_test_id('supply-desk').wait_for(); o.get_by_test_id('open-supply-form').click(); of = o.get_by_test_id('supply-form'); of.get_by_test_id('supply-target-fixed').wait_for()
+    ctx, o = as_user(b, 'oo'); o.goto(BASE + '/warehouse-requests'); o.get_by_test_id('supply-desk').wait_for(); o.get_by_test_id('open-supply-form').click(); of = o.get_by_test_id('supply-form'); of.get_by_test_id('supply-target-fixed').wait_for(); of.get_by_label('Bags of Size 4').wait_for(); o.wait_for_timeout(300)
     check('the mill\'s officer asks for the MILL, already chosen, with both sizes there', 'Tamale Mill' in txt(of.get_by_test_id('supply-target-fixed')) and of.get_by_test_id('size-row').count() == 2 and of.get_by_test_id('kind-warehouse').count() == 0)
     of.get_by_label('Bags of Size 4').fill('10'); of.get_by_label('Bags of Size 5').fill('2'); of.get_by_role('button', name='Tomorrow').click(); o.get_by_test_id('supply-send').click(); o.get_by_test_id('supply-sent').wait_for(); M1 = sent_number(o)
     check('it is with the Operations Manager', 'With the Operations Manager' in txt(o.get_by_test_id('supply-sent')))
@@ -131,7 +131,7 @@ with sync_playwright() as pw:
     d.get_by_test_id('open-notification').first.click(); d.wait_for_selector('[data-testid=supply-card][data-focus="true"]'); check('and it lands on that request, highlighted', 'request=SR-' in d.url); ctx.close()
 
     # =============== 10. Size 4 and Size 5 everywhere bags are counted ===============
-    ctx, d = as_user(b, 'fsup'); d.goto(BASE + '/deliveries'); d.get_by_test_id('open-request-form').click(); d.get_by_test_id('request-form').wait_for()
+    ctx, d = as_user(b, 'fsup'); d.goto(BASE + '/deliveries'); d.get_by_test_id('open-request-form').click(); d.get_by_test_id('request-form').wait_for(); d.get_by_test_id('request-form').get_by_label('Bags of Size 4').wait_for(); d.wait_for_timeout(300)
     check('the Farm Director\'s dispatch request form has both sizes', d.get_by_test_id('request-form').get_by_test_id('size-row').count() == 2); ctx.close()
     ctx, m = as_user(b, 'fm'); m.goto(BASE + '/paddy-entries'); m.get_by_role('button', name='Log paddy intake').click(); m.get_by_test_id('intake-form').wait_for()
     check('the farm intake form has both sizes', m.get_by_test_id('intake-form').get_by_test_id('size-row').count() == 2)

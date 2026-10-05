@@ -41,9 +41,10 @@ const USERS = {
   md: { id: 'u-md', email: 'md@kam.local', firstName: 'Kwame', lastName: 'Asante', role: 'MD', scopes: GLOBAL, perms: ['supply.view', 'dashboard.view', 'sales.release', 'sales.view', 'finance.view', 'finance.approve.director', 'ai.view', 'ai.use', 'milling.view'] },
   ceo: { id: 'u-ceo', email: 'ceo@kam.local', firstName: 'Ama', lastName: 'Owusu', role: 'CEO', scopes: GLOBAL, perms: ['dashboard.view', 'sales.release', 'sales.view', 'finance.view', 'ai.view', 'ai.use', 'milling.view'] },
   ops: { id: 'u-ops', email: 'operationsmanager.1@kam.local', firstName: 'Kojo', lastName: 'Antwi', role: 'OPERATIONS_MANAGER', scopes: GLOBAL, perms: ['supply.view', 'supply.request', 'supply.forward', 'dashboard.view', 'milling.view', 'production.approve', 'reports.view', 'ai.view', 'ai.use'] },
-  sup: { id: 'u-sup', email: 'warehousesupervisor@kam.local', firstName: 'Efua', lastName: 'Darko', role: 'WAREHOUSE_SUPERVISOR', scopes: GLOBAL, perms: ['supply.view', 'supply.request', 'supply.forward', 'supply.fulfil', 'dashboard.view', 'sales.assign', 'sales.fulfill', 'warehouse.view'] },
+  sup: { id: 'u-sup', email: 'warehousesupervisor@kam.local', firstName: 'Efua', lastName: 'Darko', role: 'WAREHOUSE_SUPERVISOR', scopes: GLOBAL, perms: ['supply.view', 'supply.request', 'supply.forward', 'supply.fulfil', 'dashboard.view', 'sales.assign', 'sales.fulfill', 'warehouse.view', 'warehouse.transfer', 'warehouse.receive'] },
+  sup2: { id: 'u-sup2', email: 'warehousesupervisor.2@kam.local', firstName: 'Yaw', lastName: 'Boateng', role: 'WAREHOUSE_SUPERVISOR', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH2 }], perms: ['supply.view', 'supply.request', 'supply.forward', 'supply.fulfil', 'dashboard.view', 'warehouse.view', 'warehouse.transfer', 'warehouse.receive'] },
   wm1: { id: 'u-wm1', email: 'warehousemanager.1@kam.local', firstName: 'Kwabena', lastName: 'Adjei', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH1 }], perms: ['supply.view', 'supply.request', 'dashboard.view', 'sales.fulfill', 'warehouse.view', 'warehouse.receive', 'farm.inventory.view'] },
-  wm2: { id: 'u-wm2', email: 'warehousemanager.2@kam.local', firstName: 'Abena', lastName: 'Gyasi', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH2 }], perms: ['dashboard.view', 'sales.fulfill', 'warehouse.view'] },
+  wm2: { id: 'u-wm2', email: 'warehousemanager.2@kam.local', firstName: 'Abena', lastName: 'Gyasi', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH2 }], perms: ['supply.view', 'supply.request', 'dashboard.view', 'sales.fulfill', 'warehouse.view', 'warehouse.receive'] },
   fsup: { id: 'u-fsup', email: 'farmdirector@kam.local', firstName: 'Efua', lastName: 'Mensah', role: 'FARM_DIRECTOR', scopes: GLOBAL, perms: ['supply.view', 'supply.fulfil', 'dashboard.view', 'delivery.create', 'delivery.view', 'delivery.approve', 'delivery.reject', 'farm.inventory.view', 'paddy.approve', 'tasks.assign', 'tasks.complete'] },
   fm: { id: 'u-fm', email: 'farmmanager@kam.local', firstName: 'Yaa', lastName: 'Owusu', role: 'FARM_MANAGER', scopes: [{ scopeType: 'FARM', scopeId: '33333333-3333-4333-8333-333333333333' }], perms: ['dashboard.view', 'paddy.create', 'paddy.submit', 'delivery.create', 'delivery.view', 'farm.inventory.view', 'tasks.complete'] },
   oo: { id: 'u-oo', email: 'operationsofficer@kam.local', firstName: 'Ama', lastName: 'Frimpong', role: 'OPERATIONS_OFFICER', scopes: [{ scopeType: 'MILLING_CENTER', scopeId: '66666666-6666-4666-8666-666666666666' }], perms: ['dashboard.view', 'milling.view', 'production.create', 'supply.view', 'supply.request'] },
@@ -397,8 +398,12 @@ const stPrisma = {
 const stLedger = {
   generateNumber: fakeLedger.generateNumber,
   getBalancesForLocation: async () => Object.entries(X.stock).map(([paddyGradeId, bagCount]) => ({ paddyGradeId, bagCount })),
-  recordTransaction: async () => {},
-  adjustBalance: async (_tx, key, _kg, bags) => { if (key.locationType === 'FARM') X.stock[key.paddyGradeId] = (X.stock[key.paddyGradeId] ?? 0) + bags; },
+  recordTransaction: async (_tx, t) => { (X.txns ??= []).push(t); },
+  adjustBalance: async (_tx, key, _kg, bags) => {
+    if (key.locationType === 'FARM') X.stock[key.paddyGradeId] = (X.stock[key.paddyGradeId] ?? 0) + bags;
+    else if (key.locationType === 'WAREHOUSE') { X.whStock[key.locationId] ??= {}; X.whStock[key.locationId][key.paddyGradeId] = (X.whStock[key.locationId][key.paddyGradeId] ?? 0) + bags; }
+    else if (key.locationType === 'EXTERNAL') { X.road ??= {}; X.road[key.locationId] ??= {}; X.road[key.locationId][key.paddyGradeId] = (X.road[key.locationId][key.paddyGradeId] ?? 0) + bags; }
+  },
 };
 const notifier = { notify: async (n) => { X.notes.push(n); } };
 const dispatchOrders = new DeliveryOrdersService(stPrisma, fakeAudit, stLedger, notifier);
@@ -429,7 +434,7 @@ const MC1 = '66666666-6666-4666-8666-666666666666';
 const FARM_B = '77777777-7777-4777-8777-777777777777';
 const FARMS_ALL = () => [{ id: FARM, name: 'Nkawkaw Farm', isActive: true, managers: X.noManager ? [] : [{ user: who2 }] }, { id: FARM_B, name: 'Techiman Farm', isActive: true, managers: [] }];
 const prevSeed = seedX;
-seedX = function () { prevSeed(); X.supply = []; X.whStock = { [WH1]: { [G4]: 12, [G5]: 3 } }; };
+seedX = function () { prevSeed(); X.supply = []; X.transfers = []; X.millReceipts = []; X.txns = []; X.road = {}; X.whStock = { [WH1]: { [G4]: 12, [G5]: 3 }, [WH2]: { [G4]: 40, [G5]: 9 } }; };
 seedX();
 stLedger.getBalancesForLocation = async (type, id) => Object.entries(type === 'WAREHOUSE' ? X.whStock[id] ?? {} : id === FARM_B ? { [G4]: 5, [G5]: 0 } : X.stock).map(([paddyGradeId, bagCount]) => ({ paddyGradeId, bagCount }));
 const matchS = (r, w = {}) => Object.entries(w).every(([k, v]) => (k === 'OR' ? v.some((c) => matchS(r, c)) : v && typeof v === 'object' && 'in' in v ? v.in.includes(r[k]) : v && typeof v === 'object' && 'notIn' in v ? !v.notIn.includes(r[k]) : r[k] === v));
@@ -442,9 +447,11 @@ const supplyPrisma = {
     findMany: async ({ where } = {}) => X.supply.filter((r) => matchS(r, where)),
     findFirst: async ({ where }) => X.supply.find((r) => matchS(r, where)) ?? null,
     update: async ({ where, data }) => { const r = X.supply.find((x) => x.id === where.id); Object.assign(r, data); return r; },
+    updateMany: async ({ where, data }) => { const r = X.supply.find((x) => x.id === where.id && x.status === where.status); if (!r) return { count: 0 }; Object.assign(r, data); return { count: 1 }; },
   },
+  paddyTransfer: { findMany: async ({ where }) => X.transfers.filter((t) => where.supplyRequestNumber.in.includes(t.supplyRequestNumber) && t.status !== 'CANCELLED').slice().reverse() },
   user: { findMany: async ({ where }) => { if (where.id) return userRows().filter((u) => where.id.in.includes(u.id)); const some = where.roles.some; const wh = some.OR?.[2]?.scopes?.some?.scopeId; return userRows().filter((u) => some.role.code.in.includes(u.role) && (!some.OR || u.scopes.length === 0 || u.scopes.some((s) => s.scopeType === 'GLOBAL' || (s.scopeType === 'WAREHOUSE' && s.scopeId === wh)))); } },
-  warehouse: { findUnique: async ({ where }) => (WAREHOUSES[where.id] ? { ...whOf(where.id), isActive: true } : null), findMany: async ({ where }) => Object.keys(WAREHOUSES).filter((id) => where.id.in.includes(id)).map((id) => whOf(id)) },
+  warehouse: { findUnique: async ({ where }) => (WAREHOUSES[where.id] ? { ...whOf(where.id), isActive: true } : null), findMany: async ({ where }) => Object.keys(WAREHOUSES).filter((id) => (where.id?.in ? where.id.in.includes(id) : where.id?.not ? id !== where.id.not : true)).map((id) => ({ ...whOf(id), isActive: true })) },
   millingCenter: { findUnique: async ({ where }) => (where.id === MC1 ? { id: MC1, name: 'Tamale Mill', warehouseId: WH1, isActive: true } : null), findMany: async ({ where }) => (where.id.in.includes(MC1) ? [{ id: MC1, name: 'Tamale Mill' }] : []) },
   farm: { findMany: async ({ where }) => (where.isActive ? FARMS_ALL() : FARMS_ALL().filter((f) => where.id.in.includes(f.id))) },
   paddyGrade: { findMany: async ({ where }) => GRADES2.filter((g) => where.id.in.includes(g.id)) },
@@ -455,17 +462,19 @@ const supplyPrisma = {
   },
   $transaction: async (cb) => cb(sTx),
 };
-const supplyService = new SupplyRequestsService(supplyPrisma, fakeAudit, stLedger, dispatchOrders, notifier);
+const millReceipts = { create: async (dto, a) => { X.millReceipts.push({ ...dto, by: a.id }); return { id: uuidn() }; } };
+const supplyService = new SupplyRequestsService(supplyPrisma, fakeAudit, stLedger, dispatchOrders, notifier, millReceipts);
 const whereaboutsService = new PaddyWhereaboutsService({
   paddyGrade: { findMany: async () => GRADES2 },
-  inventoryBalance: { findMany: async () => [...Object.entries(X.stock).map(([g, n]) => ({ locationType: 'FARM', locationId: FARM, paddyGradeId: g, bagCount: n })), ...Object.entries(X.whStock[WH1] ?? {}).map(([g, n]) => ({ locationType: 'WAREHOUSE', locationId: WH1, paddyGradeId: g, bagCount: n }))].filter((b) => b.bagCount > 0) },
+  inventoryBalance: { findMany: async () => [...Object.entries(X.stock).map(([g, n]) => ({ locationType: 'FARM', locationId: FARM, paddyGradeId: g, bagCount: n })), ...Object.entries(X.whStock).flatMap(([wid, st]) => Object.entries(st).map(([g, n]) => ({ locationType: 'WAREHOUSE', locationId: wid, paddyGradeId: g, bagCount: n })))].filter((b) => b.bagCount > 0) },
+  paddyTransfer: { findMany: async () => X.transfers.filter((t) => t.status === 'IN_TRANSIT') },
   shipment: { findMany: async () => X.shipments.filter((s) => !s.receivedAt).map((s) => { const rep = X.reports.find((r) => r.id === s.deliveryReportId); return { ...s, farm: { name: 'Nkawkaw Farm' }, warehouse: { name: WAREHOUSES[s.warehouseId] }, deliveryReport: rep ? { dispatchRef: rep.dispatchRef, driver: rep.driverId ? X.drivers[rep.driverId] : null, vehicle: rep.vehicleId ? X.vehicles[rep.vehicleId] : null } : null }; }) },
   farm: { findMany: async ({ where }) => FARMS_ALL().filter((f) => where.id.in.includes(f.id)) },
   warehouse: { findMany: async ({ where }) => Object.keys(WAREHOUSES).filter((id) => where.id.in.includes(id)).map((id) => whOf(id)) },
   millingCenter: { findMany: async ({ where }) => (where.id.in.includes(MC1) ? [{ id: MC1, name: 'Tamale Mill' }] : []) },
 });
 const sRoute = (method, path, Cls, fn) => app[method](path, async (req, res) => {
-  const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); log(req, { item: req.params.id });
+  const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); log(req, { item: req.params.id, body: req.body });
   let d = {}; if (Cls) { d = await body(res, Cls, req.body); if (!d) return; }
   try { ok(res, await fn(d, actorOf(k), req)); } catch (e) { apiErr(res, e); }
 });
@@ -479,6 +488,34 @@ sRoute('post', '/api/supply-requests/:id/assign', AssignSupplyRequestDto, (d, a,
 sRoute('post', '/api/supply-requests/:id/ready', ReadySupplyRequestDto, (d, a, req) => supplyService.ready(req.params.id, d, a));
 sRoute('post', '/api/supply-requests/:id/ask-farm-director', ReadySupplyRequestDto, (d, a, req) => supplyService.askFarmDirector(req.params.id, d, a));
 sRoute('post', '/api/supply-requests/:id/cancel', null, (d, a, req) => supplyService.cancel(req.params.id, a));
+const { ReceivedAtMillDto } = require(B + '/supply/dto/supply-request.dto');
+sRoute('post', '/api/supply-requests/:id/received', ReceivedAtMillDto, (d, a, req) => supplyService.receivedAtMill(req.params.id, d, a));
+// ---- paddy sent from one warehouse to another: the real service, behind a stand-in database ----
+const { PaddyTransfersService } = require(B + '/supply/paddy-transfers.service');
+const { SendPaddyTransferDto, ReceivePaddyTransferDto, CancelPaddyTransferDto } = require(B + '/supply/dto/paddy-transfer.dto');
+const matchT = (r, w = {}) => Object.entries(w).every(([k, v]) => (k === 'OR' ? v.some((c) => matchT(r, c)) : v && typeof v === 'object' && 'in' in v ? v.in.includes(r[k]) : v && typeof v === 'object' && 'not' in v ? r[k] !== v.not : r[k] === v));
+const ptPrisma = {
+  warehouse: { findUnique: async ({ where }) => (WAREHOUSES[where.id] ? { ...whOf(where.id), isActive: true } : null), findMany: async ({ where } = {}) => Object.keys(WAREHOUSES).filter((id) => (where?.id?.in ? where.id.in.includes(id) : true)).map((id) => ({ ...whOf(id), isActive: true })) },
+  paddyGrade: { findMany: async ({ where }) => GRADES2.filter((g) => (where.id?.in ? where.id.in.includes(g.id) : g.isActive)) },
+  paddyTransfer: {
+    create: async ({ data }) => { const row = { id: uuidn(), sentAt: new Date(), receivedById: null, receivedAt: null, receivedLines: null, varianceBags: null, receiveNote: null, cancelReason: null, ...data }; X.transfers.push(row); return row; },
+    findUnique: async ({ where }) => X.transfers.find((r) => r.id === where.id) ?? null,
+    findFirst: async ({ where }) => X.transfers.find((r) => matchT(r, where)) ?? null,
+    findMany: async ({ where } = {}) => X.transfers.filter((r) => matchT(r, where)).slice().reverse(),
+    updateMany: async ({ where, data }) => { const r = X.transfers.find((x) => x.id === where.id && x.status === where.status); if (!r) return { count: 0 }; Object.assign(r, data); return { count: 1 }; },
+  },
+  supplyRequest: supplyPrisma.supplyRequest, user: supplyPrisma.user,
+  $transaction: async (cb) => cb(ptPrisma),
+};
+const ptService = new PaddyTransfersService(ptPrisma, fakeAudit, stLedger, notifier);
+sRoute('get', '/api/paddy-transfers/places', null, (d, a) => ptService.places(a));
+sRoute('get', '/api/paddy-transfers', null, (d, a) => ptService.list(a));
+sRoute('post', '/api/paddy-transfers', SendPaddyTransferDto, (d, a) => ptService.send(d, a));
+sRoute('post', '/api/paddy-transfers/:id/receive', ReceivePaddyTransferDto, (d, a, req) => ptService.receive(req.params.id, d, a));
+sRoute('post', '/api/paddy-transfers/:id/cancel', CancelPaddyTransferDto, (d, a, req) => ptService.cancel(req.params.id, d, a));
+app.get('/__transfers', (req, res) => res.json(X.transfers));
+app.get('/__millreceipts', (req, res) => res.json(X.millReceipts));
+app.get('/__whstock', (req, res) => res.json({ warehouses: X.whStock, road: X.road, txns: X.txns }));
 app.get('/api/notifications', (req, res) => { const k = who(req); const mine = X.notes.filter((n) => k && n.userIds.includes(USERS[k].id)); ok(res, mine.map((n, i) => ({ id: `n${i}`, title: n.title, body: n.body, isRead: false, createdAt: new Date().toISOString(), entityType: n.entityType, entityId: n.entityId, type: n.type }))); });
 app.get('/__supply', (req, res) => res.json(X.supply));
 app.get('/__orders', (req, res) => res.json(X.orders));

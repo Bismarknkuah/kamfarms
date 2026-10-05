@@ -6,7 +6,7 @@ import { PERMISSIONS } from '../common/constants/permissions';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { SupplyRequestsService } from './supply-requests.service';
 import { PaddyWhereaboutsService } from './paddy-whereabouts.service';
-import { AssignSupplyRequestDto, CreateSupplyRequestDto, DeclineSupplyRequestDto, ForwardSupplyRequestDto, ReadySupplyRequestDto } from './dto/supply-request.dto';
+import { AssignSupplyRequestDto, CreateSupplyRequestDto, DeclineSupplyRequestDto, ForwardSupplyRequestDto, ReadySupplyRequestDto, ReceivedAtMillDto } from './dto/supply-request.dto';
 
 @ApiTags('supply-requests')
 @ApiBearerAuth()
@@ -54,4 +54,8 @@ export class SupplyRequestsController {
   @Post(':id/cancel')
   @RequirePermission(PERMISSIONS.SUPPLY_REQUEST)
   cancel(@Param('id') id: string, @CurrentUser() actor: AuthenticatedUser) { return this.supply.cancel(id, actor); }
+
+  @Post(':id/received')
+  @RequirePermission(PERMISSIONS.SUPPLY_REQUEST)
+  receivedAtMill(@Param('id') id: string, @Body() dto: ReceivedAtMillDto, @CurrentUser() actor: AuthenticatedUser) { return this.supply.receivedAtMill(id, dto, actor); }
 }

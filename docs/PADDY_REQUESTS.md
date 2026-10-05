@@ -1,4 +1,4 @@
-# Paddy requests: the chain from the warehouse and the mill to the farm (version 2026.10.12)
+# Paddy requests: the chain from the warehouse and the mill to the farm or another warehouse (version 2026.10.13)
 
 Paddy is asked for **up** the chain and sent **down** it. Each person does only their own part, in one tap, and is told when it is their move.
 This page covers the two request chains, the stock checks that guide each decision, the "Where is the paddy?" view, and the small changes that
@@ -10,15 +10,17 @@ make the screens easier for people who do not want to read much.
 A WAREHOUSE needs paddy
   Warehouse Manager asks          (Size 4 and Size 5, the day needed)
   -> Warehouse Supervisor         "Send to the Farm Director"  (or "Not possible", with a reason)
-  -> Farm Director                "Choose a farm": each farm's stock of EACH size is shown beside the choice
-  -> the Farm Manager of that farm is asked to dispatch (the Dispatch desk takes over, and this request follows it)
+  -> Farm Director                "Choose where it comes from": each farm's stock of EACH size is shown beside the choice,
+                                  and so is the stock of each OTHER warehouse that holds paddy
+       a FARM      -> the Farm Manager of that farm is asked to dispatch (the Dispatch desk takes over, and this request follows it)
+       a WAREHOUSE -> the Warehouse Supervisor of that warehouse is asked to send it (the Deliveries desk, below)
   -> on the road (driver and vehicle shown) -> arrived at the warehouse
 
 A MILLING CENTER needs paddy      (a mill draws its paddy from its own warehouse)
   Operations Officer asks
   -> Operations Manager           "Send to the Warehouse Supervisor"
   -> Warehouse Supervisor of the mill's warehouse sees that warehouse's stock against the need:
-       enough  -> "Paddy is ready"
+       enough  -> "Paddy is ready" -> the mill's officer presses "Paddy received at the mill" when it has reached the mill
        short   -> "Ask the Farm Director for the rest": a warehouse request is raised for EXACTLY the shortfall and follows the first chain.
                   The mill's request waits; when that paddy has arrived it comes back to the supervisor to press "Paddy is ready".
 ```
@@ -58,6 +60,32 @@ dispatch. The same is true for the farm manager's dispatch task. Nothing is expl
 - **Where is the paddy?** (button on the Paddy requests screen): every place the paddy is now, size by size: farms, the road (one entry per truck, with
   the driver and vehicle), warehouses, mills. Each person sees their own places; the Farm Director and management see all of them.
 
+## Paddy between warehouses: the Deliveries desk (new in 2026.10.13)
+
+A warehouse has its own place for deliveries: **Deliveries** in the menu of Warehouse Supervisors and Warehouse Managers (`/site-deliveries`).
+
+- **Going out.** The Warehouse Supervisor presses "Send paddy": the warehouse the paddy goes to, Size 4 and Size 5 in bags (what the warehouse holds is
+  shown beside each size), the driver and vehicle if known. Only bags are asked for. The paddy leaves the sender's stock **at once** and is counted as
+  "on the road", so nobody can promise it twice. A delivery can be cancelled by the person who sent it until it is counted in: the bags come back.
+- **Coming to you.** The other warehouse's Manager (or Supervisor) is told. When the paddy arrives they press "Paddy arrived", say how many bags of each
+  size really came (it starts at what was sent), and confirm. What arrived goes into their stock and the "on the road" bucket is closed completely.
+  If fewer bags came, the difference is written down for review (it is held for approval when it is more than 5 kg) and both sides are told. More bags
+  than were sent cannot be counted in: the sender must correct the delivery first.
+- **For a paddy request.** When the Farm Director chose a warehouse, its Supervisor has a short task and a big "Send the paddy" button on the request. It
+  opens the send form already filled in (where, and both sizes). The request then follows that delivery: getting it ready, on the road, arrived.
+- **Paddy that comes from a farm** is still counted in on the Shipments page. A mill's outgoing rice goes to its warehouse inside the packaging batch.
+- **At the mill.** When a mill request is "ready", the Operations Officer (or Manager) presses **Paddy received at the mill**. That writes the mill's own
+  record of paddy received (the same one the Production page keeps, both sizes in bags) and closes the request.
+
+| Who | Permission | On the Deliveries desk |
+|---|---|---|
+| Warehouse Supervisor | `warehouse.transfer` | Sends paddy, cancels what they sent, counts in |
+| Warehouse Manager | `warehouse.receive` | Counts in |
+| Operations Officer, Operations Manager | `supply.request` | "Paddy received at the mill" (on the Paddy requests desk) |
+
+No new permissions were added: the desk uses the two warehouse permissions that already exist. A person sees only deliveries to or from the warehouses
+they look after (the Administrator and the management roles see all).
+
 ## The bag weight is a setting
 
 When only a number of bags is entered, the kilograms are worked out from the bags and marked as an estimate. The weight of a bag is the **Standard paddy
@@ -72,10 +100,16 @@ bag weight** in Settings (Logistics, default 50 kg). Change it there and every e
 | `GET /api/supply-requests/:id/sources` | reviewer or supplier role | The farms' stock (warehouse request) or the warehouse's stock (mill request), size by size |
 | `POST /api/supply-requests/:id/forward` | `supply.forward` | Send it on |
 | `POST /api/supply-requests/:id/decline` | `supply.forward` or `supply.fulfil` | "Not possible": a reason is required |
-| `POST /api/supply-requests/:id/assign` | `supply.fulfil` | Farm Director: this farm will send it (asks its manager to dispatch) |
+| `POST /api/supply-requests/:id/assign` | `supply.fulfil` | Farm Director: this farm (`sourceFarmId`) OR this warehouse (`sourceWarehouseId`) will send it |
 | `POST /api/supply-requests/:id/ready` | `supply.fulfil` | Warehouse Supervisor: the paddy is ready (refused if the stock is not there) |
 | `POST /api/supply-requests/:id/ask-farm-director` | `supply.fulfil` | Warehouse Supervisor: ask for exactly the shortfall |
 | `POST /api/supply-requests/:id/cancel` | `supply.request` | Cancel (only by whoever asked, before it is filled) |
+| `POST /api/supply-requests/:id/received` | `supply.request` | Mill: the paddy that is ready has reached the mill (Operations Officer or Manager of that mill) |
+| `GET /api/paddy-transfers` | `warehouse.transfer` or `warehouse.receive` | Deliveries to or from the person's warehouses, marked IN, OUT or BOTH |
+| `GET /api/paddy-transfers/places` | same | Where the person may send from (with the stock, size by size) and where it can go |
+| `POST /api/paddy-transfers` | `warehouse.transfer` | Send paddy: `fromWarehouseId`, `toWarehouseId`, `lines` (grade and bags), optional driver, vehicle, note, `supplyRequestNumber` |
+| `POST /api/paddy-transfers/:id/receive` | either | Count it in: `lines` (grade and bags that arrived), optional note |
+| `POST /api/paddy-transfers/:id/cancel` | `warehouse.transfer` | Cancel before it is counted in (the sender, or the Administrator) |
 | `GET /api/supply-requests/whereabouts` | `supply.view`, `farm.inventory.view` or `warehouse.inventory.view` | Where the paddy is |
 
 ## Database changes
@@ -103,10 +137,32 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS supply_request_number TEXT;
 CREATE INDEX IF NOT EXISTS tasks_supply_request_number_idx ON tasks (supply_request_number);
 ```
 
+### Added in 2026.10.13
+
+```sql
+CREATE TYPE "PaddyTransferStatus" AS ENUM ('IN_TRANSIT', 'RECEIVED', 'CANCELLED');
+CREATE TABLE IF NOT EXISTS paddy_transfers (
+  id TEXT PRIMARY KEY, transfer_number TEXT NOT NULL UNIQUE, from_warehouse_id TEXT NOT NULL, to_warehouse_id TEXT NOT NULL,
+  lines JSONB NOT NULL, total_bags INTEGER NOT NULL, total_kg DECIMAL(14,2) NOT NULL, driver_name TEXT, vehicle_plate TEXT, notes TEXT,
+  status "PaddyTransferStatus" NOT NULL DEFAULT 'IN_TRANSIT', sent_by_id TEXT NOT NULL, sent_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  received_by_id TEXT, received_at TIMESTAMP(3), received_lines JSONB, variance_bags INTEGER, receive_note TEXT, cancel_reason TEXT,
+  supply_request_number TEXT, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP(3) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS paddy_transfers_status_idx ON paddy_transfers (status);
+CREATE INDEX IF NOT EXISTS paddy_transfers_from_warehouse_id_idx ON paddy_transfers (from_warehouse_id);
+CREATE INDEX IF NOT EXISTS paddy_transfers_to_warehouse_id_idx ON paddy_transfers (to_warehouse_id);
+CREATE INDEX IF NOT EXISTS paddy_transfers_supply_request_number_idx ON paddy_transfers (supply_request_number);
+ALTER TYPE "SupplyRequestStatus" ADD VALUE IF NOT EXISTS 'RECEIVED';
+ALTER TABLE supply_requests ADD COLUMN IF NOT EXISTS source_warehouse_id TEXT;
+ALTER TABLE supply_requests ADD COLUMN IF NOT EXISTS received_by_id TEXT;
+ALTER TABLE supply_requests ADD COLUMN IF NOT EXISTS received_at TIMESTAMP(3);
+CREATE INDEX IF NOT EXISTS supply_requests_source_warehouse_id_idx ON supply_requests (source_warehouse_id);
+```
+
 ## Limits worth knowing
 
-- Paddy **moving from one warehouse to another** is not built. The Farm Director chooses among the farms; a mill's request is answered from its own
-  warehouse's stock, and what is short is asked of the Farm Director.
+- A request is filled from **one** place: the Farm Director chooses one farm or one warehouse that can cover it, not two sharing it.
+- A delivery between warehouses is counted in as one whole delivery (sizes together). Paddy from farms is still counted in per size on the Shipments page.
 - A warehouse that asks cannot ask two farms to share one request: the Farm Director chooses one farm that can cover it.
 - The warehouse receives each size of a truck as its own shipment (grouped receiving is not built).
 - The Warehouse Supervisor and Operations Manager must exist for a request to have someone to go to; a warehouse with no supervisor assigned has its
@@ -114,5 +170,6 @@ CREATE INDEX IF NOT EXISTS tasks_supply_request_number_idx ON tasks (supply_requ
 
 ## Checking it works
 
-Server: `cd backend && npx jest src/supply src/logistics`. Browser: `e2e/t_supply.py` (the whole chain, both sizes everywhere, notification links) and
-`e2e/t_dispatch.py`. See `e2e/README.md`.
+Server: `cd backend && npx jest src/supply src/logistics`. Browser: `e2e/t_supply.py` (the whole chain, both sizes everywhere, notification links),
+`e2e/t_deliveries.py` (sending, counting in with a shortage, cancelling, the Farm Director choosing a warehouse, the mill confirming, and who is
+offered the page across every role) and `e2e/t_dispatch.py`. See `e2e/README.md`.

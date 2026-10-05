@@ -13,6 +13,7 @@ const USERS: { id: string; firstName: string; lastName: string; role: string; sc
   { id: 'md-1', firstName: 'Nana', lastName: 'Addo', role: 'MD', scopes: [{ type: 'GLOBAL', id: null }] },
   { id: 'om-1', firstName: 'Kwame', lastName: 'Asare', role: 'OPERATIONS_MANAGER', scopes: [{ type: 'GLOBAL', id: null }] },
   { id: 'oo-1', firstName: 'Ama', lastName: 'Frimpong', role: 'OPERATIONS_OFFICER', scopes: [{ type: 'MILLING_CENTER', id: MC1 }] },
+  { id: 'oo-2', firstName: 'Kojo', lastName: 'Darko', role: 'OPERATIONS_OFFICER', scopes: [{ type: 'MILLING_CENTER', id: 'mc-2' }] },
   { id: 'ad-1', firstName: 'Admin', lastName: 'User', role: 'ADMIN', scopes: [{ type: 'GLOBAL', id: null }] },
 ];
 const PERMS: Record<string, string[]> = {
@@ -34,6 +35,8 @@ function build(opts: { stock?: Record<string, Record<string, Record<string, numb
   let seq = 0;
   const rows: any[] = [];
   const tasks: any[] = [];
+  const transfers: any[] = [];
+  const millReceipts = { create: jest.fn(async () => ({ id: 'pmr1' })) };
   const STOCK = opts.stock ?? { FARM: { [FARM_A]: { [G4]: 50, [G5]: 10 }, [FARM_B]: { [G4]: 5, [G5]: 0 } }, WAREHOUSE: { [WH1]: { [G4]: 12, [G5]: 3 } } };
   const cards = opts.cards ?? new Map<string, any>();
   const tx = {
@@ -46,7 +49,9 @@ function build(opts: { stock?: Record<string, Record<string, Record<string, numb
       findMany: jest.fn(async ({ where }: any = {}) => rows.filter((r) => match(r, where))),
       findFirst: jest.fn(async ({ where }: any) => rows.find((r) => match(r, where)) ?? null),
       update: jest.fn(async ({ where, data }: any) => { const r = rows.find((x) => x.id === where.id)!; Object.assign(r, data); return r; }),
+      updateMany: jest.fn(async ({ where, data }: any) => { const r = rows.find((x) => x.id === where.id && x.status === where.status); if (!r) return { count: 0 }; Object.assign(r, data); return { count: 1 }; }),
     },
+    paddyTransfer: { findMany: jest.fn(async ({ where }: any) => transfers.filter((x) => where.supplyRequestNumber.in.includes(x.supplyRequestNumber) && x.status !== 'CANCELLED')) },
     user: {
       findMany: jest.fn(async ({ where }: any) => {
         if (where.id) return USERS.filter((u) => where.id.in.includes(u.id));
@@ -54,7 +59,7 @@ function build(opts: { stock?: Record<string, Record<string, Record<string, numb
         return USERS.filter((u) => codes.includes(u.role) && (!some.OR || u.scopes.length === 0 || u.scopes.some((s) => s.type === 'GLOBAL' || (s.type === 'WAREHOUSE' && s.id === wh))));
       }),
     },
-    warehouse: { findUnique: jest.fn(async ({ where }: any) => WAREHOUSES[where.id] ?? null), findMany: jest.fn(async ({ where }: any) => Object.values(WAREHOUSES).filter((w: any) => where.id.in.includes(w.id))) },
+    warehouse: { findUnique: jest.fn(async ({ where }: any) => WAREHOUSES[where.id] ?? null), findMany: jest.fn(async ({ where }: any) => Object.values(WAREHOUSES).filter((w: any) => (where.id?.in ? where.id.in.includes(w.id) : where.id?.not ? w.id !== where.id.not && w.isActive : w.isActive))) },
     millingCenter: { findUnique: jest.fn(async ({ where }: any) => (where.id === MC1 ? { id: MC1, name: 'Tamale Mill', warehouseId: WH1, isActive: true } : null)), findMany: jest.fn(async ({ where }: any) => (where.id.in.includes(MC1) ? [{ id: MC1, name: 'Tamale Mill' }] : [])) },
     farm: {
       findMany: jest.fn(async ({ where }: any) => {
@@ -73,8 +78,8 @@ function build(opts: { stock?: Record<string, Record<string, Record<string, numb
   const ledger = { generateNumber: jest.fn(async (_t: unknown, prefix: string) => `${prefix}-2026-${String(++seq).padStart(6, '0')}`), getBalancesForLocation: jest.fn(async (type: string, id: string) => Object.entries((STOCK as any)[type]?.[id] ?? {}).map(([paddyGradeId, bagCount]) => ({ paddyGradeId, bagCount }))) };
   const deliveryOrders = { createRequest: jest.fn(async () => ({ requestRef: 'RQ-2026-000001', farmName: 'Nkawkaw Farm' })), cardsByRequestRefs: jest.fn(async () => cards) };
   const notifications = { notify: jest.fn() };
-  const service = new SupplyRequestsService(prisma as any, { record: jest.fn() } as any, ledger as any, deliveryOrders as any, notifications as any);
-  return { service, rows, tasks, prisma, notifications, deliveryOrders, cards };
+  const service = new SupplyRequestsService(prisma as any, { record: jest.fn() } as any, ledger as any, deliveryOrders as any, notifications as any, millReceipts as any);
+  return { service, rows, tasks, prisma, notifications, deliveryOrders, cards, transfers, millReceipts };
 }
 const ask = (over: Record<string, unknown> = {}) => ({ warehouseId: WH1, lines: [{ paddyGradeId: G4, bagCount: 17 }, { paddyGradeId: G5, bagCount: 3 }], neededBy: '2026-10-09', ...over }) as any;
 const toldTo = (n: jest.Mock) => n.mock.calls.map(([a]: any[]) => a);
@@ -339,5 +344,135 @@ describe('the right ROLE does each step, not just anyone holding the permission'
     const h = build(); await h.service.create(ask(), actor('wm-1'));
     await expect(h.service.forward('sr1', {}, actor('ad-1'))).resolves.toMatchObject({ status: 'FORWARDED' });
     await expect(h.service.assign('sr1', { sourceFarmId: FARM_A }, actor('ad-1'))).resolves.toMatchObject({ status: 'ASSIGNED' });
+  });
+});
+
+describe('the Farm Director may choose a WAREHOUSE to send it, not only a farm', () => {
+  const STOCK = { FARM: { [FARM_A]: { [G4]: 50, [G5]: 10 } }, WAREHOUSE: { [WH1]: { [G4]: 12, [G5]: 3 }, [WH2]: { [G4]: 40, [G5]: 9 } } };
+  async function atFarmDirector(h = build({ stock: STOCK })) { await h.service.create(ask(), actor('wm-1')); await h.service.forward('sr1', {}, actor('ws-1')); return h; }
+
+  it('the choice lists the other warehouses that hold paddy, size by size, with who looks after them (and never the asking warehouse)', async () => {
+    const h = await atFarmDirector();
+    const s: any = await h.service.sources('sr1', actor('fd-1'));
+    expect(s.warehouses).toHaveLength(1);
+    expect(s.warehouses[0]).toMatchObject({ warehouseId: WH2, warehouseName: 'Kumasi Warehouse', supervisors: ['Yaw Boateng'], canCover: true, totalHas: 49 });
+    expect(s.warehouses[0].bySize).toEqual([{ paddyGradeId: G4, label: 'Size 4', needed: 17, has: 40, enough: true }, { paddyGradeId: G5, label: 'Size 5', needed: 3, has: 9, enough: true }]);
+    expect(s.farms).toHaveLength(2); // the farms are still there
+  });
+
+  it('a warehouse with no paddy is not offered', async () => {
+    const h = await atFarmDirector(build({ stock: { ...STOCK, WAREHOUSE: { [WH1]: { [G4]: 12, [G5]: 3 }, [WH2]: { [G4]: 0, [G5]: 0 } } } }));
+    expect(((await h.service.sources('sr1', actor('fd-1'))) as any).warehouses).toEqual([]);
+  });
+
+  it('choosing it asks ONLY that warehouse\'s supervisor (a short task and one line), and tells the person who asked', async () => {
+    const h = await atFarmDirector();
+    const v = await h.service.assign('sr1', { sourceWarehouseId: WH2, note: 'Please send before Friday' }, actor('fd-1'));
+    expect(h.rows[0]).toMatchObject({ status: 'ASSIGNED', sourceWarehouseId: WH2, sourceFarmId: null, dispatchRequestRef: null });
+    expect(h.deliveryOrders.createRequest).not.toHaveBeenCalled(); // no farm is asked
+    expect(h.tasks.filter((x) => x.assignedToId === 'fd-1').map((x) => x.status)).toEqual(['COMPLETED']); // the Farm Director's own task is closed
+    expect(v).toMatchObject({ stage: 'DISPATCHING', holder: 'Warehouse Supervisor', label: 'Kumasi Warehouse is getting it ready', sourceWarehouse: { id: WH2, name: 'Kumasi Warehouse' }, transfer: null });
+    const open = h.tasks.filter((x) => x.status === 'TODO'); // the earlier steps' tasks (and the Farm Director's own) are done
+    expect(open).toHaveLength(1);
+    expect(open[0]).toMatchObject({ assignedToId: 'ws-2', title: 'Send 20 bags to Tamale Warehouse', supplyRequestNumber: 'SR-2026-000001' });
+    const told = toldTo(h.notifications.notify).filter((n: any) => n.title.includes('paddy from you') || n.title.includes('will send'));
+    expect(told).toEqual([
+      expect.objectContaining({ userIds: ['ws-2'], title: 'Tamale Warehouse needs paddy from you', body: NEEDS }),
+      expect.objectContaining({ userIds: ['wm-1'], title: 'Kumasi Warehouse will send your paddy', body: 'Size 4: 17, Size 5: 3' }),
+    ]);
+  });
+
+  it('a farm OR a warehouse, never both and never neither; never the asking warehouse itself; only the Farm Director', async () => {
+    const h = await atFarmDirector();
+    await expect(h.service.assign('sr1', { sourceFarmId: FARM_A, sourceWarehouseId: WH2 } as any, actor('fd-1'))).rejects.toThrow('Choose one farm or one warehouse');
+    await expect(h.service.assign('sr1', {} as any, actor('fd-1'))).rejects.toThrow('Choose one farm or one warehouse');
+    await expect(h.service.assign('sr1', { sourceWarehouseId: WH1 }, actor('fd-1'))).rejects.toThrow('cannot come from the warehouse that is asking');
+    await expect(h.service.assign('sr1', { sourceWarehouseId: WH2 }, actor('ws-2'))).rejects.toThrow(ForbiddenException);
+    expect(h.rows[0].status).toBe('FORWARDED');
+    await h.service.assign('sr1', { sourceFarmId: FARM_A }, actor('fd-1')); // the farm way still works
+    expect(h.deliveryOrders.createRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('only the sending warehouse\'s supervisor sees it (before and after it is chosen), not other warehouses\' supervisors', async () => {
+    const h = await atFarmDirector();
+    expect((await h.service.board(actor('ws-2'))).map((v) => v.requestNumber)).toEqual([]); // not chosen yet
+    await h.service.assign('sr1', { sourceWarehouseId: WH2 }, actor('fd-1'));
+    expect((await h.service.board(actor('ws-2'))).map((v) => v.requestNumber)).toEqual(['SR-2026-000001']);
+  });
+
+  it('follows the other warehouse\'s delivery: getting it ready, on the road, arrived (and a bag short is said)', async () => {
+    const h = await atFarmDirector(); await h.service.assign('sr1', { sourceWarehouseId: WH2 }, actor('fd-1'));
+    const view = async () => (await h.service.board(actor('md-1')))[0];
+    h.transfers.push({ id: 'pt1', transferNumber: 'PT-2026-000001', supplyRequestNumber: 'SR-2026-000001', status: 'IN_TRANSIT', fromWarehouseId: WH2, toWarehouseId: WH1, totalBags: 20, driverName: 'Kojo Asante', vehiclePlate: 'GT-1234-21', sentAt: new Date('2026-10-06T07:00:00Z'), lines: [], receivedLines: null, varianceBags: null, receivedAt: null });
+    expect(await view()).toMatchObject({ stage: 'ON_THE_WAY', holder: 'On the road', label: 'On the road to Tamale Warehouse', transfer: { transferNumber: 'PT-2026-000001', driverName: 'Kojo Asante', vehiclePlate: 'GT-1234-21', bags: 20 } });
+    Object.assign(h.transfers[0], { status: 'RECEIVED', receivedLines: [{ bags: 16 }, { bags: 3 }], varianceBags: -1, receivedAt: new Date('2026-10-06T15:00:00Z') });
+    const done = await view();
+    expect(done).toMatchObject({ stage: 'RECEIVED', label: 'Arrived at Tamale Warehouse', transfer: { receivedBags: 19, bagVariance: -1 } });
+    expect(done.steps.map((s) => [s.label, s.state, s.detail])).toEqual([
+      ['Asked', 'done', null], ['Warehouse Supervisor sends it on', 'done', null], ['Farm Director chooses the warehouse', 'done', 'Kumasi Warehouse'],
+      ['Warehouse Supervisor loads and sends', 'done', 'Arrived at Tamale Warehouse: 1 bag short'], ['On the road', 'done', 'Vehicle GT-1234-21'], ['Arrived', 'done', '1 bag short'],
+    ]);
+  });
+
+  it('a CANCELLED delivery does not count: the request goes back to "getting it ready"', async () => {
+    const h = await atFarmDirector(); await h.service.assign('sr1', { sourceWarehouseId: WH2 }, actor('fd-1'));
+    h.transfers.push({ id: 'pt1', transferNumber: 'PT-2026-000001', supplyRequestNumber: 'SR-2026-000001', status: 'CANCELLED', fromWarehouseId: WH2, toWarehouseId: WH1, totalBags: 20 });
+    expect((await h.service.board(actor('md-1')))[0]).toMatchObject({ stage: 'DISPATCHING', label: 'Kumasi Warehouse is getting it ready', transfer: null });
+  });
+});
+
+describe('the mill confirms the paddy has reached it', () => {
+  async function ready() {
+    const h = build({ stock: { WAREHOUSE: { [WH1]: { [G4]: 40, [G5]: 9 } }, FARM: {} } });
+    await h.service.create({ millingCenterId: MC1, lines: [{ paddyGradeId: G4, bagCount: 10 }, { paddyGradeId: G5, bagCount: 2 }], neededBy: '2026-10-09' } as any, actor('oo-1'));
+    await h.service.forward('sr1', {}, actor('om-1')); await h.service.ready('sr1', {}, actor('ws-1'));
+    h.notifications.notify.mockClear();
+    return h;
+  }
+
+  it('writes the mill\'s own record of paddy received (both sizes, in bags), closes the request, and tells the warehouse and the Operations Manager', async () => {
+    const h = await ready();
+    const v = await h.service.receivedAtMill('sr1', { note: 'All good' }, actor('oo-1'));
+    expect(h.millReceipts.create).toHaveBeenCalledTimes(1);
+    const [dto] = (h.millReceipts.create as jest.Mock).mock.calls[0];
+    expect(dto).toMatchObject({ millingCenterId: MC1, lines: [{ paddyGradeId: G4, bagCount: 10 }, { paddyGradeId: G5, bagCount: 2 }] });
+    expect(dto.notes).toContain('SR-2026-000001'); expect(dto.notes).toContain('All good');
+    expect(v).toMatchObject({ status: 'RECEIVED', stage: 'RECEIVED', label: 'Received at Tamale Mill', receivedBy: 'Ama Frimpong' });
+    expect(v.steps.map((s) => [s.label, s.state])).toEqual([['Asked', 'done'], ['Operations Manager sends it on', 'done'], ['Warehouse Supervisor checks the stock', 'done'], ['Paddy is ready', 'done'], ['Received at the mill', 'done']]);
+    expect(toldTo(h.notifications.notify).map((n: any) => [n.userIds.sort(), n.title])).toEqual([[['om-1', 'ws-1'], 'Tamale Mill has received the paddy']]);
+  });
+
+  it('while it is only "ready", the last step is the mill\'s to do', async () => {
+    const h = await ready();
+    const v = (await h.service.board(actor('om-1')))[0];
+    expect(v.steps.map((s) => s.state)).toEqual(['done', 'done', 'done', 'done', 'current']);
+  });
+
+  it('only once: a second press, or a request that is not ready yet, is refused', async () => {
+    const h = await ready();
+    await h.service.receivedAtMill('sr1', {}, actor('oo-1'));
+    await expect(h.service.receivedAtMill('sr1', {}, actor('oo-1'))).rejects.toThrow('already confirmed');
+    expect(h.millReceipts.create).toHaveBeenCalledTimes(1);
+    const h2 = build(); await h2.service.create({ millingCenterId: MC1, lines: [{ paddyGradeId: G4, bagCount: 5 }], neededBy: '2026-10-09' } as any, actor('oo-1'));
+    await expect(h2.service.receivedAtMill('sr1', {}, actor('oo-1'))).rejects.toThrow('not ready yet');
+  });
+
+  it('only the mill: not the warehouse supervisor, not another mill\'s officer, and a warehouse request is not a mill\'s', async () => {
+    const h = await ready();
+    await expect(h.service.receivedAtMill('sr1', {}, actor('ws-1'))).rejects.toThrow(ForbiddenException);
+    await expect(h.service.receivedAtMill('sr1', {}, actor('oo-2'))).rejects.toThrow(ForbiddenException);
+    expect(h.rows[0].status).toBe('READY');
+    const h2 = build(); await h2.service.create(ask(), actor('wm-1'));
+    await expect(h2.service.receivedAtMill('sr1', {}, actor('ad-1'))).rejects.toThrow('Only a milling center');
+    const done = await h.service.receivedAtMill('sr1', {}, actor('ad-1')); // the Administrator may
+    expect(done.status).toBe('RECEIVED');
+  });
+
+  it('if the mill\'s record cannot be written, nothing is half done: it is still "ready" and can be pressed again', async () => {
+    const h = await ready();
+    (h.millReceipts.create as jest.Mock).mockRejectedValueOnce(new Error('database down'));
+    await expect(h.service.receivedAtMill('sr1', {}, actor('oo-1'))).rejects.toThrow('database down');
+    expect(h.rows[0]).toMatchObject({ status: 'READY', receivedById: null, receivedAt: null });
+    expect((await h.service.receivedAtMill('sr1', {}, actor('oo-1'))).status).toBe('RECEIVED');
   });
 });

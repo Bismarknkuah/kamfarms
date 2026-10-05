@@ -621,3 +621,15 @@ Adds one table (`supply_requests`), one column (`tasks.supply_request_number`) a
 2. Set the real **Standard paddy bag weight** in Settings (Logistics). Every estimate follows it.
 
 See `docs/PADDY_REQUESTS.md`.
+
+## Version 2026.10.13: deliveries between warehouses
+
+Adds one table (`paddy_transfers`), three columns and one status value on `supply_requests` (`source_warehouse_id`, `received_by_id`, `received_at`,
+`RECEIVED`), added by the start-up steps. **No new permissions**: the desk uses `warehouse.transfer` (Warehouse Supervisor) and `warehouse.receive`
+(Warehouse Manager). `/api/health` should then show `2026.10.13`. After deploying:
+
+1. Make sure each warehouse has a **Warehouse Supervisor** (who sends paddy out) and a **Warehouse Manager** (who counts it in) assigned under Users, and
+   that the mill's **Operations Officer** is scoped to the mill (they confirm paddy received at the mill).
+2. Try it: Warehouse Supervisor, Deliveries, Send paddy to another warehouse; then the other warehouse's Manager, Deliveries, Paddy arrived.
+
+See `docs/PADDY_REQUESTS.md`.

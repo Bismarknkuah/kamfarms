@@ -29,10 +29,11 @@ export class PaddyWhereaboutsService {
     const millScope = scopedLocationIds(actor, 'MILLING_CENTER');
     const sees = (scope: { isGlobal: boolean; ids: string[] }, id: string) => scope.isGlobal || scope.ids.includes(id);
 
-    const [grades, balances, shipments] = await Promise.all([
+    const [grades, balances, shipments, transfers] = await Promise.all([
       this.prisma.paddyGrade.findMany({ where: { isActive: true }, orderBy: { label: 'asc' } }),
       this.prisma.inventoryBalance.findMany({ where: { paddyGradeId: { not: null }, locationType: { in: ['FARM', 'WAREHOUSE', 'MILLING_CENTER'] as any }, bagCount: { gt: 0 } } }),
       this.prisma.shipment.findMany({ where: { receivedAt: null }, include: { farm: true, warehouse: true, deliveryReport: { include: { driver: true, vehicle: true } } } }),
+      this.prisma.paddyTransfer.findMany({ where: { status: 'IN_TRANSIT' } }),
     ]);
 
     const visible = balances.filter((b) => (b.locationType === 'FARM' ? sees(farmScope, b.locationId) : b.locationType === 'WAREHOUSE' ? sees(whScope, b.locationId) : sees(millScope, b.locationId)));
@@ -62,6 +63,13 @@ export class PaddyWhereaboutsService {
       const trip = s.deliveryReport?.dispatchRef ?? s.id;
       const who = [s.deliveryReport?.driver?.name && `Driver ${s.deliveryReport.driver.name}`, s.deliveryReport?.vehicle?.plateNumber && `vehicle ${s.deliveryReport.vehicle.plateNumber}`].filter(Boolean).join(', ');
       add(`R${trip}`, { type: 'ROAD', id: trip, name: `${s.farm?.name ?? 'The farm'} to ${s.warehouse?.name ?? 'the warehouse'}`, location: null, detail: who || null }, s.paddyGradeId, Number(s.expectedBags ?? 0));
+    }
+    // ...and paddy travelling between warehouses
+    for (const t of transfers as any[]) {
+      if (!(sees(whScope, t.fromWarehouseId) || sees(whScope, t.toWarehouseId))) continue;
+      const nameOf = (id: string) => whs.find((x) => x.id === id)?.name ?? 'A warehouse';
+      const who = [t.driverName && `Driver ${t.driverName}`, t.vehiclePlate && `vehicle ${t.vehiclePlate}`].filter(Boolean).join(', ');
+      for (const l of (t.lines ?? []) as { paddyGradeId: string; bags: number }[]) add(`R${t.transferNumber}`, { type: 'ROAD', id: t.transferNumber, name: `${nameOf(t.fromWarehouseId)} to ${nameOf(t.toWarehouseId)}`, location: null, detail: who || null }, l.paddyGradeId, l.bags);
     }
 
     const order = { FARM: 0, ROAD: 1, WAREHOUSE: 2, MILL: 3 } as const;

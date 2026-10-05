@@ -4,11 +4,12 @@ import { AuditService } from '../audit/audit.service';
 import { InventoryLedgerService } from '../inventory-ledger/inventory-ledger.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { DeliveryOrdersService } from '../logistics/delivery-orders.service';
+import { PaddyMillingReceiptsService } from '../production/paddy-milling-receipts.service';
 import { longDate } from '../logistics/dispatch-request.util';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { assertScope, scopedLocationIds } from '../common/utils/scope.util';
 import { PERMISSIONS } from '../common/constants/permissions';
-import { AssignSupplyRequestDto, CreateSupplyRequestDto, DeclineSupplyRequestDto, ForwardSupplyRequestDto, ReadySupplyRequestDto } from './dto/supply-request.dto';
+import { AssignSupplyRequestDto, CreateSupplyRequestDto, DeclineSupplyRequestDto, ForwardSupplyRequestDto, ReadySupplyRequestDto, ReceivedAtMillDto } from './dto/supply-request.dto';
 import { SupplyContext, SupplyLine, SupplyView, buildSupplyView, sizesText } from './supply-board.util';
 
 const isAdmin = (a: AuthenticatedUser) => a.roles.some((r: any) => r.roleCode === 'ADMIN');
@@ -37,6 +38,7 @@ export class SupplyRequestsService {
     private readonly ledger: InventoryLedgerService,
     private readonly deliveryOrders: DeliveryOrdersService,
     @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly millReceipts?: PaddyMillingReceiptsService,
   ) {}
 
   // ---------------------------------------------------------------- who sees what
@@ -55,7 +57,7 @@ export class SupplyRequestsService {
     if (codes.includes('WAREHOUSE_SUPERVISOR')) {
       const w = scopedLocationIds(actor, 'WAREHOUSE');
       if (w.isGlobal) return {};
-      if (w.ids.length) clauses.push({ warehouseId: { in: w.ids } });
+      if (w.ids.length) clauses.push({ warehouseId: { in: w.ids } }, { sourceWarehouseId: { in: w.ids } });
     }
     if (codes.includes('WAREHOUSE_MANAGER')) {
       const w = scopedLocationIds(actor, 'WAREHOUSE');
@@ -174,7 +176,16 @@ export class SupplyRequestsService {
         });
       }
       out.sort((a, b) => Number(b.canCover) - Number(a.canCover) || b.totalHas - a.totalHas);
-      return { kind: 'WAREHOUSE' as const, farms: out };
+      const others = await this.prisma.warehouse.findMany({ where: { isActive: true, id: { not: row.warehouseId } }, orderBy: { name: 'asc' } });
+      const warehouses = [];
+      for (const w of others) {
+        const bySize = rate(await this.ledger.getBalancesForLocation('WAREHOUSE', w.id));
+        const totalHas = bySize.reduce((n, s) => n + s.has, 0);
+        if (totalHas <= 0) continue;
+        warehouses.push({ warehouseId: w.id, warehouseName: w.name, supervisors: (await this.peopleWith(['WAREHOUSE_SUPERVISOR'], w.id)).map((p: any) => `${p.firstName} ${p.lastName}`.trim()), bySize, canCover: bySize.every((s) => s.enough), totalHas });
+      }
+      warehouses.sort((a, b) => Number(b.canCover) - Number(a.canCover) || b.totalHas - a.totalHas);
+      return { kind: 'WAREHOUSE' as const, farms: out, warehouses };
     }
     assertScope(actor, 'WAREHOUSE', row.warehouseId, 'this warehouse');
     const wh = await this.prisma.warehouse.findUnique({ where: { id: row.warehouseId } });
@@ -188,13 +199,15 @@ export class SupplyRequestsService {
     if (row.kind !== 'WAREHOUSE') throw new BadRequestException('A mill request is answered by its warehouse, not by a farm.');
     if (row.status !== 'FORWARDED') throw new BadRequestException('This request is not waiting for a farm to be chosen.');
     if (!maySupply(actor, 'WAREHOUSE')) throw new ForbiddenException('Only the Farm Director chooses the farm.');
-    assertScope(actor, 'FARM', dto.sourceFarmId, 'this farm');
+    if (!!dto.sourceFarmId === !!dto.sourceWarehouseId) throw new BadRequestException('Choose one farm or one warehouse to send it.');
+    if (dto.sourceWarehouseId) return this.assignToWarehouse(row, dto, actor);
+    assertScope(actor, 'FARM', dto.sourceFarmId as string, 'this farm');
     const n = await this.names(row);
     const lines = row.lines as unknown as SupplyLine[];
     const needBy = row.neededBy ? new Date(row.neededBy) : new Date(Date.now() + 2 * 86400000);
     // The farm's own stock is checked here, size by size: asking a farm for paddy it does not have fails with the shortfall named.
     const made = await this.deliveryOrders.createRequest(
-      { farmId: dto.sourceFarmId, destinationWarehouseId: row.warehouseId, requestedDate: needBy.toISOString().slice(0, 10), notes: dto.note ? dto.note.slice(0, 480) : undefined, lines: lines.map((l) => ({ paddyGradeId: l.paddyGradeId, bagCount: l.bags })) } as any,
+      { farmId: dto.sourceFarmId as string, destinationWarehouseId: row.warehouseId, requestedDate: needBy.toISOString().slice(0, 10), notes: dto.note ? dto.note.slice(0, 480) : undefined, lines: lines.map((l) => ({ paddyGradeId: l.paddyGradeId, bagCount: l.bags })) } as any,
       actor,
     );
     const updated = await this.prisma.supplyRequest.update({ where: { id }, data: { status: 'ASSIGNED', sourceFarmId: dto.sourceFarmId, dispatchRequestRef: made.requestRef, decidedById: actor.id, decidedAt: new Date(), decisionNote: dto.note } });
@@ -203,6 +216,47 @@ export class SupplyRequestsService {
     return this.one(updated);
   }
 
+  /** Farm Director: another warehouse will send it. Its Warehouse Supervisor is asked to send the paddy (on the Deliveries desk, where this request follows it). */
+  private async assignToWarehouse(row: any, dto: AssignSupplyRequestDto, actor: AuthenticatedUser) {
+    const src = await this.prisma.warehouse.findUnique({ where: { id: dto.sourceWarehouseId as string } });
+    if (!src || !src.isActive) throw new BadRequestException('That warehouse was not found or is not in use.');
+    if (src.id === row.warehouseId) throw new BadRequestException('The paddy cannot come from the warehouse that is asking for it.');
+    const n = await this.names(row);
+    const lines = row.lines as unknown as SupplyLine[];
+    const updated = await this.prisma.supplyRequest.update({ where: { id: row.id }, data: { status: 'ASSIGNED', sourceWarehouseId: src.id, decidedById: actor.id, decidedAt: new Date(), decisionNote: dto.note } });
+    await this.audit.record({ userId: actor.id, action: 'supply_request.assign', entity: 'SupplyRequest', entityId: row.id, afterValue: { status: 'ASSIGNED', sourceWarehouseId: src.id } });
+    await this.finishTasks(row, actor); // the Farm Director's own "choose where it comes from" task is done
+    const staff = (await this.peopleWith(['WAREHOUSE_SUPERVISOR'], src.id)).map((p: any) => p.id as string);
+    await this.giveTask(staff, row, `Send ${row.totalBags} bags to ${n.warehouse}`, actor);
+    await this.tell(staff, row, `${n.warehouse} needs paddy from you`, `${sizesText(lines)}${row.neededBy ? ` · by ${longDate(row.neededBy)}` : ''}`, actor);
+    await this.tell([row.requestedById], row, `${src.name} will send your paddy`, sizesText(lines), actor);
+    return this.one(updated);
+  }
+  /** Operations Officer (or Manager): the paddy has reached the mill. Writes the mill's own record of paddy received (the one the Production page keeps) and closes the request. */
+  async receivedAtMill(id: string, dto: ReceivedAtMillDto, actor: AuthenticatedUser) {
+    const row = await this.load(id);
+    if (row.kind !== 'MILL') throw new BadRequestException('Only a milling center confirms paddy it has received.');
+    if (row.status !== 'READY') throw new BadRequestException(row.status === 'RECEIVED' ? 'The mill has already confirmed this paddy.' : 'This paddy is not ready yet.');
+    if (!(isAdmin(actor) || rolesOf(actor).some((r) => ['OPERATIONS_OFFICER', 'OPERATIONS_MANAGER'].includes(r)))) throw new ForbiddenException('Only the mill confirms that the paddy has reached it.');
+    assertScope(actor, 'MILLING_CENTER', row.millingCenterId as string, 'this milling center');
+    if (!this.millReceipts) throw new BadRequestException('Recording paddy received at the mill is not available right now.');
+    const claimed = await this.prisma.supplyRequest.updateMany({ where: { id, status: 'READY' }, data: { status: 'RECEIVED', receivedById: actor.id, receivedAt: new Date() } });
+    if (claimed.count !== 1) throw new BadRequestException('The mill has already confirmed this paddy.');
+    const lines = row.lines as unknown as SupplyLine[];
+    try {
+      await this.millReceipts.create({ millingCenterId: row.millingCenterId as string, date: new Date().toISOString().slice(0, 10), lines: lines.map((l) => ({ paddyGradeId: l.paddyGradeId, bagCount: l.bags })), notes: `Paddy request ${row.requestNumber}${dto.note ? `: ${dto.note}` : ''}` } as any, actor);
+    } catch (e) {
+      await this.prisma.supplyRequest.update({ where: { id }, data: { status: 'READY', receivedById: null, receivedAt: null } }); // nothing is half done
+      throw e;
+    }
+    const updated = await this.load(id);
+    await this.finishTasks(row, actor);
+    await this.audit.record({ userId: actor.id, action: 'supply_request.received_at_mill', entity: 'SupplyRequest', entityId: id, afterValue: { status: 'RECEIVED' } });
+    const n = await this.names(row);
+    const people = [...(await this.peopleWith(['WAREHOUSE_SUPERVISOR'], row.warehouseId)), ...(await this.peopleWith(['OPERATIONS_MANAGER']))].map((p: any) => p.id as string);
+    await this.tell(people, row, `${n.center ?? 'The mill'} has received the paddy`, sizesText(lines), actor);
+    return this.one(updated);
+  }
   private async shortfall(row: any) {
     const have = await this.ledger.getBalancesForLocation('WAREHOUSE', row.warehouseId);
     return (row.lines as unknown as SupplyLine[])
@@ -374,20 +428,23 @@ export class SupplyRequestsService {
     const all = [...rows, ...children];
     const uniq = (xs: (string | null | undefined)[]) => [...new Set(xs.filter((x): x is string => !!x))];
     const [users, whs, centers, farms, cards, parents] = await Promise.all([
-      this.prisma.user.findMany({ where: { id: { in: uniq(all.flatMap((r) => [r.requestedById, r.forwardedById, r.decidedById])) } }, select: { id: true, firstName: true, lastName: true } }),
-      this.prisma.warehouse.findMany({ where: { id: { in: uniq(all.map((r) => r.warehouseId)) } }, select: { id: true, name: true, location: true } }),
+      this.prisma.user.findMany({ where: { id: { in: uniq(all.flatMap((r) => [r.requestedById, r.forwardedById, r.decidedById, r.receivedById])) } }, select: { id: true, firstName: true, lastName: true } }),
+      this.prisma.warehouse.findMany({ where: { id: { in: uniq(all.flatMap((r) => [r.warehouseId, r.sourceWarehouseId])) } }, select: { id: true, name: true, location: true } }),
       this.prisma.millingCenter.findMany({ where: { id: { in: uniq(all.map((r) => r.millingCenterId)) } }, select: { id: true, name: true } }),
       this.prisma.farm.findMany({ where: { id: { in: uniq(all.map((r) => r.sourceFarmId)) } }, select: { id: true, name: true } }),
       this.deliveryOrders.cardsByRequestRefs(uniq(all.map((r) => r.dispatchRequestRef))),
       this.prisma.supplyRequest.findMany({ where: { id: { in: uniq(all.map((r) => r.parentRequestId)) } }, select: { id: true, requestNumber: true } }),
     ]);
+    const sent = await this.prisma.paddyTransfer.findMany({ where: { supplyRequestNumber: { in: uniq(all.filter((r) => r.sourceWarehouseId).map((r) => r.requestNumber)) }, status: { not: 'CANCELLED' } }, orderBy: { sentAt: 'desc' } });
+    const transfers = new Map<string, any>();
+    for (const x of sent) if (x.supplyRequestNumber && !transfers.has(x.supplyRequestNumber)) transfers.set(x.supplyRequestNumber, x);
     const kids = new Map<string, any>();
     for (const c of children) { const key = c.parentRequestId as string; const keep = kids.get(key); if (!keep || (['DECLINED', 'CANCELLED'].includes(keep.status) && !['DECLINED', 'CANCELLED'].includes(c.status))) kids.set(key, c); }
     const ctx: SupplyContext = {
       users: new Map(users.map((u) => [u.id, `${u.firstName} ${u.lastName}`.trim()])),
       warehouses: new Map(whs.map((w) => [w.id, { name: w.name, location: w.location ?? null }])),
       centers: new Map(centers.map((c) => [c.id, c.name])), farms: new Map(farms.map((f) => [f.id, f.name])),
-      cards, parents: new Map(parents.map((p) => [p.id, p.requestNumber])), children: kids,
+      cards, parents: new Map(parents.map((p) => [p.id, p.requestNumber])), children: kids, transfers,
     };
     return rows.map((r) => buildSupplyView(r, ctx));
   }

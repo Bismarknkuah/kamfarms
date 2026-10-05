@@ -25,7 +25,11 @@ export class CreateSupplyRequestDto {
 export class ForwardSupplyRequestDto { @ApiProperty({ required: false }) @IsOptional() @IsString() @MaxLength(300) note?: string; }
 export class DeclineSupplyRequestDto { @ApiProperty({ description: 'Mandatory: whoever declines must say why.' }) @MandatoryComment() reason: string; }
 export class AssignSupplyRequestDto {
-  @ApiProperty({ description: 'The farm that will send the paddy.' }) @IsUuidLike({ message: 'Choose the farm.' }) sourceFarmId: string;
-  @ApiProperty({ required: false }) @IsOptional() @IsString() @MaxLength(300) note?: string;
+  @ApiProperty({ required: false, description: 'The farm that will send it (choose this OR a warehouse).' }) @IsOptional() @IsUuidLike() sourceFarmId?: string;
+  @ApiProperty({ required: false, description: 'The warehouse that will send it (choose this OR a farm).' }) @IsOptional() @IsUuidLike() sourceWarehouseId?: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsString() @MaxLength(500) note?: string;
+}
+export class ReceivedAtMillDto {
+  @ApiProperty({ required: false }) @IsOptional() @IsString() @MaxLength(500) note?: string;
 }
 export class ReadySupplyRequestDto { @ApiProperty({ required: false }) @IsOptional() @IsString() @MaxLength(300) note?: string; }

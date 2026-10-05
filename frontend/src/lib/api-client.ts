@@ -2074,7 +2074,9 @@ export const reportCatalogApi = {
 // ----------------------------------------------------------------------------------------------------------------------------------------
 export type SupplyStage = 'WITH_REVIEWER' | 'WITH_SUPPLIER' | 'DISPATCHING' | 'ON_THE_WAY' | 'RECEIVED' | 'READY' | 'DECLINED' | 'CANCELLED';
 export interface SupplyStepView { label: string; state: 'done' | 'current' | 'upcoming' | 'stopped'; who: string | null; at: string | null; detail: string | null }
+export interface SupplyTransfer { id: string; transferNumber: string; status: string; label: string; driverName: string | null; vehiclePlate: string | null; bags: number; receivedBags: number | null; bagVariance: number | null; sentAt: string | null; arrivedAt: string | null }
 export interface SupplyView {
+  sourceWarehouse: { id: string; name: string } | null; transfer: SupplyTransfer | null; receivedBy: string | null; receivedAt: string | null;
   id: string; requestNumber: string; kind: 'WAREHOUSE' | 'MILL'; status: string; stage: SupplyStage; label: string; holder: string | null; since: string | null;
   warehouse: { id: string; name: string; location: string | null }; millingCenter: { id: string; name: string } | null;
   lines: { paddyGradeId: string; gradeLabel: string; bags: number }[]; totalBags: number; neededBy: string | null; notes: string | null;
@@ -2086,7 +2088,7 @@ export interface SupplyView {
 }
 export interface SupplySizeCheck { paddyGradeId: string; label: string; needed: number; has: number; enough: boolean }
 export type SupplySources =
-  | { kind: 'WAREHOUSE'; farms: { farmId: string; farmName: string; managers: string[]; bySize: SupplySizeCheck[]; canCover: boolean; totalHas: number }[] }
+  | { kind: 'WAREHOUSE'; farms: { farmId: string; farmName: string; managers: string[]; bySize: SupplySizeCheck[]; canCover: boolean; totalHas: number }[]; warehouses: { warehouseId: string; warehouseName: string; supervisors: string[]; bySize: SupplySizeCheck[]; canCover: boolean; totalHas: number }[] }
   | { kind: 'MILL'; warehouse: { id: string; name: string }; bySize: SupplySizeCheck[]; canCover: boolean };
 export interface Whereabouts {
   sizes: { id: string; label: string }[];
@@ -2100,9 +2102,31 @@ export const supplyApi = {
   sources: (accessToken: string, id: string) => request<SupplySources>(`/supply-requests/${id}/sources`, { method: 'GET' }, accessToken),
   forward: (accessToken: string, id: string, note?: string) => request<SupplyView>(`/supply-requests/${id}/forward`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
   decline: (accessToken: string, id: string, reason: string) => request<SupplyView>(`/supply-requests/${id}/decline`, { method: 'POST', body: JSON.stringify({ reason }) }, accessToken),
-  assign: (accessToken: string, id: string, data: { sourceFarmId: string; note?: string }) => request<SupplyView>(`/supply-requests/${id}/assign`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
+  assign: (accessToken: string, id: string, data: { sourceFarmId?: string; sourceWarehouseId?: string; note?: string }) => request<SupplyView>(`/supply-requests/${id}/assign`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
   ready: (accessToken: string, id: string, note?: string) => request<SupplyView>(`/supply-requests/${id}/ready`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
   askFarmDirector: (accessToken: string, id: string, note?: string) => request<SupplyView>(`/supply-requests/${id}/ask-farm-director`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
   cancel: (accessToken: string, id: string) => request<SupplyView>(`/supply-requests/${id}/cancel`, { method: 'POST' }, accessToken),
+  received: (accessToken: string, id: string, note?: string) => request<SupplyView>(`/supply-requests/${id}/received`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
   whereabouts: (accessToken: string) => request<Whereabouts>('/supply-requests/whereabouts', { method: 'GET' }, accessToken),
+};
+
+export interface PaddyTransferLine { paddyGradeId: string; gradeLabel: string; bags: number }
+export interface PaddyTransferView {
+  id: string; transferNumber: string; status: 'IN_TRANSIT' | 'RECEIVED' | 'CANCELLED'; label: string; direction: 'IN' | 'OUT' | 'BOTH';
+  from: { id: string; name: string }; to: { id: string; name: string }; lines: PaddyTransferLine[]; totalBags: number;
+  driverName: string | null; vehiclePlate: string | null; notes: string | null; sentBy: string; sentAt: string | null;
+  receivedBy: string | null; receivedAt: string | null; receivedLines: PaddyTransferLine[] | null; varianceBags: number | null; receiveNote: string | null; cancelReason: string | null;
+  supplyRequestNumber: string | null;
+}
+export interface PaddyTransferPlaces {
+  mine: { id: string; name: string; location: string | null; stock: { paddyGradeId: string; label: string; bags: number }[] }[];
+  others: { id: string; name: string; location: string | null }[];
+}
+export interface SendPaddyInput { fromWarehouseId: string; toWarehouseId: string; lines: { paddyGradeId: string; bags: number }[]; driverName?: string; vehiclePlate?: string; notes?: string; supplyRequestNumber?: string }
+export const paddyTransfersApi = {
+  list: (accessToken: string) => request<PaddyTransferView[]>('/paddy-transfers', { method: 'GET' }, accessToken),
+  places: (accessToken: string) => request<PaddyTransferPlaces>('/paddy-transfers/places', { method: 'GET' }, accessToken),
+  send: (accessToken: string, data: SendPaddyInput) => request<PaddyTransferView>('/paddy-transfers', { method: 'POST', body: JSON.stringify(data) }, accessToken),
+  receive: (accessToken: string, id: string, data: { lines: { paddyGradeId: string; bags: number }[]; notes?: string }) => request<PaddyTransferView>(`/paddy-transfers/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
+  cancel: (accessToken: string, id: string, reason?: string) => request<PaddyTransferView>(`/paddy-transfers/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }, accessToken),
 };

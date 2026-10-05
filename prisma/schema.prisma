@@ -1083,6 +1083,8 @@ enum SupplyRequestStatus {
   READY
   DECLINED
   CANCELLED
+  /// A mill request whose paddy the mill has confirmed it received.
+  RECEIVED
 }
 
 enum PaddyRequestStatus {
@@ -1128,6 +1130,11 @@ model SupplyRequest {
   dispatchRequestRef String?             @map("dispatch_request_ref")
   /// Set when a warehouse supervisor asked the Farm Director for what a mill request was short of.
   parentRequestId    String?             @map("parent_request_id")
+  /// When another WAREHOUSE is the one that sends it (instead of a farm).
+  sourceWarehouseId  String?             @map("source_warehouse_id")
+  /// A mill request: who confirmed the paddy reached the mill, and when.
+  receivedById       String?             @map("received_by_id")
+  receivedAt         DateTime?           @map("received_at")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
 
@@ -1135,7 +1142,49 @@ model SupplyRequest {
   @@index([warehouseId])
   @@index([dispatchRequestRef])
   @@index([parentRequestId])
+  @@index([sourceWarehouseId])
   @@map("supply_requests")
+}
+
+enum PaddyTransferStatus {
+  IN_TRANSIT
+  RECEIVED
+  CANCELLED
+}
+
+/// Paddy sent from one warehouse to another: counted out of the sender's stock into "in transit", counted into the receiver's stock when it arrives.
+model PaddyTransfer {
+  id                  String              @id @default(uuid())
+  transferNumber      String              @unique @map("transfer_number") // PT-2026-000123
+  fromWarehouseId     String              @map("from_warehouse_id")
+  toWarehouseId       String              @map("to_warehouse_id")
+  /// What was sent: [{ paddyGradeId, gradeLabel, bags, kg }]
+  lines               Json
+  totalBags           Int                 @map("total_bags")
+  totalKg             Decimal             @map("total_kg") @db.Decimal(14, 2)
+  driverName          String?             @map("driver_name")
+  vehiclePlate        String?             @map("vehicle_plate")
+  notes               String?
+  status              PaddyTransferStatus @default(IN_TRANSIT)
+  sentById            String              @map("sent_by_id")
+  sentAt              DateTime            @default(now()) @map("sent_at")
+  receivedById        String?             @map("received_by_id")
+  receivedAt          DateTime?           @map("received_at")
+  /// What was counted in: [{ paddyGradeId, gradeLabel, bags }]
+  receivedLines       Json?               @map("received_lines")
+  varianceBags        Int?                @map("variance_bags") // received minus sent (negative = short)
+  receiveNote         String?             @map("receive_note")
+  cancelReason        String?             @map("cancel_reason")
+  /// Set when this is the paddy for a supply request (SR-...) the Farm Director gave to this warehouse.
+  supplyRequestNumber String?             @map("supply_request_number")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+  @@index([supplyRequestNumber])
+  @@map("paddy_transfers")
 }
 
 model PaddyRequest {

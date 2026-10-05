@@ -1,6 +1,6 @@
 # Browser tests for the sales chain, the approval screens, intake and dispatch
 
-384 checks (74 + 76 + 31 + 41 + 48 + 62 + 52) that drive the real website in a real browser, one signed-in browser per role (Sales Officer, Finance Director, MD,
+434 checks (74 + 76 + 31 + 41 + 48 + 62 + 52 + 50) that drive the real website in a real browser, one signed-in browser per role (Sales Officer, Finance Director, MD,
 Warehouse Supervisor, Warehouse Managers, Administrator).
 
 They run against `mock-api.js`, a small stand-in for the API. It is **not** the real database, but it reuses the real backend code for the parts that
@@ -22,6 +22,7 @@ python3 e2e/t_extras.py          # progress bar, slow flag, every dashboard desk
 python3 e2e/t_ai.py              # AI Insights: three directions vs the real server maths      (41)
 python3 e2e/t_intake.py          # one intake with several sizes, new users, kilograms optional (48)
 python3 e2e/t_supply.py          # paddy requests: warehouse and mill chains, stock checks, both sizes everywhere (52)
+python3 e2e/t_deliveries.py      # deliveries between warehouses, the Farm Director choosing a warehouse, the mill confirming, menu for every role (50)
 python3 e2e/t_dispatch.py        # the Dispatch desk: request, task, ONE dispatch for both sizes, approval (62)
 ```
 Each script exits non-zero if any check fails. `POST http://localhost:4000/__reset` restores the seed data between runs.

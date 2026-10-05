@@ -9,6 +9,7 @@ function build() {
   const prisma = {
     paddyGrade: { findMany: jest.fn(async () => [{ id: 'g4', label: 'Size 4' }, { id: 'g5', label: 'Size 5' }]) },
     inventoryBalance: { findMany: jest.fn(async () => [bal('FARM', 'fa', 'g4', 50), bal('FARM', 'fa', 'g5', 10), bal('FARM', 'fb', 'g4', 5), bal('WAREHOUSE', 'w1', 'g4', 12), bal('WAREHOUSE', 'w1', 'g5', 3), bal('WAREHOUSE', 'w2', 'g4', 8), bal('MILLING_CENTER', 'm1', 'g4', 4)]) },
+    paddyTransfer: { findMany: jest.fn(async () => []) },
     shipment: { findMany: jest.fn(async () => [
       { id: 's1', farmId: 'fa', warehouseId: 'w1', paddyGradeId: 'g4', expectedBags: 17, farm: { name: 'Nkawkaw Farm' }, warehouse: { name: 'Tamale Warehouse' }, deliveryReport: { dispatchRef: 'DS-1', driver: { name: 'Yaw Boateng' }, vehicle: { plateNumber: 'GT-5521-21' } } },
       { id: 's2', farmId: 'fa', warehouseId: 'w1', paddyGradeId: 'g5', expectedBags: 3, farm: { name: 'Nkawkaw Farm' }, warehouse: { name: 'Tamale Warehouse' }, deliveryReport: { dispatchRef: 'DS-1', driver: { name: 'Yaw Boateng' }, vehicle: { plateNumber: 'GT-5521-21' } } },
@@ -56,5 +57,26 @@ describe('where is the paddy?', () => {
     const r = await build().whereabouts(person([]));
     expect(r.places).toEqual([]);
     expect(r.totals).toEqual({});
+  });
+});
+
+describe('paddy travelling between warehouses', () => {
+  const lines = [{ paddyGradeId: 'g4', gradeLabel: 'Size 4', bags: 20 }, { paddyGradeId: 'g5', gradeLabel: 'Size 5', bags: 10 }];
+  const who = (role: string, scopes: { scopeType: string; scopeId: string | null }[]) => ({ id: 'u', roles: [{ roleCode: role, scopes }], permissionCodes: new Set() }) as any;
+  const service = () => new PaddyWhereaboutsService({
+    paddyGrade: { findMany: async () => [{ id: 'g4', label: 'Size 4' }, { id: 'g5', label: 'Size 5' }] }, inventoryBalance: { findMany: async () => [] }, shipment: { findMany: async () => [] },
+    paddyTransfer: { findMany: async () => [{ transferNumber: 'PT-2026-000001', fromWarehouseId: 'w2', toWarehouseId: 'w1', driverName: 'Kojo Asante', vehiclePlate: 'GT-1234-21', lines }] },
+    farm: { findMany: async () => [] }, warehouse: { findMany: async () => [{ id: 'w1', name: 'Tamale Warehouse', location: null }, { id: 'w2', name: 'Kumasi Warehouse', location: null }, { id: 'w3', name: 'Bolga Warehouse', location: null }] }, millingCenter: { findMany: async () => [] },
+  } as any);
+
+  it('is one entry on the road, both sizes together, with the driver and vehicle', async () => {
+    const r = await service().whereabouts(who('FARM_DIRECTOR', [{ scopeType: 'GLOBAL', scopeId: null }]));
+    expect(r.places).toEqual([expect.objectContaining({ type: 'ROAD', name: 'Kumasi Warehouse to Tamale Warehouse', detail: 'Driver Kojo Asante, vehicle GT-1234-21', bags: { g4: 20, g5: 10 }, total: 30 })]);
+    expect(r.totals).toEqual({ g4: 20, g5: 10 });
+  });
+
+  it('is seen by the warehouse it leaves and the one it is going to, and by no other', async () => {
+    const at = async (id: string) => (await service().whereabouts(who('WAREHOUSE_SUPERVISOR', [{ scopeType: 'WAREHOUSE', scopeId: id }]))).places.length;
+    expect([await at('w1'), await at('w2'), await at('w3')]).toEqual([1, 1, 0]);
   });
 });

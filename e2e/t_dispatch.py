@@ -123,6 +123,7 @@ with sync_playwright() as pw:
     ctx, m = as_user(b, 'fm'); m.goto(BASE + '/deliveries'); c1 = card(sec(m, 'desk-needs-action'), 'RQ-2026-009001'); c1.wait_for(); c1.get_by_test_id('act-dispatch').click()
     f = c1.get_by_test_id('dispatch-form'); f.wait_for(); f.get_by_label('Bags of Size 4').wait_for(); f.page.wait_for_timeout(600); f.get_by_label('Bags of Size 4').fill('90'); f.get_by_test_id('dispatch-draft').click(); m.get_by_test_id('dispatch-sent').wait_for()
     check('saving as a draft says it is NOT sent yet', 'saved as a draft' in txt(m.get_by_test_id('dispatch-sent')) and 'not sent yet' in txt(m.get_by_test_id('dispatch-sent')))
+    card(m, 'RQ-2026-009001').get_by_test_id('act-send-draft').wait_for()  # the board refreshes just after the message appears
     check('the farm manager can then send it for approval from the card', card(m, 'RQ-2026-009001').get_by_test_id('act-send-draft').count() == 1)
     ctx.close()
     ctx, p = as_user(b, 'fsup'); p.goto(BASE + '/deliveries'); c1 = card(p, 'RQ-2026-009001'); c1.wait_for()

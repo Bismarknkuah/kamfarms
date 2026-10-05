@@ -44,6 +44,13 @@ export const NAV_ITEMS: NavItem[] = [
     feature: 'control-center',
   },
   {
+    label: 'Money ledger',
+    href: '/money',
+    icon: 'landmark',
+    description: 'Every payment received and every expense, across all farms, warehouses and milling centers, with filters and totals.',
+    permission: 'finance.view',
+  },
+  {
     label: 'Oversight',
     href: '/oversight',
     icon: 'eye',
@@ -362,7 +369,7 @@ export function adminNavSections(): { title: string; items: NavItem[] }[] {
  * scope an Overview page's inventory to just their own location. Returns
  * null for anyone without exactly this scope shape - a GLOBAL-scoped
  * person, or someone scoped to more than one location of that type. */
-export function findSingleLocationScope(me: MeResponse, scopeType: 'FARM' | 'WAREHOUSE'): string | null {
+export function findSingleLocationScope(me: MeResponse, scopeType: 'FARM' | 'WAREHOUSE' | 'MILLING_CENTER'): string | null {
   const matches = me.roles.flatMap((r) => r.scopes.filter((s) => s.scopeType === scopeType && s.scopeId));
   if (matches.length !== 1) return null;
   return matches[0].scopeId;

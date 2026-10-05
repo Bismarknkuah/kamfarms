@@ -65,7 +65,8 @@ export class ExpensesService {
 
     const farmScope = scopedLocationIds(actor, 'FARM');
     const warehouseScope = scopedLocationIds(actor, 'WAREHOUSE');
-    const isFullyGlobal = farmScope.isGlobal && warehouseScope.isGlobal;
+    const millScope = scopedLocationIds(actor, 'MILLING_CENTER');
+    const isFullyGlobal = farmScope.isGlobal && warehouseScope.isGlobal && millScope.isGlobal;
 
     if (isFullyGlobal) {
       where.farmId = filters.farmId;
@@ -80,13 +81,15 @@ export class ExpensesService {
       if (allowedWarehouseIds && allowedWarehouseIds.length > 0) {
         or.push({ warehouseId: filters.warehouseId && allowedWarehouseIds.includes(filters.warehouseId) ? filters.warehouseId : { in: allowedWarehouseIds } });
       }
+      const allowedMillIds = millScope.isGlobal ? null : millScope.ids;
+      if (allowedMillIds && allowedMillIds.length > 0) or.push({ millingCenterId: { in: allowedMillIds } });
       if (or.length === 0) return Promise.resolve([]);
       where.OR = or;
     }
 
     const rows = await this.prisma.expense.findMany({
       where,
-      include: { category: true, farm: true, warehouse: true, submittedBy: true, approvedBy: true },
+      include: { category: true, farm: true, warehouse: true, millingCenter: true, submittedBy: true, approvedBy: true },
       orderBy: { date: 'desc' },
     });
     return this.withFinanceDirectorFlag(rows);
@@ -95,7 +98,7 @@ export class ExpensesService {
   async findById(id: string, actor: AuthenticatedUser) {
     const expense = await this.prisma.expense.findUnique({
       where: { id },
-      include: { category: true, farm: true, warehouse: true, submittedBy: true, approvedBy: true },
+      include: { category: true, farm: true, warehouse: true, millingCenter: true, submittedBy: true, approvedBy: true },
     });
     if (!expense) throw new NotFoundException('Expense not found.');
 
@@ -105,7 +108,8 @@ export class ExpensesService {
     if (!isGlobal) {
       const okViaFarm = expense.farmId && farmScope.ids.includes(expense.farmId);
       const okViaWarehouse = expense.warehouseId && warehouseScope.ids.includes(expense.warehouseId);
-      if (!okViaFarm && !okViaWarehouse) {
+      const okViaMill = expense.millingCenterId && scopedLocationIds(actor, 'MILLING_CENTER').ids.includes(expense.millingCenterId);
+      if (!okViaFarm && !okViaWarehouse && !okViaMill) {
         throw new ForbiddenException({ message: 'You are not authorized for this expense.', errorCode: 'SCOPE_DENIED' });
       }
     }
@@ -124,6 +128,7 @@ export class ExpensesService {
     // just not applied here until now.
     if (dto.farmId) assertScope(actor, 'FARM', dto.farmId, 'this farm');
     if (dto.warehouseId) assertScope(actor, 'WAREHOUSE', dto.warehouseId, 'this warehouse');
+    if (dto.millingCenterId) assertScope(actor, 'MILLING_CENTER', dto.millingCenterId, 'this milling center');
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const expense = await this.prisma.$transaction(async (tx: any) => {
@@ -140,6 +145,7 @@ export class ExpensesService {
           date: new Date(dto.date),
           farmId: dto.farmId,
           warehouseId: dto.warehouseId,
+          millingCenterId: dto.millingCenterId,
           paymentMethod: dto.paymentMethod,
           reference: dto.reference,
           customCategoryLabel: dto.customCategoryLabel,

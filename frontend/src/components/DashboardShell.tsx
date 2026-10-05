@@ -57,7 +57,7 @@ import { TopBar } from './TopBar';
 // scope, not re-resolved on every render (dynamic() inside a component
 // body creates a new component type each render, which flashes/
 // remounts; a plain lookup object doesn't have that problem).
-const ICON_MAP: Record<string, LucideIcon> = {
+export const ICON_MAP: Record<string, LucideIcon> = {
   'layout-template': LayoutTemplate,
   'sliders-horizontal': SlidersHorizontal,
   'layout-dashboard': LayoutDashboard,

@@ -12,6 +12,7 @@ import { hasFinancialVisibility } from '@/lib/nav-items';
 import { YieldPredictionCard } from '@/components/DataEntryKit';
 import { IconStatCard, DonutChart } from '@/components/StatCard';
 import { FinanceDesk, ReleaseDesk, DeliveryDesk, MyOrdersDesk } from '@/components/SalesDesks';
+import { ExecutiveDashboard } from '@/components/executive/ExecutiveDashboard';
 import { roleLabel } from '@/lib/role-labels';
 import { Wheat, Truck, Factory, Package, DollarSign } from 'lucide-react';
 import { WatchlistCard } from '@/components/WatchlistCard';
@@ -758,6 +759,15 @@ export default function DashboardPage() {
     return (
       <DashboardShell me={me}>
         <AdminDashboard me={me} accessToken={accessToken} />
+      </DashboardShell>
+    );
+  }
+
+  // The Finance Director, MD and CEO have a control center of their own, built like the Administrator's: the company's money, what is waiting for them, and where to go.
+  if ((isFinanceDirector || isMdOrCeo) && accessToken) {
+    return (
+      <DashboardShell me={me}>
+        <ExecutiveDashboard me={me} accessToken={accessToken} hasPermission={hasPermission} mode={isFinanceDirector ? 'FINANCE' : 'EXECUTIVE'} />
       </DashboardShell>
     );
   }

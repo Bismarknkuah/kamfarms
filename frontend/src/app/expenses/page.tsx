@@ -58,6 +58,7 @@ export default function ExpensesPage() {
 
   const myFarmId = me ? findSingleLocationScope(me, 'FARM') : null;
   const myWarehouseId = me ? findSingleLocationScope(me, 'WAREHOUSE') : null;
+  const myMillingCenterId = me ? findSingleLocationScope(me, 'MILLING_CENTER') : null;
   // Mirrors the server's rule exactly, so the buttons shown are the ones that will work:
   // the Finance Director decides everyone's expenses except their own; an expense the
   // Finance Director entered personally is decided by the MD or CEO instead.
@@ -133,6 +134,7 @@ export default function ExpensesPage() {
         categoryId, amount: parseFloat(amount), date,
         farmId: myFarmId ?? undefined,
         warehouseId: myWarehouseId ?? undefined,
+        millingCenterId: myMillingCenterId ?? undefined,
         paymentMethod,
         reference: reference || undefined,
         customCategoryLabel: isOtherCategory ? customCategoryLabel.trim() : undefined,
@@ -216,7 +218,7 @@ export default function ExpensesPage() {
     <DashboardShell me={me}>
       <h1 className="font-display text-2xl font-medium text-paddy-900">Expenses</h1>
       <p className="mt-1 text-sm text-ink-500">
-        {myFarmId ? 'Log expenses for your farm - labour, transport, and other running costs.' : 'Every expense submitted, awaiting approval or already decided.'}
+        {myFarmId ? 'Log expenses for your farm - labour, transport, and other running costs.' : myMillingCenterId ? 'Log expenses for your milling center - power, repairs, labour and other running costs.' : 'Every expense submitted, awaiting approval or already decided.'}
       </p>
 
       {pageError && <p className="mt-4 text-sm text-red-600">{pageError}</p>}
@@ -473,7 +475,7 @@ export default function ExpensesPage() {
                   )}
                 </td>
                 <td className="px-4 py-3 text-ink-700">GHS {e.amount.toLocaleString()}</td>
-                <td className="px-4 py-3 text-ink-700">{e.farm?.name ?? e.warehouse?.name ?? ' - '}</td>
+                <td className="px-4 py-3 text-ink-700">{e.farm?.name ?? e.warehouse?.name ?? e.millingCenter?.name ?? ' - '}</td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[e.status] ?? 'bg-ink-500/10'}`}>{e.status}</span>
                 </td>

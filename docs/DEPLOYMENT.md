@@ -682,3 +682,21 @@ a role permanently.
 (Users), because the Supervisor now decides on damaged bags.
 
 **Rolling back:** the two new tables are additive and are simply left unused.
+
+## Version 2026.10.17: the Finance Director, MD and CEO dashboards, the money ledger, spending at milling centers
+
+Adds one column (`expenses.milling_center_id`, empty for every existing expense), created by the start-up database step; nothing is changed or dropped. `/api/health` should then show `2026.10.17`.
+See `docs/MONEY_CENTER.md`.
+
+**What changes for people:**
+
+1. The **Finance Director, MD and CEO** open a new control center: the company's money, the work waiting for them, spending at every farm, warehouse and milling center, the sales record, who owes the
+   company, and a **Money ledger** page with every payment and expense. Every other role's control center is restyled to match.
+2. An **Operations Officer** can record spending for their milling center (attached from the one mill they are scoped to), and it shows in the Finance Director's, MD's and CEO's figures.
+
+**After deploying:** make sure each Operations Officer is scoped to exactly one milling center (Users), or their expenses cannot be attached to it.
+
+**Build safety (also in this release):** the API image build now fails, naming the file, if any compiled file is missing from `backend/dist` (`docker/check-dist.sh`), the production TypeScript build is no longer
+incremental, and `*.tsbuildinfo` files are git-ignored. A bad build now stops at the build instead of crash-looping after deploy, and the previous working version keeps running.
+
+**Rolling back:** the new column is additive and is simply left unused.

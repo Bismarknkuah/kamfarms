@@ -27,6 +27,7 @@ python3 e2e/t_tracking.py         # Track dispatch for every role, who delayed, 
 python3 e2e/t_search.py           # quick search: pages, records, keyboard, and each person finding only what is theirs (24)
 python3 e2e/t_deliveries.py      # deliveries between warehouses, the Farm Director choosing a warehouse, the mill confirming, menu for every role (50)
 python3 e2e/t_dispatch.py        # the Dispatch desk: request, task, ONE dispatch for both sizes, approval (62)
+python3 e2e/t_executive.py       # 2026.10.17: the Finance Director, MD and CEO dashboards, spending by place, the money ledger and who may see it
 python3 e2e/t_update.py          # 2026.10.16: control center buttons, the install pop-up, search under slow/failing parts, damaged bags, who can use what (82)
 ```
 Each script exits non-zero if any check fails. `POST http://localhost:4000/__reset` restores the seed data between runs.

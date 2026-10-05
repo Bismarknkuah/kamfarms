@@ -58,7 +58,7 @@ const actorOf = (k) => { const u = USERS[k]; return { id: u.id, email: u.email, 
 const seedText = require('fs').readFileSync(ROOT + '/prisma/seed.ts', 'utf8');
 const seedPerms = (role) => { const i = seedText.indexOf(`code: '${role}'`); if (i < 0) return []; const j = seedText.indexOf('permissionCodes: [', i); const k = seedText.indexOf(']', j); return [...seedText.slice(j, k).replace(/\/\/[^\n]*/g, '').matchAll(/'([a-z_.]+)'/g)].map((m) => m[1]); };
 const FD_READ = ['supply.view', 'dispatch.track', 'milldispatch.view', 'delivery.view', 'warehouse.inventory.view', 'milling.view', 'ai.use', 'insights.view', 'farm.view', 'warehouse.view', 'expense.view', 'sales.view'];
-for (const u of Object.values(USERS)) { if (u.role === 'ADMIN') continue; const take = (c) => c.startsWith('milldispatch.') || c === 'receipt.review' || (u.role === 'FINANCE_DIRECTOR' && FD_READ.includes(c)) || (u.role === 'CEO' && ['finance.approve.director', 'supply.view'].includes(c)); u.perms = [...new Set([...u.perms, ...seedPerms(u.role).filter(take)])]; }
+for (const u of Object.values(USERS)) { if (u.role === 'ADMIN') continue; const take = (c) => c.startsWith('milldispatch.') || c === 'receipt.review' || (u.role === 'FINANCE_DIRECTOR' && FD_READ.includes(c)) || (u.role === 'CEO' && ['finance.approve.director', 'supply.view'].includes(c)) || (['reports.view', 'reports.export'].includes(c) && ['FINANCE_DIRECTOR', 'MD', 'CEO'].includes(u.role)); u.perms = [...new Set([...u.perms, ...seedPerms(u.role).filter(take)])]; }
 // What the Administrator switched off: the REAL service, over a stand-in table.
 const { RoleAccessService } = require(B + '/access/role-access.service');
 const ROLE_NAMES = { SALES_OFFICER: 'Sales Officer', FINANCE_DIRECTOR: 'Finance Director', MD: 'Managing Director', CEO: 'CEO', OPERATIONS_MANAGER: 'Operations Manager', OPERATIONS_OFFICER: 'Operations Officer', WAREHOUSE_SUPERVISOR: 'Warehouse Supervisor', WAREHOUSE_MANAGER: 'Warehouse Manager', FARM_DIRECTOR: 'Farm Supervisor', FARM_MANAGER: 'Farm Manager' };
@@ -673,6 +673,44 @@ sRoute('put', '/api/access/features/:roleCode', SetRoleFeaturesDto, (d, a, req) 
 // ---- the overview figures the Farm Supervisor's and Operations Manager's home pages draw (empty lists would make those widgets fail) ----
 app.get('/api/reports/farm-overview', (req, res) => ok(res, { paddy: { received: [{ gradeLabel: 'Size 4', bags: 120, kg: 6000 }], available: [{ gradeLabel: 'Size 4', bags: 83, kg: 4150 }, { gradeLabel: 'Size 5', bags: 97, kg: 4850 }], dispatched: [] } }));
 app.get('/api/reports/production-overview', (req, res) => ok(res, { processed: [], recoveredRiceKg: 0, brokenRiceKg: 0, riceHullKg: 0, recoveryPercent: 0, energyConsumedKwh: 0 }));
+// ---- the company's money: the REAL service over fixed figures (the same set the unit tests use), always "now" = 15 October 2026 ----
+const { FinanceCenterService } = require(B + '/finance/finance-center.service');
+const MONEY_NOW = new Date('2026-10-15T12:00:00Z');
+const md = (x) => new Date(`${x}T10:00:00Z`);
+const mex = (id, amount, date, category, where = {}, status = 'APPROVED') => ({ id, expenseNumber: `EXP-${id}`, amount, date: md(date), status, category: { name: category }, itemDescription: null, customCategoryLabel: null, farmId: null, warehouseId: null, millingCenterId: null, ...where });
+const mpay = (id, amount, date, status = 'VERIFIED', customer = 'Adom Foods') => ({ id, paymentNumber: `PAY-${id}`, amount, method: 'MOBILE_MONEY', transactionReference: null, paymentDate: md(date), status, customer: { name: customer } });
+const mord = (id, amount, date, status, customer, fulfilledAt = null) => ({ id, orderNumber: `SO-${id}`, totalAmount: amount, status, createdAt: md(date), fulfilledAt: fulfilledAt ? md(fulfilledAt) : null, customer: { id: customer[0], name: customer[1] }, salesOfficer: { firstName: 'Nana', lastName: 'Yeboah' } });
+const minv = (total, due, c, allocs = []) => ({ totalAmount: total, dueDate: md(due), issueDate: md('2026-08-01'), customer: { id: c[0], name: c[1], customerNumber: c[2] }, allocations: allocs.map(([a, st]) => ({ amountApplied: a, payment: { status: st } })) });
+const MONEY = {
+  expenses: [
+    mex('e1', 1000, '2026-10-03', 'Labour', { farmId: FARM }), mex('e2', 500, '2026-10-10', 'Fuel', { farmId: FARM }), mex('e3', 700, '2026-10-05', 'Labour', { farmId: FARM_B }),
+    mex('e4', 2000, '2026-10-07', 'Transport', { warehouseId: WH1 }), mex('e5', 3000, '2026-10-08', 'Electricity', { millingCenterId: MC1 }), mex('e6', 4000, '2026-10-01', 'Salaries'),
+    mex('e7', 250, '2026-10-09', 'Transport', { farmId: FARM, warehouseId: WH1 }), mex('e8', 900, '2026-10-12', 'Maintenance', { millingCenterId: MC2 }, 'PENDING'), mex('e9', 100, '2026-10-13', 'Fuel', { farmId: FARM_B }, 'PENDING'),
+    mex('e10', 9999, '2026-10-02', 'Labour', { farmId: FARM }, 'REJECTED'), mex('e11', 800, '2026-09-10', 'Labour', { farmId: FARM }), mex('e12', 1200, '2026-09-11', 'Electricity', { millingCenterId: MC1 }), mex('e13', 5000, '2026-04-10', 'Labour', { farmId: FARM }),
+  ],
+  payments: [mpay('p1', 5000, '2026-10-02'), mpay('p2', 3000, '2026-10-14', 'VERIFIED', 'Boateng Stores'), mpay('p3', 2500, '2026-09-20'), mpay('p4', 1500, '2026-10-14', 'PENDING_VERIFICATION'), mpay('p5', 700, '2026-10-13', 'REJECTED')],
+  orders: [mord('o1', 10000, '2026-10-04', 'APPROVED', ['C1', 'Adom Foods']), mord('o2', 6000, '2026-10-06', 'FULFILLED', ['C2', 'Boateng Stores'], '2026-10-12'), mord('o3', 99999, '2026-10-07', 'SUBMITTED', ['C1', 'Adom Foods']), mord('o4', 4000, '2026-09-15', 'FULFILLED', ['C1', 'Adom Foods'], '2026-09-25'), mord('o5', 77777, '2026-10-08', 'REJECTED', ['C2', 'Boateng Stores'])],
+  invoices: [minv(8000, '2026-10-01', ['C1', 'Adom Foods', 'CUS-1'], [[3000, 'VERIFIED']]), minv(2000, '2026-11-01', ['C1', 'Adom Foods', 'CUS-1']), minv(1000, '2026-09-01', ['C2', 'Boateng Stores', 'CUS-2'], [[1000, 'PENDING_VERIFICATION']])],
+};
+const matchMoney = (r, w = {}) => Object.entries(w).every(([k, v]) => {
+  const val = r[k];
+  if (v && typeof v === 'object' && !(v instanceof Date)) {
+    if ('in' in v && !v.in.includes(val)) return false; if ('not' in v && val === v.not) return false;
+    for (const op of ['gte', 'lte', 'lt', 'gt']) if (op in v) { if (val == null) return false; const t = new Date(val).getTime(), b = new Date(v[op]).getTime(); if ((op === 'gte' && !(t >= b)) || (op === 'lte' && !(t <= b)) || (op === 'lt' && !(t < b)) || (op === 'gt' && !(t > b))) return false; }
+    return true;
+  }
+  return val === v;
+});
+const moneyTable = (rows) => ({ findMany: async ({ where, orderBy, take } = {}) => { let out = rows.filter((r) => matchMoney(r, where)); const key = orderBy && Object.keys(orderBy)[0]; if (key && ['date', 'paymentDate', 'createdAt'].includes(key)) out = [...out].sort((a, b) => new Date(b[key]) - new Date(a[key])); return take ? out.slice(0, take) : out; } });
+const moneyPrisma = {
+  expense: moneyTable(MONEY.expenses), payment: moneyTable(MONEY.payments), salesOrder: moneyTable(MONEY.orders), invoice: moneyTable(MONEY.invoices),
+  farm: { findMany: async () => FARMS_ALL().map((f) => ({ id: f.id, name: f.name, isActive: true })) },
+  warehouse: { findMany: async () => Object.keys(WAREHOUSES).map((id) => ({ id, name: WAREHOUSES[id], isActive: true })) },
+  millingCenter: { findMany: async () => [{ id: MC1, name: 'Tamale Mill', isActive: true }, { id: MC2, name: 'Kumasi Mill', isActive: true }] },
+};
+const moneySvc = new FinanceCenterService(moneyPrisma);
+sRoute('get', '/api/finance-center/overview', null, (d, a, req) => moneySvc.overview(a, req.query.period, MONEY_NOW));
+sRoute('get', '/api/finance-center/ledger', null, (d, a, req) => moneySvc.ledger(a, req.query));
 // the settings screen expects groups and items (an empty list would crash it); the real values are not needed to test the screens around them
 app.get('/api/settings/registry', (req, res) => ok(res, { groups: [], items: [] }));
 // ---- anything else the pages ask for: empty, so they load ----

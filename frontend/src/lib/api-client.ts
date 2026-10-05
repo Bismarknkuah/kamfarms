@@ -1689,6 +1689,7 @@ export interface Expense {
   date: string;
   farm: { name: string } | null;
   warehouse: { name: string } | null;
+  millingCenter?: { name: string } | null;
   status: string;
   paymentMethod: string | null;
   reference: string | null;
@@ -1709,7 +1710,7 @@ export const expensesApi = {
     request<Expense[]>(`/expenses${status ? `?status=${status}` : ''}`, { method: 'GET' }, accessToken),
   create: (
     accessToken: string,
-    data: { categoryId: string; amount: number; date: string; farmId?: string; warehouseId?: string; paymentMethod?: string; reference?: string; customCategoryLabel?: string; itemDescription?: string; attachmentUrl?: string; notes?: string },
+    data: { categoryId: string; amount: number; date: string; farmId?: string; warehouseId?: string; millingCenterId?: string; paymentMethod?: string; reference?: string; customCategoryLabel?: string; itemDescription?: string; attachmentUrl?: string; notes?: string },
   ) => request<Expense>('/expenses', { method: 'POST', body: JSON.stringify(data) }, accessToken),
   approve: (accessToken: string, id: string) =>
     request<Expense>(`/expenses/${id}/approve`, { method: 'POST' }, accessToken),
@@ -2171,6 +2172,47 @@ export const dispatchTrackingApi = {
 
 export interface SearchResult { id: string; title: string; subtitle: string; href: string }
 export interface SearchGroup { key: string; label: string; results: SearchResult[] }
+// ---- the company's money: the Finance Director, MD and CEO (and the full ledger) ----
+export type MoneyPeriod = 'month' | 'last30' | 'quarter' | 'year' | 'all';
+export interface MoneyPlace { id: string; name: string; amount: number; items: number; pending: number; share: number }
+export interface MoneyLedgerRow {
+  id: string; kind: 'IN' | 'OUT'; date: string; number: string; title: string; detail: string;
+  place: { type: 'FARM' | 'WAREHOUSE' | 'MILLING_CENTER' | 'HEAD_OFFICE'; id: string | null; name: string } | null; amount: number; state: 'confirmed' | 'waiting' | 'refused'; link: string;
+}
+export interface MoneyOverview {
+  period: { key: MoneyPeriod; label: string; from: string | null; to: string; previous: { from: string; to: string } | null };
+  generatedAt: string;
+  money: {
+    salesBooked: { amount: number; orders: number; previous: number | null };
+    salesFulfilled: { amount: number; orders: number };
+    collected: { amount: number; payments: number; previous: number | null };
+    spent: { amount: number; items: number; previous: number | null };
+    net: { amount: number; previous: number | null };
+    receivables: { outstanding: number; overdue: number; customers: number };
+    pendingPayments: { amount: number; count: number };
+    pendingExpenses: { amount: number; count: number };
+  };
+  spendByPlace: {
+    farms: MoneyPlace[]; warehouses: MoneyPlace[]; millingCenters: MoneyPlace[]; headOffice: { amount: number; items: number; pending: number; share: number };
+    totals: { farms: number; warehouses: number; millingCenters: number; headOffice: number };
+  };
+  spendByCategory: { name: string; amount: number; items: number; share: number }[];
+  trend: { month: string; label: string; sales: number; collected: number; spent: number }[];
+  topCustomers: { name: string; amount: number; orders: number }[];
+  recentSales: { id: string; orderNumber: string; customer: string; officer: string; date: string; amount: number; status: string }[];
+  debtors: { name: string; number: string; outstanding: number; overdue: number }[];
+  recentTransactions: MoneyLedgerRow[];
+}
+export interface MoneyLedger {
+  rows: MoneyLedgerRow[]; count: number; truncated: boolean;
+  totals: { in: number; out: number; net: number; waitingIn: number; waitingOut: number };
+  places: { farms: { id: string; name: string }[]; warehouses: { id: string; name: string }[]; millingCenters: { id: string; name: string }[] };
+}
+export const financeCenterApi = {
+  overview: (accessToken: string, period: MoneyPeriod) => request<MoneyOverview>(`/finance-center/overview?period=${period}`, { method: 'GET', cache: 'no-store' }, accessToken),
+  ledger: (accessToken: string, params: Record<string, string>) => request<MoneyLedger>(`/finance-center/ledger?${new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()}`, { method: 'GET', cache: 'no-store' }, accessToken),
+};
+
 export interface AccessFeatureInfo { key: string; label: string; description: string; pages: string[]; ui: boolean }
 export interface AccessRoleInfo { code: string; name: string; held: string[]; denied: string[] }
 export interface AccessMatrix { features: AccessFeatureInfo[]; roles: AccessRoleInfo[] }

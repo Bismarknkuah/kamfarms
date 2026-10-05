@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, MapPin } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, Boxes, CircleAlert, CircleCheck, ClipboardCheck, CreditCard, Factory, Hourglass, Inbox, ListChecks, MapPin, Package, PackageCheck, PackageX, Receipt, Scale, Truck, Warehouse, Wheat, type LucideIcon } from 'lucide-react';
+import { ICON_MAP } from '@/components/DashboardShell';
 import { ApiError, type ControlCenterView, type MeResponse, controlCenterApi } from '@/lib/api-client';
 import { visibleNavItems } from '@/lib/nav-items';
 
@@ -32,6 +33,12 @@ const SHORTCUTS: Record<string, string[]> = {
   OPERATIONS_OFFICER: ['/mill-dispatch', '/production', '/packaging', '/quality', '/warehouse-requests', '/tasks'],
 };
 
+const TILE_ICONS: Record<string, LucideIcon> = {
+  'orders-approve': ClipboardCheck, 'orders-release': PackageCheck, 'orders-assign': Warehouse, 'orders-prepare': Package, 'payments-verify': CreditCard, 'expenses-decide': Receipt, 'expenses-director': Receipt,
+  'paddy-entries': Wheat, 'dispatch-approvals': Truck, 'receipts-review': PackageX, 'stock-corrections': Scale, 'production-approve': Factory, 'supply-waiting': Hourglass, 'trucks-coming': Truck,
+  'transfers-coming': ArrowLeftRight, 'rice-coming': Boxes, 'mill-paddy-coming': Wheat, 'mill-products-ready': Package, 'mill-approvals': ClipboardCheck, 'milled-rice-coming': Boxes, 'supply-open': Inbox, 'my-tasks': ListChecks,
+};
+
 /**
  * A control center for the people who run part of the company: the work that is waiting for THEM, with real figures, and the pages they run it from.
  * The server decides what appears (from the person's role and the places they are responsible for), so this only shows what it is given.
@@ -39,10 +46,11 @@ const SHORTCUTS: Record<string, string[]> = {
 export function ControlCenter({ accessToken, me }: { accessToken: string; me: MeResponse }) {
   const [view, setView] = useState<ControlCenterView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadedAt, setLoadedAt] = useState<Date | null>(null);
 
   useEffect(() => {
     let live = true;
-    const load = () => controlCenterApi.get(accessToken).then((v) => { if (live) { setView(v); setError(null); } }).catch((e: unknown) => { if (live) setError(e instanceof ApiError ? e.message : 'The control center could not be loaded.'); });
+    const load = () => controlCenterApi.get(accessToken).then((v) => { if (live) { setView(v); setError(null); setLoadedAt(new Date()); } }).catch((e: unknown) => { if (live) setError(e instanceof ApiError ? e.message : 'The control center could not be loaded.'); });
     load();
     const t = setInterval(load, 60000);
     return () => { live = false; clearInterval(t); };
@@ -53,6 +61,7 @@ export function ControlCenter({ accessToken, me }: { accessToken: string; me: Me
   const j = view?.jurisdiction;
   const places = j ? [...j.farms, ...j.warehouses, ...j.millingCenters].map((p) => p.name) : [];
   const shortcuts = (SHORTCUTS[view?.role ?? ''] ?? []).map((href) => offered.get(href)).filter((i): i is NonNullable<typeof i> => Boolean(i));
+  const waiting = (view?.tiles ?? []).filter((t) => t.tone === 'warn').reduce((n, t) => n + t.count, 0);
 
   return (
     <section className="space-y-5" data-testid="control-center" aria-label="Control center">
@@ -64,6 +73,16 @@ export function ControlCenter({ accessToken, me }: { accessToken: string; me: Me
 
       {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700" data-testid="cc-error">{error}</p>}
       {!view && !error && <p className="text-sm text-ink-500" data-testid="cc-loading">Loading your control center...</p>}
+
+      {view && (
+        <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="cc-status">
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium ${waiting > 0 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-800'}`}>
+            {waiting > 0 ? <CircleAlert className="h-3.5 w-3.5" aria-hidden="true" /> : <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" />}
+            {waiting > 0 ? `${waiting.toLocaleString()} waiting for you` : 'Nothing is waiting for you'}
+          </span>
+          {loadedAt && <span className="rounded-full bg-ink-500/10 px-3 py-1 text-ink-700">Refreshed {loadedAt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>}
+        </div>
+      )}
 
       {view && j && (
         <p className="flex flex-wrap items-center gap-2 rounded-2xl border border-paddy-100 bg-white px-4 py-3 text-sm text-ink-700" data-testid="cc-jurisdiction">
@@ -79,10 +98,14 @@ export function ControlCenter({ accessToken, me }: { accessToken: string; me: Me
       {view && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="cc-tiles">
           {view.tiles.map((t) => {
+            const Icon = TILE_ICONS[t.key] ?? ListChecks;
             const body = (
               <>
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-500">{t.label}</p>
-                <p className={`mt-1 font-display text-3xl font-medium ${t.tone === 'warn' ? 'text-amber-800' : 'text-paddy-900'}`} data-testid="cc-count">{t.count.toLocaleString()}</p>
+                <div className="flex items-center gap-2.5">
+                  <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${t.tone === 'warn' ? 'bg-amber-100 text-amber-800' : 'bg-paddy-50 text-paddy-700'}`}><Icon className="h-4 w-4" aria-hidden="true" /></span>
+                  <p className="text-xs font-medium uppercase tracking-wide text-ink-500">{t.label}</p>
+                </div>
+                <p className={`mt-2 font-display text-3xl font-medium ${t.tone === 'warn' ? 'text-amber-800' : 'text-paddy-900'}`} data-testid="cc-count">{t.count.toLocaleString()}</p>
                 <p className="mt-1 flex items-center justify-between gap-2 text-xs text-ink-500"><span>{t.hint}</span>{offered.has(t.href) && <ArrowRight className="h-3.5 w-3.5 shrink-0 text-paddy-700" aria-hidden="true" />}</p>
               </>
             );
@@ -98,12 +121,15 @@ export function ControlCenter({ accessToken, me }: { accessToken: string; me: Me
         <div>
           <h3 className="font-display text-lg font-medium text-paddy-900">Run your area</h3>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {shortcuts.map((i) => (
-              <Link key={i.href} href={i.href} data-testid="cc-control" className="rounded-2xl border border-paddy-100 bg-white p-4 transition hover:border-paddy-500 hover:shadow-sm">
-                <span className="block font-semibold text-paddy-900">{i.label}</span>
-                <span className="mt-0.5 block text-sm text-ink-500">{i.description}</span>
-              </Link>
-            ))}
+            {shortcuts.map((i) => {
+              const Icon = ICON_MAP[i.icon] ?? ListChecks;
+              return (
+                <Link key={i.href} href={i.href} data-testid="cc-control" className="group flex gap-4 rounded-2xl border border-paddy-100 bg-white p-4 transition hover:border-paddy-500 hover:shadow-sm">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-paddy-900 text-husk-300"><Icon className="h-5 w-5" aria-hidden="true" /></span>
+                  <span><span className="block font-semibold text-paddy-900">{i.label}</span><span className="mt-0.5 block text-sm text-ink-500">{i.description}</span></span>
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}

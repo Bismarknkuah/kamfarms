@@ -686,6 +686,7 @@ model MillingCenter {
   paddyMillingReceipts PaddyMillingReceipt[]
 
   @@map("milling_centers")
+  expenses             Expense[]
 }
 
 // ============================================================
@@ -1953,6 +1954,8 @@ model Expense {
   farm              Farm?           @relation(fields: [farmId], references: [id])
   warehouseId       String?         @map("warehouse_id")
   warehouse         Warehouse?      @relation(fields: [warehouseId], references: [id])
+  millingCenterId   String?         @map("milling_center_id")
+  millingCenter     MillingCenter?  @relation(fields: [millingCenterId], references: [id])
   paymentMethod     PaymentMethod?  @map("payment_method")
   reference         String?
   // Only meaningful when the chosen category is the "Other" catch-all  - 
@@ -1983,6 +1986,7 @@ model Expense {
 
   @@index([status])
   @@index([date])
+  @@index([millingCenterId])
   @@map("expenses")
 }
 

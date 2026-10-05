@@ -9,6 +9,7 @@ export class CreateExpenseDto {
   @ApiProperty() @IsDateString() date: string;
   @ApiProperty({ required: false }) @IsOptional() @IsUuidLike() farmId?: string;
   @ApiProperty({ required: false }) @IsOptional() @IsUuidLike() warehouseId?: string;
+  @ApiProperty({ required: false, description: 'The milling center the money was spent at (an Operations Officer\'s own mill).' }) @IsOptional() @IsUuidLike() millingCenterId?: string;
   @ApiProperty({ required: false, enum: PaymentMethod }) @IsOptional() @IsEnum(PaymentMethod) paymentMethod?: PaymentMethod;
   @ApiProperty({ required: false }) @IsOptional() @IsString() reference?: string;
   @ApiProperty({ required: false, description: 'Only meaningful when categoryId points to the "Other" category.' })

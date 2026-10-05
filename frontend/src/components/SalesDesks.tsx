@@ -116,7 +116,7 @@ function ExpenseRow({ e, open, onToggle, onChanged, accessToken }: { e: Expense;
       open={open}
       onToggle={onToggle}
       title={`${e.expenseNumber}, ${e.customCategoryLabel ?? e.category.name}`}
-      subtitle={`${e.farm?.name ?? e.warehouse?.name ?? 'Head office'} · entered by ${fullName(e.submittedBy)} · ${new Date(e.date).toLocaleDateString()}`}
+      subtitle={`${e.farm?.name ?? e.warehouse?.name ?? e.millingCenter?.name ?? 'Head office'} · entered by ${fullName(e.submittedBy)} · ${new Date(e.date).toLocaleDateString()}`}
       trailing={<span className="font-medium text-ink-900">{ghs(e.amount)}</span>}
     >
       {(e.itemDescription || e.notes) && <p className="text-sm text-ink-700">{e.itemDescription ?? e.notes}</p>}

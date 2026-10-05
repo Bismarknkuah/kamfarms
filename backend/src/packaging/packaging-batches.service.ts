@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { LocationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { InventoryLedgerService } from '../inventory-ledger/inventory-ledger.service';
 import { scopedLocationIds } from '../common/utils/scope.util';
+import { SettingsService, settingNumber } from '../settings/settings.service';
 import { CreatePackagingBatchDto } from './dto/create-packaging-batch.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 
@@ -13,6 +14,7 @@ export class PackagingBatchesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly ledger: InventoryLedgerService,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   /** Was returning packaging batches from every warehouse, company-wide,
@@ -74,6 +76,9 @@ export class PackagingBatchesService {
       });
     }
 
+    // With the setting on (the default) the packaged bags stay at the mill until the Operations Officer sends them and the warehouse counts them in; off, they land in the warehouse at once.
+    const waitsAtMill = (await settingNumber(this.settings, 'packaging.needs_dispatch')) >= 1;
+    const landing = waitsAtMill ? { type: LocationType.MILLING_CENTER, id: dto.millingCenterId } : { type: LocationType.WAREHOUSE, id: center.warehouseId };
     const batch = await this.prisma.$transaction(async (tx) => {
       const year = new Date().getFullYear();
       const prefix = `PKG-${year}-`;
@@ -103,8 +108,8 @@ export class PackagingBatchesService {
         type: 'PACKAGED_RICE_CREATED',
         sourceLocationType: LocationType.MILLING_CENTER,
         sourceLocationId: dto.millingCenterId,
-        destLocationType: LocationType.WAREHOUSE,
-        destLocationId: center.warehouseId,
+        destLocationType: landing.type,
+        destLocationId: landing.id,
         productId: dto.productId,
         packagingSizeId: dto.packagingSizeId,
         quantityKg: totalKg,
@@ -126,7 +131,7 @@ export class PackagingBatchesService {
       // ...and the packaged bags land in the warehouse's finished-goods balance.
       await this.ledger.adjustBalance(
         tx,
-        { locationType: LocationType.WAREHOUSE, locationId: center.warehouseId, productId: dto.productId, packagingSizeId: dto.packagingSizeId },
+        { locationType: landing.type, locationId: landing.id, productId: dto.productId, packagingSizeId: dto.packagingSizeId },
         totalKg,
         dto.bagCount,
       );

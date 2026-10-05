@@ -25,6 +25,12 @@ export interface Journey {
   steps: JourneyStep[]; lastActivity: string | null;
   /** What the person looking may do about it right now. */
   action: { type: 'CONFIRM_TRUCK'; key: string } | { type: 'OPEN'; href: string; label: string } | null;
+  /** Spoiled or broken bags reported when the truck was counted in, and what the Warehouse Supervisor decided. */
+  review?: ReviewView | null; needsReview?: boolean;
+}
+export interface ReviewView {
+  id: string; reviewNumber: string; status: 'PENDING' | 'APPROVED' | 'REJECTED'; damagedBags: number; note: string; lines: { label: string; sentBags: number; receivedBags: number; damagedBags: number }[];
+  submittedBy: string | null; submittedAt: string; decidedBy: string | null; decidedAt: string | null; decisionNote: string | null; canDecide: boolean;
 }
 export interface Names { users: Map<string, string>; farms: Map<string, string>; warehouses: Map<string, string>; grades: Map<string, string>; vehicles: Map<string, string>; drivers: Map<string, string> }
 const nameOf = (m: Map<string, string>, id?: string | null) => (id ? m.get(id) ?? null : null);

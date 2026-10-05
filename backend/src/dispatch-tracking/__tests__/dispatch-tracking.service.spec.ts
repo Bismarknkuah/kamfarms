@@ -44,6 +44,7 @@ function build() {
   const seen: Record<string, any[]> = {};
   const table = (name: string, rows: any[]) => ({ findMany: jest.fn(async ({ where }: any = {}) => { (seen[name] ??= []).push(where); return rows.filter((r) => matches(r, where)); }) });
   const prisma: any = {
+    receiptReview: { findMany: jest.fn(async () => []) },
     deliveryReport: table('report', REPORTS), deliveryOrder: table('order', ORDERS), shipment: table('shipment', SHIPMENTS), paddyTransfer: table('paddy', PADDY), stockTransfer: table('rice', RICE),
     user: { findMany: jest.fn(async () => [{ id: 'u1', firstName: 'Efua', lastName: 'Mensah' }, { id: 'u2', firstName: 'Yaa', lastName: 'Owusu' }, { id: 'u3', firstName: 'Kwabena', lastName: 'Adjei' }]) },
     farm: { findMany: jest.fn(async () => [{ id: F1, name: 'Nkawkaw Farm' }, { id: F2, name: 'Techiman Farm' }]) },
@@ -73,7 +74,7 @@ describe('who may track which dispatches', () => {
   });
   it('someone with no farm and no warehouse tracks nothing, and the database is not even asked', async () => {
     const h = build();
-    expect(await h.service.list(actor('x', 'FARM_MANAGER', []), {}, NOW)).toEqual({ journeys: [], counts: { open: 0, delivered: 0, late: 0 } });
+    expect(await h.service.list(actor('x', 'FARM_MANAGER', []), {}, NOW)).toEqual({ journeys: [], counts: { open: 0, delivered: 0, late: 0, review: 0 } });
     expect(h.seen).toEqual({});
   });
   it('the limits go to the database itself, so isolation does not depend on the screen', async () => {
@@ -95,7 +96,7 @@ describe('what the tracking shows', () => {
     const { journeys, counts } = await build().service.list(actor('md', 'MD', GLOBAL), {}, NOW);
     const by = Object.fromEntries(journeys.map((j) => [j.ref, j.status]));
     expect(by).toMatchObject({ 'DS-A': 'IN_TRANSIT', 'DS-B': 'DELIVERED', 'DS-C': 'IN_TRANSIT', 'RQ-R': 'REQUESTED', 'PT-1': 'IN_TRANSIT', 'PT-2': 'DELIVERED', 'TRF-1': 'IN_TRANSIT' });
-    expect(counts).toEqual({ open: 5, delivered: 2, late: 1 }); // only DS-A is past its needed-by day (3 Oct) and still on the road
+    expect(counts).toEqual({ open: 5, delivered: 2, late: 1, review: 0 }); // only DS-A is past its needed-by day (3 Oct) and still on the road
   });
   it('the Managing Director sees the times: when it was supposed to be there and how long each step took', async () => {
     const j = (await build().service.list(actor('md', 'MD', GLOBAL), {}, NOW)).journeys.find((x) => x.ref === 'DS-A')!;

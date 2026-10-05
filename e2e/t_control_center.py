@@ -18,16 +18,18 @@ def geometry(p):
         return { bar: r('[data-testid=top-bar]'), search: r('[data-testid=top-bar-search]'), tools: r('[data-testid=top-bar-tools]') }; }''')
 
 EXPECT = {
-    'fd':    ('Finance control center', 'the whole company', {'orders-approve': 2, 'payments-verify': 3, 'expenses-decide': 2, 'my-tasks': 0}),
+    'fd':    ('Finance control center', 'the whole company', {'orders-approve': 2, 'payments-verify': 3, 'expenses-decide': 2, 'supply-open': 0, 'my-tasks': 0}),   # supply-open: he can now follow paddy requests (read only)
     'md':    ("Managing Director's control center", 'the whole company', {'orders-release': 3, 'expenses-director': 1, 'supply-open': 0, 'my-tasks': 0}),
+    'ceo':   ("CEO's control center", 'the whole company', {'orders-release': 3, 'expenses-director': 1, 'supply-open': 0, 'my-tasks': 0}),
     'fsup':  ("Farm Supervisor's control center", 'the whole company', {'paddy-entries': 3, 'dispatch-approvals': 2, 'stock-corrections': 3, 'supply-waiting': 0, 'supply-open': 0, 'my-tasks': 0}),
     'fsup2': ("Farm Supervisor's control center", 'Nkawkaw Farm', {'paddy-entries': 2, 'dispatch-approvals': 1, 'stock-corrections': 1, 'supply-waiting': 0, 'supply-open': 0, 'my-tasks': 0}),
-    'wm1':   ('Warehouse control center', 'Tamale Warehouse', {'orders-prepare': 2, 'trucks-coming': 2, 'transfers-coming': 0, 'supply-open': 0, 'my-tasks': 0}),
-    'wm2':   ('Warehouse control center', 'Kumasi Warehouse', {'orders-prepare': 1, 'trucks-coming': 1, 'transfers-coming': 0, 'supply-open': 0, 'my-tasks': 0}),
-    'sup':   ('Warehouse control center', 'the whole company', {'orders-assign': 1, 'orders-prepare': 3, 'stock-corrections': 3, 'supply-waiting': 0, 'transfers-coming': 0, 'rice-coming': 2, 'supply-open': 0, 'my-tasks': 0}),
-    'sup2':  ('Warehouse control center', 'Kumasi Warehouse', {'orders-assign': 1, 'orders-prepare': 1, 'stock-corrections': 1, 'supply-waiting': 0, 'transfers-coming': 0, 'rice-coming': 1, 'supply-open': 0, 'my-tasks': 0}),
-    'ops':   ('Operations control center', 'the whole company', {'stock-corrections': 3, 'production-approve': 2, 'supply-waiting': 0, 'supply-open': 0, 'my-tasks': 0}),
-    'ops2':  ('Operations control center', 'Tamale Mill', {'stock-corrections': 0, 'production-approve': 1, 'supply-waiting': 0, 'supply-open': 0, 'my-tasks': 0}),
+    'wm1':   ('Warehouse control center', 'Tamale Warehouse', {'orders-prepare': 2, 'trucks-coming': 2, 'transfers-coming': 0, 'milled-rice-coming': 1, 'supply-open': 0, 'my-tasks': 0}),
+    'wm2':   ('Warehouse control center', 'Kumasi Warehouse', {'orders-prepare': 1, 'trucks-coming': 1, 'transfers-coming': 0, 'milled-rice-coming': 1, 'supply-open': 0, 'my-tasks': 0}),
+    'sup':   ('Warehouse control center', 'the whole company', {'orders-assign': 1, 'orders-prepare': 3, 'receipts-review': 0, 'stock-corrections': 3, 'supply-waiting': 0, 'transfers-coming': 0, 'rice-coming': 2, 'mill-approvals': 2, 'milled-rice-coming': 2, 'supply-open': 0, 'my-tasks': 0}),
+    'sup2':  ('Warehouse control center', 'Kumasi Warehouse', {'orders-assign': 1, 'orders-prepare': 1, 'receipts-review': 0, 'stock-corrections': 1, 'supply-waiting': 0, 'transfers-coming': 0, 'rice-coming': 1, 'mill-approvals': 1, 'milled-rice-coming': 1, 'supply-open': 0, 'my-tasks': 0}),
+    'ops':   ('Operations control center', 'the whole company', {'stock-corrections': 3, 'production-approve': 2, 'supply-waiting': 0, 'mill-approvals': 1, 'supply-open': 0, 'my-tasks': 0}),
+    'ops2':  ('Operations control center', 'Tamale Mill', {'stock-corrections': 0, 'production-approve': 1, 'supply-waiting': 0, 'mill-approvals': 1, 'supply-open': 0, 'my-tasks': 0}),
+    'oo':    ('Mill control center', 'Tamale Mill', {'mill-paddy-coming': 2, 'mill-products-ready': 2, 'supply-open': 0, 'my-tasks': 0}),
 }
 
 with sync_playwright() as pw:
@@ -86,12 +88,14 @@ with sync_playwright() as pw:
     check('only the receiving warehouse (and the supervisor responsible for all) see it coming; the sender does not', got == {'wm1': 1, 'wm2': 0, 'sup': 1, 'sup2': 0}, got)
 
     # =============== 5. The server decides, not the screen ===============
-    refused = {k: api('/control-center', k)[0] for k in ('sales1', 'sales2', 'fm', 'oo', 'ceo')}
-    check('people whose role has no control center are refused by the server (Sales Officers, Farm Manager, Operations Officer, CEO)', set(refused.values()) == {403}, refused)
+    refused = {k: api('/control-center', k)[0] for k in ('sales1', 'sales2', 'fm')}
+    check('people whose role has no control center are refused by the server (Sales Officers, Farm Manager)', set(refused.values()) == {403}, refused)
+    allowed = {k: api('/control-center', k)[0] for k in ('ceo', 'oo')}
+    check('the CEO and the Operations Officer now have one, and the server serves it', set(allowed.values()) == {200}, allowed)
     st, a = api('/control-center', 'admin'); check('the Administrator may ask (and has their own control center on the screen)', st == 200 and a['role'] == 'ADMIN')
     api_keys = {k: [t['key'] for t in api('/control-center', k)[1]['tiles']] for k in EXPECT}
     check('the server\'s tiles are exactly what each person\'s screen showed', all(api_keys[k] == list(EXPECT[k][2].keys()) for k in EXPECT), api_keys)
-    for key in ('fm', 'sales1', 'oo', 'ceo'):
+    for key in ('fm', 'sales1'):
         ctx, p = U(b, key); p.goto(BASE + '/dashboard'); p.wait_for_load_state('networkidle'); p.wait_for_timeout(500)
         check(f'{key}: no control center on their home page', p.get_by_test_id('control-center').count() == 0 and 'Application error' not in txt(p.locator('body'))); ctx.close()
 

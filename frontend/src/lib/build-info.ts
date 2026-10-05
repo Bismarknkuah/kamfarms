@@ -3,7 +3,7 @@
  * which features it has (GET /health); the website knows which it needs. When something is missing the Admin
  * dashboard says so in plain words, instead of pages quietly failing with "404".
  */
-export const REQUIRED_API_FEATURES = ['site-content', 'insights', 'settings-registry', 'system-overview', 'reports-catalog', 'admin-access', 'ai-predictions', 'sales-chain', 'ai-feedback', 'multi-size-intake', 'dispatch-requests', 'dispatch-desk', 'paddy-requests', 'paddy-transfers', 'control-center', 'dispatch-tracking', 'quick-search'] as const;
+export const REQUIRED_API_FEATURES = ['site-content', 'insights', 'settings-registry', 'system-overview', 'reports-catalog', 'admin-access', 'ai-predictions', 'sales-chain', 'ai-feedback', 'multi-size-intake', 'dispatch-requests', 'dispatch-desk', 'paddy-requests', 'paddy-transfers', 'control-center', 'dispatch-tracking', 'quick-search', 'mill-dispatch', 'damaged-bags-review', 'role-access'] as const;
 
 export const FEATURE_LABELS: Record<string, string> = {
   'site-content': 'The homepage editor',
@@ -16,8 +16,11 @@ export const FEATURE_LABELS: Record<string, string> = {
   'sales-chain': 'The new sales chain: warehouse assignment, receipt uploads and the order activity trail',
   'multi-size-intake': 'One intake with several sizes saved together, and kilograms optional where there is no scale',
   'dispatch-requests': 'Dispatch requests to the farm manager: the task, the tracking and the notifications',
-  'control-center': 'A control center for the Managing Director, Farm Supervisor, Warehouse, Operations and Finance roles',
+  'control-center': 'A control center, with a menu button, for the Managing Director, CEO, Farm Supervisor, Warehouse, Operations and Finance roles',
+  'damaged-bags-review': 'Spoiled or broken bags reported when a truck is counted in, held out of the stock until the Warehouse Supervisor decides',
+  'role-access': 'Who can use what: the Administrator switches features off per role',
   'dispatch-tracking': 'Track dispatch: every step, who handled it and when, and counting a whole truck in',
+  'mill-dispatch': 'Paddy sent to the milling center and finished products sent back, with approval and counting in',
   'quick-search': 'Quick search from the top bar',
   'paddy-transfers': 'Paddy sent between warehouses, counted in at the other end, and the mill confirming paddy received',
   'paddy-requests': 'Paddy requests passed up the chain: warehouse to Farm Director, mill to warehouse, with stock checks and where-is-the-paddy',

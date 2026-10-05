@@ -52,3 +52,7 @@ A "serious" limit can never be set below the limit at which something is first f
 - The list of permissions itself, and the definitions of the default roles for a fresh installation.
 - The rules each Watchlist check applies (only their limits are adjustable), and the list of downloadable reports.
 - The product poster picture and the description of the system's features on the homepage.
+
+## Who can use what (2026.10.16)
+
+Above the numbered settings, the Administrator has a table that switches **features** off for a role (Control center, Quick search, Track dispatch, Trace batch, Paddy requests, Mill dispatch, AI Insights, Reports, Messages, Audit log, reviewing damaged bags). The people in that role then do not see the feature in their menu or dashboard, and the server refuses it. It is kept apart from the Roles page so that it survives updates. See `docs/FEATURE_ACCESS.md`.

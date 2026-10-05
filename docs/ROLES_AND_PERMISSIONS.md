@@ -14,7 +14,7 @@
 | `OPERATIONS_MANAGER` | Operations Manager | GLOBAL or MILLING_CENTER |
 | `OPERATIONS_OFFICER` | Operations Officer | MILLING_CENTER / WAREHOUSE |
 | `SALES_OFFICER` | Sales Officer | GLOBAL (customer/order visibility) |
-| `FINANCE_DIRECTOR` | Finance Director | GLOBAL - owns every financial decision (sales, expenses, payments, invoices); includes reset approval |
+| `FINANCE_DIRECTOR` | Finance Director | GLOBAL - owns every financial decision (sales, expenses, payments, invoices); includes reset approval. Since 2026.10.16 also has **read-only** sight of the operation (tracking, paddy requests, mill dispatch, production, deliveries, stock, farms, warehouses, AI Insights) and cannot change any of it |
 | `AUDITOR` | Auditor | GLOBAL - read-only |
 
 A user can hold multiple roles (e.g. Warehouse Manager *and* Sales Officer),

@@ -39,3 +39,8 @@ The Warehouse Supervisor and the management roles can track but not count in.
 ## Tests
 
 `cd backend && npx jest src/dispatch-tracking src/logistics` and `e2e/t_tracking.py`.
+
+## Damaged bags (2026.10.16)
+
+When the Warehouse Manager counts a truck in and reports spoiled or broken bags, the truck's card shows the report: how many, per size, who reported it and what they wrote, how long it has waited for the
+Warehouse Supervisor, and the decision. A **Needs review** filter lists the trucks waiting for one. See `docs/RECEIPT_REVIEW.md`. The Finance Director may also follow tracking (read only).

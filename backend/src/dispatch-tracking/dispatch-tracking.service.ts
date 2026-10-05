@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { scopedLocationIds } from '../common/utils/scope.util';
-import { FarmGroup, Journey, JourneyStatus, Names, buildFarmJourney, buildPaddyTransferJourney, buildRiceTransferJourney } from './dispatch-journey.util';
+import { FarmGroup, Journey, JourneyStatus, Names, buildFarmJourney, buildPaddyTransferJourney, buildRiceTransferJourney, ReviewView } from './dispatch-journey.util';
 
 /** The people who supervise the farm managers and the warehouses see every dispatch; everyone else sees only their own farm's and their own warehouse's. */
 const SUPERVISING_ROLES = ['WAREHOUSE_SUPERVISOR', 'FARM_DIRECTOR', 'MD', 'CEO', 'ADMIN'];
@@ -16,14 +16,38 @@ export function visibilityOf(actor: AuthenticatedUser): Visibility {
   return { all: false, farms: farms.ids, warehouses: warehouses.ids };
 }
 
+/** Does this journey match what was typed (already lower-cased)? The one definition, used by the Track dispatch page and by the quick search. */
+export const journeyMatches = (j: Journey, q: string): boolean => [j.ref, j.requestRef, j.vehicle, j.driver, j.from.name, j.to.name, ...(j.lines ?? []).map((l) => l.label)].some((v) => v && v.toLowerCase().includes(q));
+
 @Injectable()
 export class DispatchTrackingService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Every dispatch the person may track, newest activity first, each with its steps, times and who held it up. */
-  async list(actor: AuthenticatedUser, opts: { status?: 'open' | 'delivered' | 'all'; q?: string } = {}, now = new Date()): Promise<{ journeys: Journey[]; counts: { open: number; delivered: number; late: number } }> {
+  /** The damaged-bag review (if the truck had one) rides on the truck's journey, so the whole chain is read in one place. */
+  private async withReviews(journeys: Journey[], actor: AuthenticatedUser): Promise<Journey[]> {
+    const rows = journeys.length === 0 ? [] : await this.prisma.receiptReview.findMany({ where: { truckRef: { in: journeys.map((j) => j.ref) } }, orderBy: { submittedAt: 'desc' } });
+    if (rows.length === 0) return journeys.map((j) => ({ ...j, review: null, needsReview: false }));
+    const ids = [...new Set(rows.flatMap((r) => [r.submittedById, r.decidedById]).filter((x): x is string => !!x))];
+    const people = new Map((await this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, firstName: true, lastName: true } })).map((u) => [u.id, `${u.firstName} ${u.lastName}`.trim()]));
+    const wide = actor.roles.some((r: any) => r.roleCode === 'ADMIN'); const wh = scopedLocationIds(actor, 'WAREHOUSE');
+    const may = (warehouseId: string) => (wide || actor.roles.some((r: any) => r.roleCode === 'WAREHOUSE_SUPERVISOR')) && actor.permissionCodes?.has('receipt.review') && (wh.isGlobal || wh.ids.includes(warehouseId));
+    return journeys.map((j) => {
+      const r = rows.find((x) => x.truckRef === j.ref);
+      if (!r) return { ...j, review: null, needsReview: false };
+      const review: ReviewView = {
+        id: r.id, reviewNumber: r.reviewNumber, status: r.status as ReviewView['status'], damagedBags: r.damagedBags, note: r.note,
+        lines: (r.lines as any[]).map((l) => ({ label: l.gradeLabel, sentBags: l.sentBags, receivedBags: l.receivedBags, damagedBags: l.damagedBags })),
+        submittedBy: people.get(r.submittedById) ?? null, submittedAt: r.submittedAt.toISOString(), decidedBy: r.decidedById ? people.get(r.decidedById) ?? null : null,
+        decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null, decisionNote: r.decisionNote, canDecide: r.status === 'PENDING' && r.submittedById !== actor.id && !!may(r.warehouseId),
+      };
+      return { ...j, review, needsReview: r.status === 'PENDING' };
+    });
+  }
+
+  async list(actor: AuthenticatedUser, opts: { status?: 'open' | 'delivered' | 'all'; q?: string } = {}, now = new Date()): Promise<{ journeys: Journey[]; counts: { open: number; delivered: number; late: number; review: number } }> {
     const vis = visibilityOf(actor);
-    if (!vis.all && vis.farms.length === 0 && vis.warehouses.length === 0) return { journeys: [], counts: { open: 0, delivered: 0, late: 0 } };
+    if (!vis.all && vis.farms.length === 0 && vis.warehouses.length === 0) return { journeys: [], counts: { open: 0, delivered: 0, late: 0, review: 0 } };
     // What each place may see: a farm's own dispatches, and what goes into or out of a warehouse.
     const farmWh = vis.all ? {} : { OR: [...(vis.farms.length ? [{ farmId: { in: vis.farms } }] : []), ...(vis.warehouses.length ? [{ destinationWarehouseId: { in: vis.warehouses } }] : [])] };
     const transferWh = vis.all ? {} : { OR: [{ fromWarehouseId: { in: vis.warehouses } }, { toWarehouseId: { in: vis.warehouses } }] };
@@ -74,9 +98,10 @@ export class DispatchTrackingService {
       ...riceRows.map((t) => buildRiceTransferJourney(t, names, now)),
     ];
     journeys = journeys.map((j) => ({ ...j, action: this.actionFor(j, actor, vis, groups, paddy, riceRows) }));
+    journeys = await this.withReviews(journeys, actor);
     const q = opts.q?.trim().toLowerCase();
-    if (q) journeys = journeys.filter((j) => [j.ref, j.requestRef, j.vehicle, j.driver, j.from.name, j.to.name, ...j.lines.map((l) => l.label)].some((v) => v && v.toLowerCase().includes(q)));
-    const counts = { open: journeys.filter((j) => j.status !== 'DELIVERED').length, delivered: journeys.filter((j) => j.status === 'DELIVERED').length, late: journeys.filter((j) => j.late).length };
+    if (q) journeys = journeys.filter((j) => journeyMatches(j, q));
+    const counts = { open: journeys.filter((j) => j.status !== 'DELIVERED').length, delivered: journeys.filter((j) => j.status === 'DELIVERED').length, late: journeys.filter((j) => j.late).length, review: journeys.filter((j) => j.needsReview).length };
     if (opts.status === 'open') journeys = journeys.filter((j) => j.status !== 'DELIVERED');
     if (opts.status === 'delivered') journeys = journeys.filter((j) => j.status === 'DELIVERED');
     journeys.sort((a, b) => (b.lastActivity ?? '').localeCompare(a.lastActivity ?? ''));

@@ -1,3 +1,4 @@
+import { ReceiptReviewsService } from './receipt-reviews.service';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { LocationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -25,6 +26,7 @@ export class ShipmentsService {
     private readonly ledger: InventoryLedgerService,
     @Optional() private readonly settings?: SettingsService,
     @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly reviews?: ReceiptReviewsService,
   ) {}
 
   /** "On the Way" list for the Warehouse Supervisor / destination Warehouse
@@ -151,12 +153,15 @@ export class ShipmentsService {
     const todo = shipments.filter((s) => !s.receivedAt);
     if (todo.length === 0) throw new BadRequestException('This truck has already been counted in.');
     const counts = new Map(dto.lines.map((l) => [l.paddyGradeId, l.receivedBags]));
+    const damaged = new Map(dto.lines.map((l) => [l.paddyGradeId, l.damagedBags ?? 0]));
+    for (const l of dto.lines) if ((l.damagedBags ?? 0) > l.receivedBags) throw new BadRequestException('Spoiled or broken bags cannot be more than the bags that arrived.');
+    if ([...damaged.values()].some((n) => n > 0) && (dto.damageNote ?? '').trim().length < 3) throw new BadRequestException('Say what is wrong with the spoiled or broken bags. The Warehouse Supervisor needs it to decide.');
     if (counts.size !== dto.lines.length) throw new BadRequestException('A size is on the list twice.');
     for (const id of counts.keys()) if (!shipments.some((s) => s.paddyGradeId === id)) throw new BadRequestException('That size was not on this truck.');
     for (const s of todo) if (!counts.has(s.paddyGradeId)) throw new BadRequestException('Say how many bags arrived for every size on the truck.');
     const counted: string[] = [];
     for (const s of todo) {
-      await this.receive(s.id, { receivedBags: counts.get(s.paddyGradeId) as number, receivedCondition: dto.receivedCondition, notes: dto.notes } as ReceiveShipmentDto, actor);
+      await this.receive(s.id, { receivedBags: counts.get(s.paddyGradeId) as number, damagedBags: damaged.get(s.paddyGradeId) || undefined, damageNote: (damaged.get(s.paddyGradeId) ?? 0) > 0 ? dto.damageNote : undefined, receivedCondition: dto.receivedCondition, notes: dto.notes } as ReceiveShipmentDto, actor);
       counted.push(s.id);
     }
     return { dispatchRef: ref, countedIn: counted.length, alreadyCountedIn: shipments.length - todo.length };
@@ -177,6 +182,20 @@ export class ShipmentsService {
     const toleranceKg = await settingNumber(this.settings, 'logistics.variance_tolerance_kg');
     const requiresApproval = Math.abs(varianceKg) > toleranceKg;
 
+    // Spoiled or broken bags are held out of the stock until the Warehouse Supervisor decides (see ReceiptReviewsService).
+    const damaged = dto.damagedBags ?? 0;
+    if (!Number.isInteger(damaged) || damaged < 0) throw new BadRequestException('Spoiled or broken bags must be a whole number.');
+    if (damaged > dto.receivedBags) throw new BadRequestException('Spoiled or broken bags cannot be more than the bags that arrived.');
+    const damageNote = (dto.damageNote ?? '').trim();
+    if (damaged > 0 && damageNote.length < 3) throw new BadRequestException('Say what is wrong with the spoiled or broken bags. The Warehouse Supervisor needs it to decide.');
+    if (damaged > 0 && !this.reviews) throw new BadRequestException('Damaged bags cannot be reported just now.');
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const damagedKg = damaged > 0 && dto.receivedBags > 0 ? round2((receivedKg / dto.receivedBags) * damaged) : 0;
+    const usableKg = damaged > 0 ? round2(receivedKg - damagedKg) : receivedKg;
+    const usableBags = dto.receivedBags - damaged;
+    const report = damaged > 0 ? await this.prisma.deliveryReport.findUnique({ where: { id: shipment.deliveryReportId }, select: { dispatchRef: true, reportNumber: true, farmId: true } as any }) : null;
+    let reviewed: { row: any; created: boolean } | null = null;
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.shipment.update({
         where: { id },
@@ -186,7 +205,7 @@ export class ShipmentsService {
           receivedBags: dto.receivedBags,
           varianceKg,
           varianceRequiresApproval: requiresApproval,
-          receivedCondition: dto.receivedCondition,
+          receivedCondition: dto.receivedCondition ?? (damaged > 0 ? 'Damaged bags' : undefined),
           receivedMoisturePercent: dto.receivedMoisturePercent,
           receivedAt: new Date(),
           receivedById: actor.id,
@@ -198,15 +217,15 @@ export class ShipmentsService {
       // Close the in-transit bucket entirely (the full expected amount
       // leaves EXTERNAL, regardless of what actually arrived) and credit
       // the warehouse with exactly what arrived.
-      await this.ledger.recordTransaction(tx, {
+      if (damaged === 0 || usableBags > 0) await this.ledger.recordTransaction(tx, {
         type: 'PADDY_RECEIVED_AT_WAREHOUSE',
         sourceLocationType: LocationType.EXTERNAL,
         sourceLocationId: shipment.id,
         destLocationType: LocationType.WAREHOUSE,
         destLocationId: shipment.warehouseId,
         paddyGradeId: shipment.paddyGradeId,
-        quantityKg: receivedKg,
-        bagCount: dto.receivedBags,
+        quantityKg: usableKg,
+        bagCount: usableBags,
         batchNumber: shipment.shipmentNumber,
         referenceDocument: shipment.shipmentNumber,
         userId: actor.id,
@@ -222,9 +241,24 @@ export class ShipmentsService {
       await this.ledger.adjustBalance(
         tx,
         { locationType: LocationType.WAREHOUSE, locationId: shipment.warehouseId, paddyGradeId: shipment.paddyGradeId },
-        receivedKg,
-        dto.receivedBags,
+        usableKg,
+        usableBags,
       );
+
+      if (damaged > 0) {
+        const hold = ReceiptReviewsService.holdId(shipment.id);
+        await this.ledger.adjustBalance(tx, { locationType: LocationType.EXTERNAL, locationId: hold, paddyGradeId: shipment.paddyGradeId }, damagedKg, damaged);
+        await this.ledger.recordTransaction(tx, {
+          type: 'STOCK_ADJUSTMENT', sourceLocationType: LocationType.EXTERNAL, sourceLocationId: shipment.id, destLocationType: LocationType.EXTERNAL, destLocationId: hold,
+          paddyGradeId: shipment.paddyGradeId, quantityKg: damagedKg, bagCount: damaged, batchNumber: shipment.shipmentNumber, referenceDocument: shipment.shipmentNumber, userId: actor.id,
+          reason: `${damaged} spoiled or broken bag(s) held out of the stock for the Warehouse Supervisor's review: ${damageNote}`, approvalStatus: 'PENDING',
+        });
+        const grade = await tx.paddyGrade.findUnique({ where: { id: shipment.paddyGradeId }, select: { label: true } });
+        reviewed = await this.reviews!.record(tx, {
+          truckRef: (report as any)?.dispatchRef ?? (report as any)?.reportNumber ?? shipment.shipmentNumber, warehouseId: shipment.warehouseId, farmId: (report as any)?.farmId ?? null, actor, note: damageNote,
+          line: { shipmentId: shipment.id, paddyGradeId: shipment.paddyGradeId, gradeLabel: grade?.label ?? 'paddy', sentBags: shipment.expectedBags, receivedBags: dto.receivedBags, damagedBags: damaged, damagedKg },
+        });
+      }
 
       if (varianceKg !== 0) {
         await this.ledger.recordTransaction(tx, {
@@ -268,6 +302,7 @@ export class ShipmentsService {
 
     const fresh = await this.findById(updated.id, actor);
     await this.afterReceive(fresh, { bags: dto.receivedBags, requiresApproval }, actor);
+    if (reviewed && this.reviews) await this.reviews.announce((reviewed as { row: any }).row, actor).catch(() => undefined);   // after the save: telling people must never undo a count
     return fresh;
   }
 

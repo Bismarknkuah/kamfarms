@@ -27,11 +27,15 @@ const RULES: Record<Direction, Record<Step, { roles: string[]; place: Place }>> 
   // A warehouse sends paddy to its mill: the Warehouse Manager asks, the Warehouse Supervisor approves, the mill (Operations Officer) counts it in.
   TO_MILL: { request: { roles: ['WAREHOUSE_MANAGER'], place: 'WAREHOUSE' }, approve: { roles: ['WAREHOUSE_SUPERVISOR'], place: 'WAREHOUSE' }, receive: { roles: ['OPERATIONS_OFFICER'], place: 'MILLING_CENTER' } },
   // The mill sends finished products to its warehouse: the Operations Officer asks, the Operations Manager approves, the Warehouse Manager counts them in.
-  TO_WAREHOUSE: { request: { roles: ['OPERATIONS_OFFICER'], place: 'MILLING_CENTER' }, approve: { roles: ['OPERATIONS_MANAGER'], place: 'MILLING_CENTER' }, receive: { roles: ['WAREHOUSE_MANAGER'], place: 'WAREHOUSE' } },
+  TO_WAREHOUSE: { request: { roles: ['OPERATIONS_OFFICER'], place: 'MILLING_CENTER' }, approve: { roles: ['OPERATIONS_MANAGER'], place: 'MILLING_CENTER' }, receive: { roles: ['WAREHOUSE_MANAGER', 'WAREHOUSE_SUPERVISOR'], place: 'WAREHOUSE' } },
+};
+/** Others who may also do a step, each tied to the kind of place THEY work at (an Operations Officer works at a mill, not at a warehouse). */
+const ALSO: Partial<Record<Direction, Partial<Record<Step, { roles: string[]; place: Place }>>>> = {
+  TO_MILL: { request: { roles: ['OPERATIONS_OFFICER'], place: 'MILLING_CENTER' } },
 };
 const WHO: Record<Direction, Record<Step, string>> = {
-  TO_MILL: { request: 'Warehouse Manager', approve: 'Warehouse Supervisor', receive: 'Operations Officer' },
-  TO_WAREHOUSE: { request: 'Operations Officer', approve: 'Operations Manager', receive: 'Warehouse Manager' },
+  TO_MILL: { request: 'Warehouse Manager or the mill\'s Operations Officer', approve: 'Warehouse Supervisor', receive: 'Operations Officer' },
+  TO_WAREHOUSE: { request: 'Operations Officer', approve: 'Operations Manager', receive: 'Warehouse Manager or Warehouse Supervisor' },
 };
 const dispatchType = (l: MillLine) => (l.kind === 'PADDY' ? 'PADDY_DISPATCHED' : l.kind === 'PACKAGED_RICE' ? 'PACKAGED_RICE_DISPATCHED' : 'STOCK_TRANSFER');
 const receiveType = (l: MillLine) => (l.kind === 'PADDY' ? 'PADDY_RECEIVED_AT_MILL' : 'STOCK_TRANSFER');
@@ -66,26 +70,37 @@ export class MillDispatchService {
   ) {}
 
   // ---------------------------------------------------------------- who may do what
+  /** The rules that apply to this person for a step: the main one and/or the extra one, whichever their role is. */
+  private rulesFor(actor: AuthenticatedUser, dir: Direction, step: Step) {
+    const admin = isAdmin(actor); const mine = rolesOf(actor);
+    return [RULES[dir][step], ALSO[dir]?.[step]].filter((r): r is { roles: string[]; place: Place } => !!r).filter((r) => admin || mine.some((x) => r.roles.includes(x)));
+  }
   private may(actor: AuthenticatedUser, dir: Direction, step: Step, ids: { warehouseId: string; millingCenterId: string }): boolean {
-    const rule = RULES[dir][step];
-    if (!(isAdmin(actor) || rolesOf(actor).some((r) => rule.roles.includes(r)))) return false;
-    const scope = scopedLocationIds(actor, rule.place);
-    return scope.isGlobal || scope.ids.includes(rule.place === 'WAREHOUSE' ? ids.warehouseId : ids.millingCenterId);
+    return this.rulesFor(actor, dir, step).some((rule) => {
+      const scope = scopedLocationIds(actor, rule.place);
+      return scope.isGlobal || scope.ids.includes(rule.place === 'WAREHOUSE' ? ids.warehouseId : ids.millingCenterId);
+    });
   }
   private assertMay(actor: AuthenticatedUser, dir: Direction, step: Step, row: { warehouseId: string; millingCenterId: string }) {
-    const rule = RULES[dir][step];
-    if (!(isAdmin(actor) || rolesOf(actor).some((r) => rule.roles.includes(r)))) throw new ForbiddenException(`Only the ${WHO[dir][step]} ${step === 'request' ? 'asks for this' : step === 'approve' ? 'approves or refuses this' : 'counts this in'}.`);
-    assertScope(actor, rule.place, rule.place === 'WAREHOUSE' ? row.warehouseId : row.millingCenterId, rule.place === 'WAREHOUSE' ? 'this warehouse' : 'this milling center');
+    const rules = this.rulesFor(actor, dir, step);
+    if (rules.length === 0) throw new ForbiddenException(`Only the ${WHO[dir][step]} ${step === 'request' ? 'asks for this' : step === 'approve' ? 'approves or refuses this' : 'counts this in'}.`);
+    let refused: unknown = null;
+    for (const rule of rules) { // allowed when ANY rule that applies to them covers this place
+      try { assertScope(actor, rule.place, rule.place === 'WAREHOUSE' ? row.warehouseId : row.millingCenterId, rule.place === 'WAREHOUSE' ? 'this warehouse' : 'this milling center'); return; } catch (e) { refused ??= e; }
+    }
+    throw refused;
   }
-
   // ---------------------------------------------------------------- the forms: where from, what is there to send
   async options(actor: AuthenticatedUser) {
     const roles = rolesOf(actor); const admin = isAdmin(actor);
     const out: { toMill: any; toWarehouse: any } = { toMill: null, toWarehouse: null };
-    if (admin || roles.includes('WAREHOUSE_MANAGER')) {
-      const sc = scopedLocationIds(actor, 'WAREHOUSE');
-      const whs = await this.prisma.warehouse.findMany({ where: { isActive: true, ...(sc.isGlobal ? {} : { id: { in: sc.ids } }) } as any, select: { id: true, name: true }, orderBy: { name: 'asc' } });
-      const mills = await this.prisma.millingCenter.findMany({ where: { isActive: true, warehouseId: { in: whs.map((w) => w.id) } }, select: { id: true, name: true, warehouseId: true }, orderBy: { name: 'asc' } });
+    // A Warehouse Manager sends paddy to the mills of their warehouses; an Operations Officer asks for paddy for their own mills (from those mills' warehouses).
+    const isWm = admin || roles.includes('WAREHOUSE_MANAGER'); const isOfficer = !isWm && roles.includes('OPERATIONS_OFFICER');
+    if (isWm || isOfficer) {
+      const sc = scopedLocationIds(actor, 'WAREHOUSE'); const msc = scopedLocationIds(actor, 'MILLING_CENTER');
+      const myMills = isOfficer ? await this.prisma.millingCenter.findMany({ where: { isActive: true, ...(msc.isGlobal ? {} : { id: { in: msc.ids } }) } as any, select: { id: true, warehouseId: true } }) : [];
+      const whs = await this.prisma.warehouse.findMany({ where: { isActive: true, ...(isOfficer ? { id: { in: myMills.map((m) => m.warehouseId) } } : sc.isGlobal ? {} : { id: { in: sc.ids } }) } as any, select: { id: true, name: true }, orderBy: { name: 'asc' } });
+      const mills = await this.prisma.millingCenter.findMany({ where: { isActive: true, warehouseId: { in: whs.map((w) => w.id) }, ...(isOfficer && !msc.isGlobal ? { id: { in: msc.ids } } : {}) } as any, select: { id: true, name: true, warehouseId: true }, orderBy: { name: 'asc' } });
       const grades = await this.prisma.paddyGrade.findMany({ where: { isActive: true }, orderBy: { label: 'asc' } });
       const places = [];
       for (const w of whs) {
@@ -93,7 +108,7 @@ export class MillDispatchService {
         const have = await this.ledger.getBalancesForLocation('WAREHOUSE', w.id);
         places.push({ warehouse: { id: w.id, name: w.name }, mills: ms.map((m) => ({ id: m.id, name: m.name })), paddy: grades.map((g) => ({ paddyGradeId: g.id, label: g.label, bags: have.find((b: any) => b.paddyGradeId === g.id)?.bagCount ?? 0 })) });
       }
-      out.toMill = { places };
+      out.toMill = { places, asOfficer: isOfficer };
     }
     if (admin || roles.includes('OPERATIONS_OFFICER')) {
       const sc = scopedLocationIds(actor, 'MILLING_CENTER');

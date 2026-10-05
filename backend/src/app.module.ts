@@ -21,6 +21,8 @@ import { SupplyModule } from './supply/supply.module';
 import { ControlCenterModule } from './control-center/control-center.module';
 import { DispatchTrackingModule } from './dispatch-tracking/dispatch-tracking.module';
 import { SearchModule } from './search/search.module';
+import { AccessModule } from './access/access.module';
+import { MillDispatchModule } from './mill-dispatch/mill-dispatch.module';
 import { MachinesModule } from './machines/machines.module';
 import { ProductionModule } from './production/production.module';
 import { PackagingModule } from './packaging/packaging.module';
@@ -68,6 +70,8 @@ import { SystemOverviewModule } from './system-overview/system-overview.module';
     ControlCenterModule,
     DispatchTrackingModule,
     SearchModule,
+    AccessModule,
+    MillDispatchModule,
     MachinesModule,
     ProductionModule,
     PackagingModule,

@@ -7,8 +7,8 @@ approved by a supervisor, and counted in at the other end.** Nothing leaves unti
 
 | | Asks | Approves | Counts in |
 |---|---|---|---|
-| **Paddy to the mill** | Warehouse Manager of that warehouse | Warehouse Supervisor of that warehouse | Operations Officer of that mill |
-| **Finished products to the warehouse** | Operations Officer of that mill | Operations Manager | Warehouse Manager of the mill's warehouse |
+| **Paddy to the mill** | Warehouse Manager of that warehouse, **or the Operations Officer of that mill** (who asks for the paddy they need) | Warehouse Supervisor of that warehouse | Operations Officer of that mill |
+| **Finished products to the warehouse** | Operations Officer of that mill | Operations Manager | Warehouse Manager **or Warehouse Supervisor** of the mill's warehouse |
 
 Nobody approves or refuses their own request, even holding both roles. A refusal needs a reason. The person who asked (or the approver) may cancel before approval; once it is on the
 way only the approver may, and the stock goes back. The Managing Director and CEO can see every dispatch but only watch.
@@ -43,3 +43,10 @@ One table, `mill_transfers`, created by the start-up schema step (equivalent SQL
 ## Tests
 
 `cd backend && npx jest src/mill-dispatch src/production src/packaging`.
+
+## Changed in 2026.10.16
+
+- The Operations Officer can **ask for paddy** for their own mill (the button reads *Ask for paddy for the mill*). They are tied to a mill, not a warehouse, so the rule checks the mill they work at;
+  the paddy still comes from that mill's warehouse, and the Warehouse Supervisor still approves. Nobody approves their own request.
+- The Warehouse Supervisor can **count milled rice in** (packaged rice, broken rice, hull) at their warehouse, as the Warehouse Manager can, and sees it in *Milled rice on its way to your warehouse* on their control center.
+- The page opens with a five-step guide: ask for paddy, count it in, record the milling (Production), record the packaging (Packaging), send the finished products back.

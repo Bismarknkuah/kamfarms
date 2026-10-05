@@ -53,6 +53,24 @@ const USERS = {
   admin: { id: 'u-admin', email: 'admin@kam.local', firstName: 'System', lastName: 'Administrator', role: 'ADMIN', scopes: GLOBAL, perms: ALL_PERMS },
 };
 const actorOf = (k) => { const u = USERS[k]; return { id: u.id, email: u.email, firstName: u.firstName, lastName: u.lastName, permissionCodes: new Set(u.perms), roles: [{ roleId: u.role, roleCode: u.role, permissions: u.perms, scopes: u.scopes }] }; };
+
+// Permissions added in this release come from the REAL seed, so the stand-in cannot drift from it: the review of damaged bags, the mill dispatch rights, and the Finance Director's read access.
+const seedText = require('fs').readFileSync(ROOT + '/prisma/seed.ts', 'utf8');
+const seedPerms = (role) => { const i = seedText.indexOf(`code: '${role}'`); if (i < 0) return []; const j = seedText.indexOf('permissionCodes: [', i); const k = seedText.indexOf(']', j); return [...seedText.slice(j, k).replace(/\/\/[^\n]*/g, '').matchAll(/'([a-z_.]+)'/g)].map((m) => m[1]); };
+const FD_READ = ['supply.view', 'dispatch.track', 'milldispatch.view', 'delivery.view', 'warehouse.inventory.view', 'milling.view', 'ai.use', 'insights.view', 'farm.view', 'warehouse.view', 'expense.view', 'sales.view'];
+for (const u of Object.values(USERS)) { if (u.role === 'ADMIN') continue; const take = (c) => c.startsWith('milldispatch.') || c === 'receipt.review' || (u.role === 'FINANCE_DIRECTOR' && FD_READ.includes(c)) || (u.role === 'CEO' && ['finance.approve.director', 'supply.view'].includes(c)); u.perms = [...new Set([...u.perms, ...seedPerms(u.role).filter(take)])]; }
+// What the Administrator switched off: the REAL service, over a stand-in table.
+const { RoleAccessService } = require(B + '/access/role-access.service');
+const ROLE_NAMES = { SALES_OFFICER: 'Sales Officer', FINANCE_DIRECTOR: 'Finance Director', MD: 'Managing Director', CEO: 'CEO', OPERATIONS_MANAGER: 'Operations Manager', OPERATIONS_OFFICER: 'Operations Officer', WAREHOUSE_SUPERVISOR: 'Warehouse Supervisor', WAREHOUSE_MANAGER: 'Warehouse Manager', FARM_DIRECTOR: 'Farm Supervisor', FARM_MANAGER: 'Farm Manager' };
+const roleRows = () => [...new Set(Object.values(USERS).map((u) => u.role))].filter((c) => c !== 'ADMIN').map((code) => ({ code, name: ROLE_NAMES[code] || code, permissions: [...new Set(Object.values(USERS).filter((u) => u.role === code).flatMap((u) => u.perms))].map((p) => ({ permission: { code: p } })) })).sort((x, y) => x.name.localeCompare(y.name));
+const accessPrisma = {
+  roleFeatureDenial: { findMany: async () => (X.denials || []).map((r) => ({ ...r })), deleteMany: async ({ where }) => { X.denials = (X.denials || []).filter((r) => r.roleCode !== where.roleCode); }, createMany: async ({ data }) => { X.denials = [...(X.denials || []), ...data]; } },
+  role: { findMany: async () => roleRows(), findFirst: async ({ where }) => roleRows().concat([{ code: 'ADMIN' }]).find((r) => r.code === where.code) || null },
+  $transaction: async (ops) => Promise.all(ops),
+};
+const accessSvc = new RoleAccessService(accessPrisma, { record: async () => {} });
+const restricted = async (k) => { const a = actorOf(k); const [r] = await accessSvc.restrict(a.roles); return { ...a, roles: [r], permissionCodes: new Set(r.permissions) }; };
+const ME = { delay: 0 };   // test hook: make /auth/me slow, to prove pages keep their menu while it loads
 const keyOfToken = (t) => (t && t.startsWith('tok-') ? t.slice(4) : null);
 const WAREHOUSES = { [WH1]: 'Tamale Warehouse', [WH2]: 'Kumasi Warehouse' };
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
@@ -128,10 +146,11 @@ app.post('/api/auth/login', (req, res) => {
 });
 app.post('/api/auth/refresh', (req, res) => { const k = String((req.body || {}).refreshToken || '').replace('ref-', ''); USERS[k] ? ok(res, { accessToken: 'tok-' + k, refreshToken: 'ref-' + k }) : fail(res, 401, 'Session expired.'); });
 app.post('/api/auth/logout', (req, res) => ok(res, null));
-app.get('/api/auth/me', (req, res) => { const k = who(req); k && USERS[k] ? ok(res, meOf(k)) : fail(res, 401, 'Please sign in again.'); });
+app.get('/api/auth/me', async (req, res) => { const k = who(req); if (!k || !USERS[k]) return fail(res, 401, 'Please sign in again.'); if (ME.delay) await new Promise((r) => setTimeout(r, ME.delay)); const [r] = await accessSvc.restrict([{ roleCode: USERS[k].role, permissions: USERS[k].perms }]); ok(res, { ...meOf(k), permissions: r.permissions, hiddenFeatures: await accessSvc.hiddenFor([USERS[k].role]) }); });
+app.post('/__me_delay', (req, res) => { ME.delay = Number((req.body || {}).ms || 0); res.json(ME); });
 
 // ---- test controls ----
-app.post('/__reset', (req, res) => { seed(); seedX(); res.json({ ok: true }); });
+app.post('/__reset', (req, res) => { seed(); seedX(); ME.delay = 0; if (globalThis.__afterReset) globalThis.__afterReset(); res.json({ ok: true }); });
 app.post('/__stock', (req, res) => { X.stock[req.query.g] = Number(req.query.n); res.json({ ok: true }); });
 app.post('/__no_manager', (req, res) => { X.noManager = true; res.json({ ok: true }); });
 app.get('/__tasks', (req, res) => res.json(X.tasks));
@@ -478,7 +497,7 @@ const whereaboutsService = new PaddyWhereaboutsService({
 const sRoute = (method, path, Cls, fn) => app[method](path, async (req, res) => {
   const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); log(req, { item: req.params.id, body: req.body });
   let d = {}; if (Cls) { d = await body(res, Cls, req.body); if (!d) return; }
-  try { ok(res, await fn(d, actorOf(k), req)); } catch (e) { apiErr(res, e); }
+  try { ok(res, await fn(d, await restricted(k), req)); } catch (e) { apiErr(res, e); }
 });
 sRoute('get', '/api/supply-requests/whereabouts', null, (d, a) => whereaboutsService.whereabouts(a));
 sRoute('get', '/api/supply-requests', null, (d, a) => supplyService.board(a));
@@ -547,7 +566,10 @@ const ccPrisma = {
   warehouse: { findMany: async ({ where }) => Object.keys(WAREHOUSES).filter((id) => where.id.in.includes(id)).map((id) => ({ id, name: WAREHOUSES[id] })) },
   millingCenter: { findMany: async ({ where }) => [{ id: MC1, name: 'Tamale Mill' }, { id: MC2, name: 'Kumasi Mill' }].filter((x) => where.id.in.includes(x.id)) },
 };
-const ccService = new ControlCenterService(ccPrisma, supplyService);
+const matchGt = (r, w = {}) => Object.entries(w).every(([k, v]) => (k === 'OR' ? v.some((c) => matchGt(r, c)) : k === 'AND' ? v.every((c) => matchGt(r, c)) : v && typeof v === 'object' && !(v instanceof Date) ? (('in' in v ? v.in.includes(r[k]) : true) && ('not' in v ? r[k] !== v.not : true) && ('gt' in v ? r[k] > v.gt : true)) : r[k] === v));
+const gtTable = (rows) => ({ count: async ({ where } = {}) => rows().filter((r) => matchGt(r, where)).length });
+Object.assign(ccPrisma, { millTransfer: gtTable(() => X.cc.millTransfers), inventoryBalance: gtTable(() => X.cc.balances), receiptReview: gtTable(() => X.reviews) });
+const ccService = new ControlCenterService(ccPrisma, supplyService, accessSvc);
 sRoute('get', '/api/control-center', null, (d, a) => ccService.forActor(a));
 app.get('/__transfers', (req, res) => res.json(X.transfers));
 app.get('/__millreceipts', (req, res) => res.json(X.millReceipts));
@@ -590,12 +612,13 @@ const trkPrisma = {
   vehicle: { findMany: async () => [{ id: 'veh1', plateNumber: 'GT-9000-21' }] }, driver: { findMany: async () => [{ id: 'drv1', name: 'Kofi Mensah' }] },
   product: { findMany: async () => [{ id: 'prod1', name: 'Premium Rice 25kg' }] }, supplyRequest: { findMany: async () => [] },
 };
+trkPrisma.receiptReview = { findMany: async ({ where }) => (X.reviews || []).filter((r) => where.truckRef.in.includes(r.truckRef)) };
 const trackingService = new DispatchTrackingService(trkPrisma);
 sRoute('get', '/api/dispatch-tracking', null, (d, a, req) => trackingService.list(a, { status: req.query.status ?? 'all', q: req.query.q }));
 // the whole truck counted in: the REAL receiveDispatch (its checks and its scope rule), over a stand-in "receive one size"
 const shipSvc = Object.create(ShipmentsService.prototype);
 shipSvc.prisma = { shipment: { findMany: async ({ where }) => { const refs = where.deliveryReport.OR.flatMap((o) => Object.values(o)); const reps = X.trk.reports.filter((r) => refs.includes(r.dispatchRef) || refs.includes(r.reportNumber)); return X.trk.shipments.filter((s) => reps.some((r) => r.id === s.deliveryReportId)); } } };
-shipSvc.receive = async (id, dto, a) => { const s = X.trk.shipments.find((x) => x.id === id); Object.assign(s, { receivedAt: new Date(), receivedBags: dto.receivedBags, receivedById: a.id }); X.trk.reports.find((r) => r.id === s.deliveryReportId).status = 'RECONCILED'; return s; };
+shipSvc.receive = async (id, dto, a) => { const s = X.trk.shipments.find((x) => x.id === id); const rep = X.trk.reports.find((r) => r.id === s.deliveryReportId); Object.assign(s, { receivedAt: new Date(), receivedBags: dto.receivedBags, receivedById: a.id }); rep.status = 'RECONCILED'; const bad = dto.damagedBags || 0; if (bad > 0) { X.reviewLedger.push({ op: 'hold', bags: bad, credited: dto.receivedBags - bad }); const out = await reviewSvc.record(reviewTx, { truckRef: rep.dispatchRef || rep.reportNumber, warehouseId: s.warehouseId, farmId: rep.farmId, actor: a, note: String(dto.damageNote || '').trim(), line: { shipmentId: s.id, paddyGradeId: s.paddyGradeId, gradeLabel: (GRADES2.find((g) => g.id === s.paddyGradeId) || {}).label || 'paddy', sentBags: s.expectedBags, receivedBags: dto.receivedBags, damagedBags: bad, damagedKg: bad * 50 } }); await reviewSvc.announce(out.row, a); } return s; };
 sRoute('post', '/api/shipments/dispatch/:ref/receive', ReceiveDispatchDto, (d, a, req) => shipSvc.receiveDispatch(req.params.ref, d, a));
 app.get('/__trk', (req, res) => res.json(X.trk));
 const searchPrisma = {
@@ -604,11 +627,54 @@ const searchPrisma = {
   warehouse: { findMany: async ({ where, take }) => Object.keys(WAREHOUSES).map((id) => ({ id, name: WAREHOUSES[id], location: LOCATIONS[id] ?? null, code: null })).filter((r) => matchX(r, where)).slice(0, take) },
   millingCenter: { findMany: async ({ where, take }) => [{ id: MC1, name: 'Tamale Mill', code: 'TM1' }, { id: MC2, name: 'Kumasi Mill', code: 'KM1' }].filter((r) => matchX(r, where)).slice(0, take) },
 };
-const searchService = new SearchService(searchPrisma, trackingService, supplyService);
-sRoute('get', '/api/search', null, (d, a, req) => searchService.search(a, String(req.query.q ?? '')));
+const SEARCH = { delay: 0, fail: false };
+const slowTracking = { list: async (a, o) => { if (SEARCH.delay) await new Promise((r) => setTimeout(r, SEARCH.delay)); if (SEARCH.fail) throw new Error('simulated failure in the slow part'); return trackingService.list(a, o); } };
+const newSearch = () => new SearchService(searchPrisma, slowTracking, supplyService, accessSvc);
+let searchService = newSearch();
+globalThis.__afterReset = () => { SEARCH.delay = 0; SEARCH.fail = false; searchService = newSearch(); accessSvc.invalidate(); };
+app.post('/__search_mode', (req, res) => { SEARCH.delay = Number((req.body || {}).delay || 0); SEARCH.fail = !!(req.body || {}).fail; searchService = newSearch(); res.json(SEARCH); });
+sRoute('get', '/api/search', null, (d, a, req) => searchService.search(a, String(req.query.q ?? ''), req.query.scope === 'fast' || req.query.scope === 'slow' ? req.query.scope : undefined));
+
+// ---- damaged bags: the REAL review service over stand-in tables; and "who can use what": the REAL access service ----
+const { ReceiptReviewsService } = require(B + '/logistics/receipt-reviews.service');
+const { DecideReceiptReviewDto } = require(B + '/logistics/dto/decide-receipt-review.dto');
+const { SetRoleFeaturesDto } = require(B + '/access/dto/set-role-features.dto');
+const prevSeedRv = seedX;
+seedX = function () {
+  prevSeedRv(); X.denials = []; X.reviews = []; X.reviewLedger = [];
+  X.cc.millTransfers = [
+    { direction: 'TO_MILL', status: 'IN_TRANSIT', millingCenterId: MC1, warehouseId: WH1 }, { direction: 'TO_MILL', status: 'IN_TRANSIT', millingCenterId: MC1, warehouseId: WH1 }, { direction: 'TO_MILL', status: 'IN_TRANSIT', millingCenterId: MC2, warehouseId: WH2 },
+    { direction: 'TO_MILL', status: 'PENDING_APPROVAL', millingCenterId: MC1, warehouseId: WH1 }, { direction: 'TO_MILL', status: 'PENDING_APPROVAL', millingCenterId: MC2, warehouseId: WH2 },
+    { direction: 'TO_WAREHOUSE', status: 'PENDING_APPROVAL', millingCenterId: MC1, warehouseId: WH1 }, { direction: 'TO_WAREHOUSE', status: 'IN_TRANSIT', millingCenterId: MC1, warehouseId: WH1 }, { direction: 'TO_WAREHOUSE', status: 'IN_TRANSIT', millingCenterId: MC2, warehouseId: WH2 },
+  ];
+  X.cc.balances = [
+    { locationType: 'MILLING_CENTER', locationId: MC1, productId: 'rice', bagCount: 20, quantityKg: 500 }, { locationType: 'MILLING_CENTER', locationId: MC1, productId: 'broken', bagCount: 0, quantityKg: 80 },
+    { locationType: 'MILLING_CENTER', locationId: MC1, productId: null, bagCount: 50, quantityKg: 2500 }, { locationType: 'MILLING_CENTER', locationId: MC2, productId: 'rice', bagCount: 5, quantityKg: 125 },
+  ];
+};
+seedX();
+const reviewTx = { receiptReview: {
+  findFirst: async ({ where }) => X.reviews.find((r) => r.truckRef === where.truckRef && r.status === where.status) || null,
+  count: async () => X.reviews.length,
+  create: async ({ data }) => { const r = { id: `rv-${X.reviews.length + 1}`, status: 'PENDING', submittedAt: new Date(), decidedById: null, decidedAt: null, decisionNote: null, ...data }; X.reviews.push(r); return r; },
+  update: async ({ where, data }) => Object.assign(X.reviews.find((r) => r.id === where.id), data),
+} };
+const reviewPrisma = { receiptReview: { ...reviewTx.receiptReview, findUnique: async ({ where }) => X.reviews.find((r) => r.id === where.id) || null }, $transaction: async (cb) => cb(reviewTx), user: { findMany: async () => Object.values(USERS).filter((u) => u.role === 'WAREHOUSE_SUPERVISOR' || u.role === 'FARM_DIRECTOR').map((u) => ({ id: u.id })) } };
+const reviewLedger = {
+  adjustBalance: async (tx, key, kg, bags) => { X.reviewLedger.push({ op: 'adjust', where: key.locationType, hold: String(key.locationId).startsWith('hold:'), kg, bags }); },
+  recordTransaction: async (tx, input) => { X.reviewLedger.push({ op: 'txn', type: input.type, bags: input.bagCount, kg: input.quantityKg }); },
+};
+const reviewSvc = new ReceiptReviewsService(reviewPrisma, { record: async () => {} }, reviewLedger, { notify: async (n) => { X.notes.push({ userIds: n.userIds, title: n.title, body: n.body }); } });
+sRoute('post', '/api/receipt-reviews/:id/approve', DecideReceiptReviewDto, (d, a, req) => reviewSvc.approve(req.params.id, d.note, a));
+sRoute('post', '/api/receipt-reviews/:id/reject', DecideReceiptReviewDto, (d, a, req) => reviewSvc.reject(req.params.id, d.note, a));
+app.get('/__reviews', (req, res) => res.json({ reviews: X.reviews, ledger: X.reviewLedger }));
+sRoute('get', '/api/access/features', null, () => accessSvc.matrix());
+sRoute('put', '/api/access/features/:roleCode', SetRoleFeaturesDto, (d, a, req) => accessSvc.setForRole(req.params.roleCode, d.denied, a));
 // ---- the overview figures the Farm Supervisor's and Operations Manager's home pages draw (empty lists would make those widgets fail) ----
 app.get('/api/reports/farm-overview', (req, res) => ok(res, { paddy: { received: [{ gradeLabel: 'Size 4', bags: 120, kg: 6000 }], available: [{ gradeLabel: 'Size 4', bags: 83, kg: 4150 }, { gradeLabel: 'Size 5', bags: 97, kg: 4850 }], dispatched: [] } }));
 app.get('/api/reports/production-overview', (req, res) => ok(res, { processed: [], recoveredRiceKg: 0, brokenRiceKg: 0, riceHullKg: 0, recoveryPercent: 0, energyConsumedKwh: 0 }));
+// the settings screen expects groups and items (an empty list would crash it); the real values are not needed to test the screens around them
+app.get('/api/settings/registry', (req, res) => ok(res, { groups: [], items: [] }));
 // ---- anything else the pages ask for: empty, so they load ----
 app.get('/api/*', (req, res) => ok(res, []));
 app.all('/api/*', (req, res) => ok(res, {}));

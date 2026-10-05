@@ -647,3 +647,38 @@ See `docs/PADDY_REQUESTS.md`.
 4. Each control center role has a "Your area" line. Anyone who has no farm, warehouse or mill assigned sees it say so: assign their place under Users.
 
 See `docs/CONTROL_CENTERS.md`.
+
+## Version 2026.10.15: mill dispatch
+
+Adds one table (`mill_transfers`) and four permissions (`milldispatch.view`, `.request`, `.approve`, `.receive`), added by the start-up steps. `/api/health` should then show `2026.10.15`. See `docs/MILL_DISPATCH.md`.
+
+**Two behaviour changes to know before you deploy:**
+
+1. **Packaged rice no longer goes into the warehouse stock when it is packaged.** It waits at the mill until the Operations Officer sends it, the Operations Manager approves, and the Warehouse Manager counts it in.
+   To keep the old behaviour, set **Packaged rice waits at the mill until it is sent** to `0` in Settings (Production).
+2. Production approval uses the paddy the mill holds before taking any from the warehouse.
+
+After deploying: make sure each milling center has an Operations Officer (scoped to it) and the Operations Manager exists, and each warehouse has a Warehouse Manager and a Warehouse Supervisor (Users).
+
+## Version 2026.10.16: damaged-bag review, who can use what, control centers for everyone who runs something, install pop-up, faster search
+
+Adds two tables (`receipt_reviews`, `role_feature_denials`) and one permission (`receipt.review`), all added by the start-up steps; nothing existing is changed or dropped. `/api/health` should then show
+`2026.10.16`. See `docs/RECEIPT_REVIEW.md` and `docs/FEATURE_ACCESS.md`.
+
+**What changes for people:**
+
+1. **Counting a truck in can report spoiled or broken bags.** Those bags are held out of the stock until the Warehouse Supervisor of that warehouse approves (written off) or refuses (back in stock).
+2. **The Operations Officer can ask for paddy** for their mill; the **Warehouse Supervisor can count milled rice in**.
+3. **A Control center button** in the menu of the MD, CEO, Finance Director, Farm Supervisor, Warehouse Manager and Supervisor, Operations Manager and Operations Officer. The CEO and Operations Officer now have a control center.
+4. **The Finance Director** can follow tracking, paddy requests, mill dispatch, production, deliveries, stock and AI Insights (read only).
+5. **Settings > Who can use what:** the Administrator switches features off per role.
+6. **An install pop-up** after sign-in (once per sign-in; *Not now*, or *Don't ask for 30 days*). Chrome, Edge and Android get a one-tap button; iPhone, Mac Safari and Firefox get the steps.
+7. **Search** asks in two parts (quick kinds first), keeps what is on screen, and says in words when something is slow. **Pages no longer blank** while your details load.
+
+**Know before you deploy:** changes made to a *built-in* role on the Roles page are reset at every deploy (they always were: the update rebuilds those roles from the code). Use *Who can use what* to restrict
+a role permanently.
+
+**After deploying:** check that **Settings** shows *Who can use what*, that the **Control center** shows `Server version 2026.10.16`, and that each warehouse has a Warehouse Manager *and* a Warehouse Supervisor
+(Users), because the Supervisor now decides on damaged bags.
+
+**Rolling back:** the two new tables are additive and are simply left unused.

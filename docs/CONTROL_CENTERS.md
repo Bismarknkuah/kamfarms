@@ -1,7 +1,7 @@
-# Control centers (version 2026.10.14)
+# Control centers (version 2026.10.14, extended in 2026.10.16)
 
-The Managing Director, the Farm Supervisor (the Farm Director role), the Warehouse Manager and Supervisor, the Operations Manager and the Finance Director each have a
-**control center** at the top of their home page. It shows the work waiting for THEM, with real figures, and the pages they run their area from. The Administrator
+The Managing Director, the CEO, the Farm Supervisor (the Farm Director role), the Warehouse Manager and Supervisor, the Operations Manager, the Operations Officer and the
+Finance Director each have a **control center** at the top of their home page, and a **Control center** button in their menu (it opens the same thing as a page of its own). It shows the work waiting for THEM, with real figures, and the pages they run their area from. The Administrator
 keeps their own control center. Nobody else has one (the server refuses them).
 
 ## What each person sees
@@ -40,8 +40,23 @@ Every figure uses the same status the matching page treats as "waiting", so a fi
 
 ## Not included
 
-Data-reset approval counts (the dashboard's rule for them is applied in the browser). The CEO has no control center unless `CEO` is added to `CONTROL_CENTER_ROLES` in
-`backend/src/control-center/control-center.catalog.ts` and `frontend/src/components/ControlCenter.tsx`.
+Data-reset approval counts (the dashboard's rule for them is applied in the browser).
+
+## Added in 2026.10.16
+
+- The **CEO** and the **Operations Officer** have a control center, and every role that has one has the menu button (`/control-center`). The Administrator can switch the
+  control center off for a role (Settings, *Who can use what*): the button and the dashboard section disappear and the server refuses it.
+- New tiles (each appears only to the roles named):
+
+| Work | Held by | Counted as |
+|---|---|---|
+| Damaged bags waiting for your review | `receipt.review` (Warehouse Supervisor) | reviews PENDING, in the supervisor's warehouses |
+| Paddy on its way to your mill | Operations Officer | paddy mill dispatches IN_TRANSIT to their mills |
+| Finished products waiting at the mill to be sent | Operations Officer | product lines with stock at their mills |
+| Mill dispatches waiting for your approval | Warehouse Supervisor (paddy going out) / Operations Manager (products coming back) | PENDING_APPROVAL, by direction and place |
+| Milled rice on its way to your warehouse | Warehouse Manager, Warehouse Supervisor | product mill dispatches IN_TRANSIT to their warehouses |
+
+A tile can be limited to certain **roles** as well as a permission (`onlyRoles` in the catalogue), because several roles share one permission but do different things with it.
 
 ## Tests
 

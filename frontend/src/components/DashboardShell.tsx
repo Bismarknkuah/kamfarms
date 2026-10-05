@@ -135,7 +135,8 @@ export function DashboardShell({ me, children }: { me: MeResponse; children: Rea
         (item) =>
           hasNavPermission(me, item.permission) &&
           !item.hideForRoles?.some((code) => myRoleCodes.includes(code)) &&
-          (!item.onlyForRoles || item.onlyForRoles.some((code) => myRoleCodes.includes(code))),
+          (!item.onlyForRoles || item.onlyForRoles.some((code) => myRoleCodes.includes(code))) &&
+          !(item.feature && me.hiddenFeatures?.includes(item.feature)),
       );
   const initials = `${me.firstName[0] ?? ''}${me.lastName[0] ?? ''}`.toUpperCase();
 

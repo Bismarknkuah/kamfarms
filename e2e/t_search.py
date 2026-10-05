@@ -31,7 +31,7 @@ with sync_playwright() as pw:
     # =============== 2. Pages: matched from the menu the person is offered ===============
     ctx, p = start(b, 'md'); ask(p, 'track'); f = found(p)
     check('typing a page\'s name offers that page, instantly', 'Track dispatch' in f.get('Pages', []) and p.locator('[data-testid=search-result][data-href="/track-dispatch"]').count() == 1, f); ctx.close()
-    ctx, p = start(b, 'fd'); ask(p, 'track'); check('a role that is not offered a page is not offered it in search either', 'Track dispatch' not in found(p).get('Pages', [])); ctx.close()
+    ctx, p = start(b, 'sales1'); ask(p, 'track'); check('a role that is not offered a page is not offered it in search either', 'Track dispatch' not in found(p).get('Pages', [])); ctx.close()
 
     # =============== 3. Records: found, shown, and they open ===============
     ctx, p = start(b, 'md'); ask(p, 'adom'); f = found(p)

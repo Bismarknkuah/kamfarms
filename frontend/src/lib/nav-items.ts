@@ -2,6 +2,8 @@ import { MeResponse } from './api-client';
 import { canDo } from './access';
 
 export interface NavItem {
+  /** If the Administrator switches this feature off for the person's role, the entry is not shown. */
+  feature?: string;
   label: string;
   href: string;
   /** Lucide icon name (kebab-case), verified to exist in this project's
@@ -33,6 +35,14 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: 'layout-dashboard', description: 'Your dashboard home.' },
+  {
+    label: 'Control center',
+    href: '/control-center',
+    icon: 'layout-dashboard',
+    description: 'The work waiting for you, with live figures, and the pages you run your area from.',
+    onlyForRoles: ['MD', 'CEO', 'FINANCE_DIRECTOR', 'FARM_DIRECTOR', 'WAREHOUSE_MANAGER', 'WAREHOUSE_SUPERVISOR', 'OPERATIONS_MANAGER', 'OPERATIONS_OFFICER'],
+    feature: 'control-center',
+  },
   {
     label: 'Oversight',
     href: '/oversight',
@@ -86,6 +96,13 @@ export const NAV_ITEMS: NavItem[] = [
     icon: 'truck',
     description: 'Where every dispatch is, who handled it and when, and the day it was supposed to arrive.',
     permission: 'dispatch.track',
+  },
+  {
+    label: 'Mill dispatch',
+    href: '/mill-dispatch',
+    icon: 'factory',
+    description: 'Paddy sent from the warehouse to the milling center, and finished products sent back, each with the supervisor\'s approval and counted in at the other end.',
+    permission: 'milldispatch.view',
   },
   {
     label: 'Log paddy intake',
@@ -310,7 +327,7 @@ export function hasNavPermission(me: MeResponse, permission?: string | string[])
 export function visibleNavItems(me: MeResponse): NavItem[] {
   const codes = me.roles.map((r) => r.code);
   return NAV_ITEMS.filter(
-    (item) => hasNavPermission(me, item.permission) && !item.hideForRoles?.some((c) => codes.includes(c)) && (!item.onlyForRoles || item.onlyForRoles.some((c) => codes.includes(c))),
+    (item) => hasNavPermission(me, item.permission) && !item.hideForRoles?.some((c) => codes.includes(c)) && (!item.onlyForRoles || item.onlyForRoles.some((c) => codes.includes(c))) && !(item.feature && me.hiddenFeatures?.includes(item.feature)),
   );
 }
 

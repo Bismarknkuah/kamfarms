@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Optional } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
@@ -6,12 +6,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { JwtPayload } from '../types/jwt-payload';
 import { AuthenticatedUser, ResolvedRole } from '../types/authenticated-user';
 import { grantAdministratorAccess } from '../administrator-access';
+import { RoleAccessService } from '../../access/role-access.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
+    @Optional() private readonly access?: RoleAccessService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -41,7 +43,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     // The System Administrator is widened to every permission and every place here (see administrator-access.ts).
-    const roles: ResolvedRole[] = grantAdministratorAccess(
+    const granted: ResolvedRole[] = grantAdministratorAccess(
       user.roles.map((ur) => ({
         roleId: ur.roleId,
         roleCode: ur.role.code,
@@ -49,6 +51,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         scopes: ur.scopes.map((s) => ({ scopeType: s.scopeType, scopeId: s.scopeId })),
       })),
     );
+    // What the Administrator has switched off for each role comes off here, on every request (never for the Administrator): see RoleAccessService.
+    const roles: ResolvedRole[] = this.access ? await this.access.restrict(granted) : granted;
 
     const permissionCodes = new Set<string>();
     roles.forEach((r) => r.permissions.forEach((p) => permissionCodes.add(p)));

@@ -5,6 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, Bell, MessageSquare, ChevronDown } from 'lucide-react';
 import { MeResponse, SearchGroup, notificationsApi, messagingApi, searchApi } from '@/lib/api-client';
+
+/** Answers already fetched, kept 30 seconds (per sign-in), so backspacing or retyping is instant. */
+const searchMemo = new Map<string, { at: number; groups: SearchGroup[] }>();
+const remember = (key: string, groups: SearchGroup[]) => { if (searchMemo.size >= 60) searchMemo.delete(searchMemo.keys().next().value as string); searchMemo.set(key, { at: Date.now(), groups }); };
+const KIND_ORDER = ['orders', 'dispatches', 'paddy-requests', 'farms', 'warehouses', 'milling-centers'];
 import { adminNavSections, visibleNavItems } from '@/lib/nav-items';
 
 // Every dashboard in the reference design carries this same bar: a
@@ -16,8 +21,15 @@ import { adminNavSections, visibleNavItems } from '@/lib/nav-items';
 export function TopBar({ me, accessToken }: { me: MeResponse; accessToken: string }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const [groups, setGroups] = useState<SearchGroup[]>([]);
-  const [searching, setSearching] = useState(false);
+  // Search is asked in two parts: the quick kinds answer first, the slower assembled ones (dispatches, paddy requests) follow. What is on screen is kept until
+  // something better arrives, and a slow or failed part says so in words: the list never just empties.
+  const [fastGroups, setFastGroups] = useState<SearchGroup[]>([]);
+  const [slowGroups, setSlowGroups] = useState<SearchGroup[]>([]);
+  const [fastBusy, setFastBusy] = useState(false);
+  const [slowBusy, setSlowBusy] = useState(false);
+  const [gaps, setGaps] = useState<string[]>([]);
+  const [failed, setFailed] = useState(false);
+  const searching = fastBusy || slowBusy;
   const [searchOpen, setSearchOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
@@ -40,15 +52,25 @@ export function TopBar({ me, accessToken }: { me: MeResponse; accessToken: strin
   const pageHits = needle.length >= 2 ? menu.filter((i) => i.label.toLowerCase().includes(needle) || i.description.toLowerCase().includes(needle)).slice(0, 5) : [];
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 2) { setGroups([]); setSearching(false); return; }
-    setSearching(true);
-    const mine = ++seq.current;
+    if (q.length < 2) { setFastBusy(false); setSlowBusy(false); setGaps([]); setFailed(false); return; }
+    const ac = new AbortController();
+    setGaps([]); setFailed(false);
     const t = setTimeout(() => {
-      searchApi.search(accessToken, q)
-        .then((r) => { if (seq.current === mine) { setGroups(Array.isArray(r?.groups) ? r.groups : []); setSearching(false); } })
-        .catch(() => { if (seq.current === mine) { setGroups([]); setSearching(false); } });
-    }, 220);
-    return () => clearTimeout(t);
+      const ask = (scope: 'fast' | 'slow', put: (g: SearchGroup[]) => void, busy: (b: boolean) => void) => {
+        const key = `${accessToken.slice(-16)}:${scope}:${q.toLowerCase()}`; const hit = searchMemo.get(key);
+        if (hit && Date.now() - hit.at < 30_000) { put(hit.groups); busy(false); return; }
+        busy(true);
+        searchApi.search(accessToken, q, scope, ac.signal)
+          .then((r) => {
+            const gs = Array.isArray(r?.groups) ? r.groups : []; put(gs);
+            if (r?.incomplete?.length) setGaps((g) => [...g, ...r.incomplete!]); else remember(key, gs);
+            busy(false);
+          })
+          .catch(() => { if (!ac.signal.aborted) { setFailed(true); busy(false); } });   // keep what is on screen; say it did not work
+      };
+      ask('fast', setFastGroups, setFastBusy); ask('slow', setSlowGroups, setSlowBusy);
+    }, 200);
+    return () => { clearTimeout(t); ac.abort(); };
   }, [query, accessToken]);
   useEffect(() => {
     const away = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setSearchOpen(false); };
@@ -56,6 +78,7 @@ export function TopBar({ me, accessToken }: { me: MeResponse; accessToken: strin
     return () => document.removeEventListener('mousedown', away);
   }, []);
 
+  const groups = [...fastGroups, ...slowGroups].sort((x, y) => KIND_ORDER.indexOf(x.key) - KIND_ORDER.indexOf(y.key));
   const sections: { label: string; items: { href: string; title: string; subtitle: string; index: number }[] }[] = [];
   let n = 0;
   if (pageHits.length > 0) sections.push({ label: 'Pages', items: pageHits.map((i) => ({ href: i.href, title: i.label, subtitle: i.description, index: n++ })) });
@@ -63,7 +86,7 @@ export function TopBar({ me, accessToken }: { me: MeResponse; accessToken: strin
   const flat = sections.flatMap((x) => x.items);
   const show = searchOpen && needle.length >= 2;
 
-  const go = (href: string) => { setSearchOpen(false); setQuery(''); setGroups([]); setActive(-1); router.push(href); };
+  const go = (href: string) => { setSearchOpen(false); setQuery(''); setFastGroups([]); setSlowGroups([]); setGaps([]); setFailed(false); setActive(-1); router.push(href); };
   const onSearch = (e: React.FormEvent) => { e.preventDefault(); const hit = flat[active >= 0 ? active : 0]; if (hit) go(hit.href); };
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setSearchOpen(true); setActive((i) => (flat.length === 0 ? -1 : (i + 1) % flat.length)); }
@@ -85,7 +108,7 @@ export function TopBar({ me, accessToken }: { me: MeResponse; accessToken: strin
     // while leaving space for the person's tools on the right; the tools sit at the right edge. (Below 1360px the name is dropped from the tools so
     // they stay narrow, and above it the name is capped at 10rem; on a tablet the bar is simply search on the left, tools on the right.)
     <div className="relative hidden items-center gap-4 border-b border-paddy-100 bg-white px-6 py-3 [--bar-side:14rem] md:flex min-[1360px]:[--bar-side:24rem]" data-testid="top-bar">
-      <form ref={box} onSubmit={onSearch} role="search" className="relative w-full md:flex-1 lg:absolute lg:left-1/2 lg:top-1/2 lg:w-[min(34rem,calc(100%_-_2*var(--bar-side)))] lg:flex-none lg:-translate-x-1/2 lg:-translate-y-1/2" data-testid="top-bar-search">
+      <form ref={box} onSubmit={onSearch} role="search" hidden={me.hiddenFeatures?.includes('quick-search')} className="relative w-full md:flex-1 lg:absolute lg:left-1/2 lg:top-1/2 lg:w-[min(34rem,calc(100%_-_2*var(--bar-side)))] lg:flex-none lg:-translate-x-1/2 lg:-translate-y-1/2" data-testid="top-bar-search">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
         <input
           data-testid="search-input"
@@ -102,7 +125,7 @@ export function TopBar({ me, accessToken }: { me: MeResponse; accessToken: strin
           className="w-full rounded-full border border-paddy-100 bg-rice-50 py-2 pl-9 pr-4 text-sm outline-none focus:border-paddy-500"
         />
         {show && (
-          <div id="quick-search-results" role="listbox" data-testid="search-results" className="absolute left-0 right-0 top-full z-30 mt-2 max-h-[70vh] overflow-y-auto rounded-2xl border border-paddy-100 bg-white p-2 shadow-lg">
+          <div id="quick-search-results" role="listbox" aria-busy={searching} data-testid="search-results" className="absolute left-0 right-0 top-full z-30 mt-2 max-h-[70vh] overflow-y-auto rounded-2xl border border-paddy-100 bg-white p-2 shadow-lg">
             {sections.map((sec) => (
               <div key={sec.label} data-testid="search-group" data-label={sec.label} className="py-1">
                 <p className="px-3 pb-1 pt-1 text-xs font-medium uppercase tracking-wide text-ink-500">{sec.label}</p>
@@ -115,7 +138,9 @@ export function TopBar({ me, accessToken }: { me: MeResponse; accessToken: strin
                 ))}
               </div>
             ))}
-            {flat.length === 0 && <p className="px-3 py-3 text-sm text-ink-500" data-testid="search-empty">{searching ? 'Searching...' : `Nothing found for \u201c${query.trim()}\u201d.`}</p>}
+            {flat.length === 0 && <p className="px-3 py-3 text-sm text-ink-500" data-testid="search-empty">{searching ? 'Searching...' : failed ? 'Search could not reach the server just now. Try again in a moment.' : gaps.length > 0 ? `${gaps.join(' and ')} could not be searched just now. Try again in a moment.` : `Nothing found for \u201c${query.trim()}\u201d.`}</p>}
+            {flat.length > 0 && slowBusy && <p className="px-3 py-2 text-xs text-ink-500" data-testid="search-more">Still looking in dispatches and paddy requests...</p>}
+            {flat.length > 0 && !searching && (failed || gaps.length > 0) && <p className="px-3 py-2 text-xs text-amber-700" data-testid="search-gap">{failed ? 'Some results could not be loaded.' : `${gaps.join(' and ')} could not be searched just now.`} Keep typing to try again.</p>}
           </div>
         )}
       </form>

@@ -12,5 +12,5 @@ export class SearchController {
 
   /** Quick search for the signed-in person. Any signed-in person may ask: the service decides, kind by kind, what they may see. */
   @Get()
-  search(@CurrentUser() actor: AuthenticatedUser, @Query('q') q?: string) { return this.service.search(actor, q ?? ''); }
+  search(@CurrentUser() actor: AuthenticatedUser, @Query('q') q?: string, @Query('scope') scope?: string) { return this.service.search(actor, q ?? '', scope === 'fast' || scope === 'slow' ? scope : undefined); }
 }

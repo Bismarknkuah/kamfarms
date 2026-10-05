@@ -29,7 +29,7 @@ function build() {
   const wheres: Record<string, any[]> = {};
   const table = (name: string) => ({ findMany: jest.fn(async ({ where, take }: any) => { (wheres[name] ??= []).push(where); return DATA[name].filter((r) => matches(r, where)).slice(0, take); }) });
   const prisma: any = { salesOrder: table('salesOrder'), farm: table('farm'), warehouse: table('warehouse'), millingCenter: table('millingCenter') };
-  const tracking = { list: jest.fn(async () => ({ journeys: [{ id: 'farm:DS-1', ref: 'DS-1', from: { name: 'Nkawkaw Farm' }, to: { name: 'Tamale Warehouse' }, label: 'In transit' }], counts: {} })) };
+  const tracking = { list: jest.fn(async () => ({ journeys: [{ id: 'farm:DS-1', ref: 'DS-1', requestRef: null, vehicle: null, driver: null, lines: [], from: { name: 'Nkawkaw Farm' }, to: { name: 'Tamale Warehouse' }, label: 'In transit' }], counts: {} })) };
   const supply = { board: jest.fn(async () => [{ id: 's1', requestNumber: 'SR-2026-000001', warehouse: { name: 'Tamale Warehouse' }, millingCenter: null, label: 'With the Farm Director' }, { id: 's2', requestNumber: 'SR-2026-000002', warehouse: { name: 'Kumasi Warehouse' }, millingCenter: null, label: 'x' }]) };
   return { service: new SearchService(prisma, tracking as any, supply as any), prisma, wheres, tracking, supply };
 }
@@ -92,7 +92,7 @@ describe('quick search', () => {
       const h = build(); const a = actor('wm', 'WAREHOUSE_MANAGER', ['dispatch.track']);
       expect((await h.service.search(a, 'ds')).groups).toEqual([]); expect(h.tracking.list).not.toHaveBeenCalled();
       const r = await h.service.search(a, 'ds-1');
-      expect(h.tracking.list).toHaveBeenCalledWith(a, { q: 'ds-1', status: 'all' });
+      expect(h.tracking.list).toHaveBeenCalledWith(a, { status: 'all' });   // the whole (cached) list is built once, then filtered here
       expect(r.groups[0]).toMatchObject({ key: 'dispatches', results: [{ title: 'DS-1', subtitle: 'Nkawkaw Farm to Tamale Warehouse · In transit', href: '/track-dispatch?ref=DS-1' }] });
       expect(keys(await build().service.search(actor('x', 'SALES_OFFICER', ['sales.create']), 'ds-1'))).not.toContain('dispatches');
     });
@@ -113,5 +113,39 @@ describe('quick search', () => {
     const r = await build().service.search(actor('md', 'MD', ['sales.view', 'supply.view', 'farm.view', 'warehouse.view', 'dispatch.track']), '  tam  ');
     expect(r.q).toBe('tam'); expect(keys(r)).toEqual(['dispatches', 'paddy-requests', 'warehouses']);
     expect((await build().service.search(actor('md', 'MD', ['sales.view']), 'x'.repeat(200))).q).toHaveLength(60);
+  });
+});
+
+describe('quick search: fast and slow parts, cached, never held up', () => {
+  const md = () => actor('md', 'MD', ['sales.view', 'supply.view', 'farm.view', 'warehouse.view', 'dispatch.track']);
+  it('the fast part never touches the heavy loads, and the slow part never runs the small queries', async () => {
+    const h = build();
+    expect(keys(await h.service.search(md(), 'tam', 'fast'))).toEqual(['warehouses']);
+    expect(h.tracking.list).not.toHaveBeenCalled(); expect(h.supply.board).not.toHaveBeenCalled();
+    expect(keys(await h.service.search(md(), 'tam', 'slow'))).toEqual(['dispatches', 'paddy-requests']);
+    expect(h.prisma.warehouse.findMany).toHaveBeenCalledTimes(1);
+  });
+  it('typing more letters reuses the heavy load: built once per person, not once per keystroke', async () => {
+    const h = build();
+    for (const q of ['nka', 'nkaw', 'nkawk', 'nkawka']) expect(titles(await h.service.search(md(), q, 'slow'), 'dispatches')).toEqual(['DS-1']);
+    expect(h.tracking.list).toHaveBeenCalledTimes(1); expect(h.supply.board).toHaveBeenCalledTimes(1);
+    await h.service.search(actor('someone-else', 'MD', ['dispatch.track', 'supply.view']), 'nka', 'slow');
+    expect(h.tracking.list).toHaveBeenCalledTimes(2);                      // another person gets their OWN load, never a shared one
+  });
+  it('the same words from the same person are answered again without new queries', async () => {
+    const h = build(); await h.service.search(md(), 'tam', 'fast'); await h.service.search(md(), 'TAM ', 'fast');
+    expect(h.prisma.warehouse.findMany).toHaveBeenCalledTimes(1);
+  });
+  it('a kind of record that hangs does not hold the others up, and the answer says what is missing', async () => {
+    const h = build(); (h.service as any).timeoutMs = 30; h.tracking.list.mockImplementation(() => new Promise(() => {}));
+    const r = await h.service.search(md(), 'tam');
+    expect(r.incomplete).toEqual(['Dispatches']); expect(keys(r)).toEqual(['paddy-requests', 'warehouses']);
+  });
+  it('an answer with a gap is never reused: the next try really tries again', async () => {
+    const h = build(); (h.service as any).timeoutMs = 30; h.tracking.list.mockImplementationOnce(() => new Promise(() => {}));
+    await h.service.search(md(), 'tam', 'fast'); const slow1 = await h.service.search(md(), 'tam', 'slow'); expect(slow1.incomplete).toEqual(['Dispatches']);
+    h.tracking.list.mockResolvedValue({ journeys: [{ id: 'j', ref: 'DS-9', requestRef: null, vehicle: null, driver: null, lines: [], from: { name: 'A' }, to: { name: 'Tamale Warehouse' }, label: 'In transit' }], counts: {} });
+    (h.service as any).journeys.clear();                                    // (the stuck load is given up on after its time; clear it here instead of waiting)
+    const slow2 = await h.service.search(md(), 'tam', 'slow'); expect(slow2.incomplete).toBeUndefined(); expect(titles(slow2, 'dispatches')).toEqual(['DS-9']);
   });
 });

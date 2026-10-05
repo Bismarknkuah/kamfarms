@@ -78,6 +78,8 @@ export interface MeResponse {
   roles: { code: string; scopes: { scopeType: string; scopeId: string | null }[] }[];
   permissions: string[];
   mustChangePassword: boolean;
+  /** Menu-and-screen features the Administrator switched off for this person's role (e.g. 'control-center', 'quick-search'). */
+  hiddenFeatures?: string[];
 }
 
 export const authApi = {
@@ -1535,7 +1537,7 @@ export const deliveryReportsApi = {
 
 export const shipmentsApi = {
   /** A whole truck counted in at once: one count per size. */
-  receiveDispatch: (accessToken: string, ref: string, data: { lines: { paddyGradeId: string; receivedBags: number }[]; receivedCondition?: string; notes?: string }) =>
+  receiveDispatch: (accessToken: string, ref: string, data: { lines: { paddyGradeId: string; receivedBags: number; damagedBags?: number }[]; receivedCondition?: string; notes?: string; damageNote?: string }) =>
     request<{ dispatchRef: string; countedIn: number; alreadyCountedIn: number }>(`/shipments/dispatch/${encodeURIComponent(ref)}/receive`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
   list: (accessToken: string, filters: { warehouseId?: string; farmId?: string; inTransitOnly?: boolean } = {}) => {
     const params = new URLSearchParams();
@@ -1557,10 +1559,13 @@ export const shipmentsApi = {
     receivedCondition?: string,
     receivedMoisturePercent?: number,
     notes?: string,
+    /** Of the bags that arrived, how many are spoiled or broken (held out of the stock for the Warehouse Supervisor), and what is wrong with them. */
+    damagedBags?: number,
+    damageNote?: string,
   ) =>
     request<Shipment>(
       `/shipments/${id}/receive`,
-      { method: 'POST', body: JSON.stringify({ receivedKg, receivedBags, receivedCondition, receivedMoisturePercent, notes }) },
+      { method: 'POST', body: JSON.stringify({ receivedKg, receivedBags, receivedCondition, receivedMoisturePercent, notes, damagedBags, damageNote }) },
       accessToken,
     ),
 };
@@ -2145,7 +2150,13 @@ export const controlCenterApi = {
 };
 
 export interface JourneyStep { key: string; label: string; role: string; who: string | null; at: string | null; state: 'done' | 'current' | 'upcoming'; waitedHours: number | null; detail: string | null }
+/** Spoiled or broken bags reported when a truck was counted in, and what the Warehouse Supervisor decided. */
+export interface DispatchReview {
+  id: string; reviewNumber: string; status: 'PENDING' | 'APPROVED' | 'REJECTED'; damagedBags: number; note: string; lines: { label: string; sentBags: number; receivedBags: number; damagedBags: number }[];
+  submittedBy: string | null; submittedAt: string; decidedBy: string | null; decidedAt: string | null; decisionNote: string | null; canDecide: boolean;
+}
 export interface DispatchJourney {
+  review?: DispatchReview | null; needsReview?: boolean;
   id: string; kind: 'FARM_DISPATCH' | 'PADDY_TRANSFER' | 'RICE_TRANSFER'; ref: string; requestRef: string | null; status: 'REQUESTED' | 'IN_REVIEW' | 'IN_TRANSIT' | 'DELIVERED'; label: string;
   from: { name: string }; to: { id: string; name: string }; lines: { paddyGradeId: string | null; label: string; bags: number; receivedBags: number | null }[]; totalBags: number; vehicle: string | null; driver: string | null;
   neededBy: string | null; deliveredAt: string | null; late: { hours: number; delivered: boolean } | null;
@@ -2153,13 +2164,54 @@ export interface DispatchJourney {
   steps: JourneyStep[]; lastActivity: string | null;
   action: { type: 'CONFIRM_TRUCK'; key: string } | { type: 'OPEN'; href: string; label: string } | null;
 }
-export interface DispatchTrackingView { journeys: DispatchJourney[]; counts: { open: number; delivered: number; late: number } }
+export interface DispatchTrackingView { journeys: DispatchJourney[]; counts: { open: number; delivered: number; late: number; review?: number } }
 export const dispatchTrackingApi = {
   list: (accessToken: string, status: 'open' | 'delivered' | 'all' = 'all') => request<DispatchTrackingView>(`/dispatch-tracking?status=${status}`, { method: 'GET', cache: 'no-store' }, accessToken),
 };
 
 export interface SearchResult { id: string; title: string; subtitle: string; href: string }
 export interface SearchGroup { key: string; label: string; results: SearchResult[] }
+export interface AccessFeatureInfo { key: string; label: string; description: string; pages: string[]; ui: boolean }
+export interface AccessRoleInfo { code: string; name: string; held: string[]; denied: string[] }
+export interface AccessMatrix { features: AccessFeatureInfo[]; roles: AccessRoleInfo[] }
+export const accessApi = {
+  /** Every feature that can be switched off, every role, which features each has by default, and which are switched off. */
+  features: (accessToken: string) => request<AccessMatrix>('/access/features', { method: 'GET', cache: 'no-store' }, accessToken),
+  /** Replace the list of features switched off for one role. */
+  save: (accessToken: string, roleCode: string, denied: string[]) => request<{ code: string; denied: string[] }>(`/access/features/${encodeURIComponent(roleCode)}`, { method: 'PUT', body: JSON.stringify({ denied }) }, accessToken),
+};
+
+export const receiptReviewsApi = {
+  /** The Warehouse Supervisor accepts the damage report: the held bags are written off. */
+  approve: (accessToken: string, id: string, note?: string) => request<{ id: string; status: string }>(`/receipt-reviews/${id}/approve`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
+  /** The Warehouse Supervisor does not accept it: the held bags go back into stock. A reason is required. */
+  reject: (accessToken: string, id: string, note?: string) => request<{ id: string; status: string }>(`/receipt-reviews/${id}/reject`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
+};
+
 export const searchApi = {
-  search: (accessToken: string, q: string) => request<{ q: string; groups: SearchGroup[] }>(`/search?q=${encodeURIComponent(q)}`, { method: 'GET', cache: 'no-store' }, accessToken),
+  /** `scope` asks for the quick kinds (`fast`) or the slower assembled ones (`slow`) separately; `signal` cancels an answer nobody is waiting for any more. */
+  search: (accessToken: string, q: string, scope?: 'fast' | 'slow', signal?: AbortSignal) => request<{ q: string; groups: SearchGroup[]; incomplete?: string[] }>(`/search?q=${encodeURIComponent(q)}${scope ? `&scope=${scope}` : ''}`, { method: 'GET', cache: 'no-store', signal }, accessToken),
+};
+
+export interface MillDispatchLine { key: string; kind: 'PADDY' | 'PACKAGED_RICE' | 'BROKEN_RICE' | 'RICE_HULL'; label: string; bags: number; kg: number; receivedBags: number | null; receivedKg: number | null }
+export interface MillDispatchView {
+  id: string; transferNumber: string; direction: 'TO_MILL' | 'TO_WAREHOUSE'; status: 'PENDING_APPROVAL' | 'IN_TRANSIT' | 'RECEIVED' | 'REJECTED' | 'CANCELLED'; label: string;
+  warehouse: { id: string; name: string }; millingCenter: { id: string; name: string }; from: string; to: string; lines: MillDispatchLine[]; totalBags: number; totalKg: number;
+  driverName: string | null; vehiclePlate: string | null; notes: string | null; requestedBy: string; requestedAt: string; approvedBy: string | null; approvedAt: string | null; decisionNote: string | null;
+  receivedBy: string | null; receivedAt: string | null; receiveNote: string | null; varianceKg: number | null; approverRole: string; receiverRole: string;
+  canApprove: boolean; canReceive: boolean; canCancel: boolean; steps: { label: string; who: string | null; at: string | null; state: 'done' | 'current' | 'upcoming' | 'stopped' }[];
+}
+export interface MillDispatchOptions {
+  toMill: { asOfficer?: boolean; places: { warehouse: { id: string; name: string }; mills: { id: string; name: string }[]; paddy: { paddyGradeId: string; label: string; bags: number }[] }[] } | null;
+  toWarehouse: { mills: { id: string; name: string; warehouse: { id: string; name: string }; packaged: { productId: string; packagingSizeId: string; label: string; bags: number; kg: number }[]; broken: { productId: string; kg: number } | null; hull: { productId: string; kg: number } | null }[] } | null;
+}
+export interface MillDispatchInput { direction: 'TO_MILL' | 'TO_WAREHOUSE'; millingCenterId: string; lines: { kind: string; paddyGradeId?: string; productId?: string; packagingSizeId?: string; bags?: number; kg?: number }[]; driverName?: string; vehiclePlate?: string; notes?: string }
+export const millDispatchApi = {
+  list: (accessToken: string) => request<MillDispatchView[]>('/mill-dispatches', { method: 'GET', cache: 'no-store' }, accessToken),
+  options: (accessToken: string) => request<MillDispatchOptions>('/mill-dispatches/options', { method: 'GET', cache: 'no-store' }, accessToken),
+  request: (accessToken: string, data: MillDispatchInput) => request<MillDispatchView>('/mill-dispatches', { method: 'POST', body: JSON.stringify(data) }, accessToken),
+  approve: (accessToken: string, id: string, note?: string) => request<MillDispatchView>(`/mill-dispatches/${id}/approve`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
+  reject: (accessToken: string, id: string, reason: string) => request<MillDispatchView>(`/mill-dispatches/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }, accessToken),
+  cancel: (accessToken: string, id: string, note?: string) => request<MillDispatchView>(`/mill-dispatches/${id}/cancel`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
+  receive: (accessToken: string, id: string, data: { lines: { key: string; bags?: number; kg?: number }[]; notes?: string }) => request<MillDispatchView>(`/mill-dispatches/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
 };

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Optional, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { RoleAccessService } from '../access/role-access.service';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
@@ -17,7 +18,7 @@ import { AuthenticatedUser } from './types/authenticated-user';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService, @Optional() private readonly access?: RoleAccessService) {}
 
   private meta(req: Request) {
     return { ipAddress: req.ip, userAgent: req.headers['user-agent'] as string | undefined };
@@ -88,6 +89,8 @@ export class AuthController {
         roles: user.roles.map((r) => ({ code: r.roleCode, scopes: r.scopes })),
         permissions: Array.from(user.permissionCodes),
         mustChangePassword: user.mustChangePassword,
+        /** Menu-and-screen features the Administrator has switched off for this person's roles (the website hides them; the server refuses them too). */
+        hiddenFeatures: this.access ? await this.access.hiddenFor(user.roles.map((r) => r.roleCode)) : [],
       },
     };
   }

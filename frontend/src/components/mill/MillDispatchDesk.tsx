@@ -127,9 +127,20 @@ export function MillDispatchDesk({ accessToken, hasPermission, focusId = null }:
       {notice && <p role="status" data-testid="md-notice" className="rounded-xl border border-paddy-700 bg-paddy-50 px-4 py-2.5 text-sm font-medium text-paddy-900">{notice}</p>}
       {actionError && <p role="alert" data-testid="md-error" className="rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm text-red-800">{actionError}</p>}
 
+      <div className="rounded-2xl border border-paddy-100 bg-white p-4" data-testid="mill-steps">
+        <p className="text-sm font-medium text-paddy-900">How the mill works, step by step</p>
+        <ol className="mt-2 grid gap-3 text-sm text-ink-700 sm:grid-cols-5">
+          <li><strong>1. Ask for paddy.</strong> The mill asks its warehouse; the Warehouse Supervisor approves.</li>
+          <li><strong>2. Count it in.</strong> When it arrives the mill counts the bags. That is the mill&rsquo;s record of paddy received.</li>
+          <li><strong>3. Record the milling.</strong> {hasPermission('milling.view') ? <a href="/production" className="font-medium text-paddy-700 underline">Production</a> : 'Production'}: the paddy used, and the rice, broken rice and hull recovered.</li>
+          <li><strong>4. Record the packaging.</strong> {hasPermission('packaging.create') ? <a href="/packaging" className="font-medium text-paddy-700 underline">Packaging</a> : 'Packaging'}: the packaged rice.</li>
+          <li><strong>5. Send it back.</strong> Packaged rice, broken rice and hull go to the warehouse, which counts them in.</li>
+        </ol>
+      </div>
+
       {options && !form && (
         <div className="flex flex-wrap gap-3">
-          {options.toMill && millsToMill.length > 0 && <button type="button" data-testid="md-open-paddy" onClick={() => open('TO_MILL')} className={`${BIG} inline-flex items-center gap-2`}><Plus size={18} aria-hidden="true" /> Send paddy to the mill</button>}
+          {options.toMill && millsToMill.length > 0 && <button type="button" data-testid="md-open-paddy" onClick={() => open('TO_MILL')} className={`${BIG} inline-flex items-center gap-2`}><Plus size={18} aria-hidden="true" /> {options.toMill.asOfficer ? 'Ask for paddy for the mill' : 'Send paddy to the mill'}</button>}
           {options.toWarehouse && millsToWh.length > 0 && <button type="button" data-testid="md-open-products" onClick={() => open('TO_WAREHOUSE')} className={`${BIG} inline-flex items-center gap-2`}><Plus size={18} aria-hidden="true" /> Send finished products to the warehouse</button>}
         </div>
       )}

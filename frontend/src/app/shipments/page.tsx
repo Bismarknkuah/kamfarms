@@ -16,6 +16,8 @@ export default function ShipmentsPage() {
   const [receivedBags, setReceivedBags] = useState('');
   const [receivedCondition, setReceivedCondition] = useState('');
   const [receivedMoisturePercent, setReceivedMoisturePercent] = useState('');
+  const [damagedBags, setDamagedBags] = useState('0');
+  const [damageNote, setDamageNote] = useState('');
   const [receiving, setReceiving] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedShipment, setExpandedShipment] = useState<Shipment | null>(null);
@@ -39,13 +41,17 @@ export default function ShipmentsPage() {
       // left with (so a full load shows no difference), and marks them as an estimate.
       const bags = parseInt(receivedBags, 10);
       const kg = receivedKg ? parseFloat(receivedKg) : undefined;
+      const damagedCount = parseInt(damagedBags || '0', 10) || 0;
+      if (damagedCount > bags) { setPageError('Spoiled or broken bags cannot be more than the bags that arrived.'); setReceiving(false); return; }
+      if (damagedCount > 0 && damageNote.trim().length < 3) { setPageError('Say what is wrong with the spoiled or broken bags. The Warehouse Supervisor needs it to decide.'); setReceiving(false); return; }
       await shipmentsApi.receive(
         accessToken, id, kg, bags,
         receivedCondition || undefined,
         receivedMoisturePercent ? parseFloat(receivedMoisturePercent) : undefined,
+        undefined, damagedCount || undefined, damagedCount > 0 ? damageNote.trim() : undefined,
       );
       setReceivingId(null);
-      setReceivedKg(''); setReceivedBags(''); setReceivedCondition(''); setReceivedMoisturePercent('');
+      setReceivedKg(''); setReceivedBags(''); setReceivedCondition(''); setReceivedMoisturePercent(''); setDamagedBags('0'); setDamageNote('');
       loadShipments(accessToken);
     } catch (err) {
       setPageError(err instanceof ApiError ? err.message : 'Failed to record receipt.');
@@ -129,6 +135,12 @@ export default function ShipmentsPage() {
                       <div className="mt-4">
                         <label className="mb-2 block text-xs font-medium text-ink-700">Condition on arrival</label>
                         <ConditionChips value={receivedCondition} onChange={setReceivedCondition} />
+                      </div>
+                      <div className="mt-4 rounded-xl bg-amber-50 p-3" data-testid="damage-block">
+                        <label className="mb-2 block text-xs font-medium text-ink-700">Of those, how many are spoiled or broken?</label>
+                        <BagStepper value={damagedBags} onChange={setDamagedBags} />
+                        <p className="mt-1 text-xs text-ink-500">They are held out of the stock and sent to the Warehouse Supervisor to approve.</p>
+                        {(parseInt(damagedBags || '0', 10) || 0) > 0 && <input data-testid="damage-note" value={damageNote} onChange={(e) => setDamageNote(e.target.value)} placeholder="What is wrong with them? (required)" className="mt-2 w-full rounded-xl border-2 border-paddy-100 px-3 py-2 text-sm" />}
                       </div>
                       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div>

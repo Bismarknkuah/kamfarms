@@ -81,8 +81,9 @@ describe('the warehouse asks to send paddy to its mill', () => {
     const h = build(); await h.service.request(paddy(), actor('wm1'));
     expect(told(h.notifications.notify)).toEqual([expect.objectContaining({ userIds: ['both', 'ws1'], type: 'mill.dispatch', entityType: 'MillDispatch', entityId: 'mt1', title: 'Tamale Warehouse wants to send paddy to Tamale Mill', body: 'Size 4: 20, Size 5: 10. It needs your approval.' })]);
   });
-  it('only the Warehouse Manager of that warehouse may ask: not another warehouse\'s, not a supervisor, not the mill', async () => {
-    for (const who of ['wm2', 'ws1', 'oo1', 'om1']) await expect(build().service.request(paddy(), actor(who))).rejects.toThrow(ForbiddenException);
+  it('only the Warehouse Manager of that warehouse, or the mill\'s own Operations Officer, may ask: not another warehouse\'s, not a supervisor, not the Operations Manager', async () => {
+    for (const who of ['wm2', 'ws1', 'om1']) await expect(build().service.request(paddy(), actor(who))).rejects.toThrow(ForbiddenException);
+    await expect(build().service.request(paddy(), actor('oo1'))).resolves.toMatchObject({ status: 'PENDING_APPROVAL', direction: 'TO_MILL' });
     await expect(build().service.request(paddy(), actor('ad1'))).resolves.toMatchObject({ status: 'PENDING_APPROVAL' });
   });
   it('refuses more than the warehouse holds, naming how many it has, and a size listed twice, and anything but paddy', async () => {
@@ -196,7 +197,7 @@ describe('the mill counts the paddy in', () => {
 describe('the mill sends finished products to the warehouse: the Operations Officer asks, the Operations Manager approves, the warehouse counts them in', () => {
   it('packaged rice, broken rice and hull are asked for, with the kilograms of packaged rice from its pack size', async () => {
     const h = build(); const v = await h.service.request(products(), actor('oo1'));
-    expect(v).toMatchObject({ direction: 'TO_WAREHOUSE', status: 'PENDING_APPROVAL', label: 'Waiting for the Operations Manager to approve', from: 'Tamale Mill', to: 'Tamale Warehouse', totalBags: 30, totalKg: 1350, approverRole: 'Operations Manager', receiverRole: 'Warehouse Manager' });
+    expect(v).toMatchObject({ direction: 'TO_WAREHOUSE', status: 'PENDING_APPROVAL', label: 'Waiting for the Operations Manager to approve', from: 'Tamale Mill', to: 'Tamale Warehouse', totalBags: 30, totalKg: 1350, approverRole: 'Operations Manager', receiverRole: 'Warehouse Manager or Warehouse Supervisor' });
     expect(v.lines.map((l) => [l.label, l.bags, l.kg])).toEqual([['Premium Rice 25 kg', 30, 750], ['Broken rice', 0, 200], ['Rice hull', 0, 400]]);
     expect(told(h.notifications.notify)).toEqual([expect.objectContaining({ userIds: ['om1'], title: 'Tamale Mill wants to send finished products to Tamale Warehouse' })]);
   });
@@ -255,7 +256,7 @@ describe('who sees which dispatches, what each person may do, and the forms', ()
     const h = build();
     const wm = await h.service.options(actor('wm1')); expect(wm.toWarehouse).toBeNull();
     expect(wm.toMill.places).toEqual([{ warehouse: { id: W1, name: 'Tamale Warehouse' }, mills: [{ id: M1, name: 'Tamale Mill' }], paddy: [{ paddyGradeId: G4, label: 'Size 4', bags: 100 }, { paddyGradeId: G5, label: 'Size 5', bags: 80 }] }]);
-    const oo = await h.service.options(actor('oo1')); expect(oo.toMill).toBeNull();
+    const oo = await h.service.options(actor('oo1')); expect(oo.toMill.asOfficer).toBe(true); expect(oo.toMill.places).toHaveLength(1); expect(wm.toMill.asOfficer).toBe(false);
     expect(oo.toWarehouse.mills).toEqual([{ id: M1, name: 'Tamale Mill', warehouse: { id: W1, name: 'Tamale Warehouse' }, packaged: [{ productId: RICE, packagingSizeId: S25, label: 'Premium Rice 25 kg', bags: 40, kg: 1000 }], broken: { productId: BROKEN, kg: 300 }, hull: { productId: HULL, kg: 500 } }]);
     const both = await h.service.options(actor('ad1')); expect(both.toMill.places).toHaveLength(2); expect(both.toWarehouse.mills).toHaveLength(2);
     const none = await h.service.options(actor('ws1')); expect(none).toEqual({ toMill: null, toWarehouse: null });

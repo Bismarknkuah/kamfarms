@@ -1,106 +1,79 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-
-const DISMISSED_KEY = 'kam_roms_install_dismissed';
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
-
-function isIos(): boolean {
-  if (typeof window === 'undefined') return false;
-  return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
-}
-
-function isStandalone(): boolean {
-  if (typeof window === 'undefined') return false;
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    // iOS Safari's own (non-standard) flag for "already added to home screen"
-    (window.navigator as unknown as { standalone?: boolean }).standalone === true
-  );
-}
+import { useEffect, useRef, useState } from 'react';
+import { Download, X } from 'lucide-react';
+import {
+  InstallEvent, InstallPlatform, capturedInstallEvent, clearInstallEvent, detectPlatform, instructionsFor, markInstalled, markShown, shouldOffer, snooze30Days,
+} from '@/lib/install';
 
 /**
- * Shows once a real, logged-in user lands on any dashboard page (mounted
- * inside DashboardShell, not the login page itself - installing before
- * someone even has an account to use makes no sense). Two real,
- * different code paths, not one glossed-over "install" button:
- *
- * - Chrome/Android/Edge fire a genuine `beforeinstallprompt` event this
- *   component captures and replays via `.prompt()` when the user taps
- *   the button - an actual native install flow, not a fake one.
- * - iOS Safari never fires that event at all (Apple doesn't support
- *   programmatic install prompts) - there is no way to trigger the
- *   "Add to Home Screen" flow from JavaScript on iOS. For iOS, this
- *   shows the real manual steps instead of pretending a button can do
- *   it, which would silently do nothing when tapped.
+ * A pop-up offered once per sign-in, on a phone or a computer, asking the person to put KAM-ROMS on their device. Where the browser provides a real install
+ * button (Chrome, Edge, Android) it is one tap; on an iPhone, iPad, Mac Safari or Firefox, which have none, it shows the exact steps for that device.
+ * "Not now" hides it until the next sign-in; "Don't ask for 30 days" hides it for a month; once installed it never appears again.
  */
 export function InstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [showIosInstructions, setShowIosInstructions] = useState(false);
-  const [dismissed, setDismissed] = useState(true); // default hidden until effects confirm it's worth showing
+  const [open, setOpen] = useState(false);
+  const [event, setEvent] = useState<InstallEvent | null>(null);
+  const [platform, setPlatform] = useState<InstallPlatform>('other');
+  const [busy, setBusy] = useState(false);
+  const primary = useRef<HTMLButtonElement>(null);
+  const token = useRef<string | null>(null);
 
   useEffect(() => {
-    if (isStandalone()) return; // already installed - nothing to offer
-    if (localStorage.getItem(DISMISSED_KEY) === 'true') return;
-
-    if (isIos()) {
-      setShowIosInstructions(true);
-      setDismissed(false);
-      return;
-    }
-
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-      setDismissed(false);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    token.current = sessionStorage.getItem('kam_roms_access_token');
+    if (!shouldOffer(token.current)) return;
+    const p = detectPlatform(); setPlatform(p);
+    setEvent(capturedInstallEvent());
+    const onReady = () => setEvent(capturedInstallEvent());
+    const onInstalled = () => { markInstalled(); setOpen(false); };
+    window.addEventListener('kam-install-ready', onReady); window.addEventListener('appinstalled', onInstalled);
+    // On an iPhone nothing more will arrive, so show soon. Elsewhere the browser's own install event can come a moment after the page opens: give it a moment.
+    const t = setTimeout(() => { if (shouldOffer(token.current)) { markShown(token.current!); setOpen(true); } }, p.startsWith('ios') ? 700 : 2200);
+    return () => { clearTimeout(t); window.removeEventListener('kam-install-ready', onReady); window.removeEventListener('appinstalled', onInstalled); };
   }, []);
 
-  const onDismiss = () => {
-    setDismissed(true);
-    localStorage.setItem(DISMISSED_KEY, 'true');
+  useEffect(() => {
+    if (!open) return;
+    primary.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  const install = async () => {
+    if (!event || busy) return;
+    setBusy(true);
+    try { await event.prompt(); const choice = await event.userChoice; if (choice.outcome === 'accepted') markInstalled(); } catch { /* the browser declined to show it: nothing to do */ }
+    clearInstallEvent(); setEvent(null); setBusy(false); setOpen(false);
   };
 
-  const onInstall = async () => {
-    if (!deferredPrompt) return;
-    await deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
-    setDeferredPrompt(null);
-    onDismiss();
-  };
-
-  if (dismissed || (!deferredPrompt && !showIosInstructions)) return null;
-
+  if (!open) return null;
+  const how = instructionsFor(platform);
   return (
-    <div className="border-b border-husk-300 bg-husk-100/60">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-2.5 text-sm">
-        {showIosInstructions ? (
-          <p className="text-soil-700">
-            Install KAM-ROMS on this phone: tap the <strong>Share</strong> button, then{' '}
-            <strong>&ldquo;Add to Home Screen.&rdquo;</strong>
-          </p>
-        ) : (
-          <p className="text-soil-700">Install KAM-ROMS for quicker, full-screen access - no browser bar.</p>
-        )}
-        <div className="flex items-center gap-2">
-          {!showIosInstructions && (
-            <button
-              type="button"
-              onClick={onInstall}
-              className="rounded-full bg-paddy-900 px-4 py-1 text-xs font-medium text-rice-50"
-            >
-              Install
-            </button>
-          )}
-          <button type="button" onClick={onDismiss} className="text-xs font-medium text-soil-500 underline">
-            Not now
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-4 sm:items-center" data-testid="install-backdrop">
+      <div role="dialog" aria-modal="true" aria-labelledby="install-title" data-testid="install-dialog" data-platform={platform} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+        <div className="flex items-start gap-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icons/icon-192.png" alt="" width={56} height={56} className="h-14 w-14 rounded-2xl border border-paddy-100" />
+          <div className="min-w-0 flex-1">
+            <h2 id="install-title" className="font-display text-xl font-medium text-paddy-900">{event ? 'Install KAM-ROMS on this device' : how.title}</h2>
+            <p className="mt-1 text-sm text-ink-700">Open it in one tap from your {platform.startsWith('desktop') ? 'desktop or taskbar' : 'home screen'}, full screen, like any other app.</p>
+          </div>
+          <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="rounded-full p-1.5 text-ink-500 hover:bg-rice-50"><X className="h-5 w-5" /></button>
+        </div>
+
+        {event ? (
+          <button ref={primary} type="button" onClick={install} disabled={busy} data-testid="install-now" className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-paddy-700 px-4 py-3 text-base font-medium text-white hover:bg-paddy-800 disabled:opacity-60">
+            <Download className="h-5 w-5" aria-hidden="true" /> Install now
           </button>
+        ) : (
+          <ol data-testid="install-instructions" className="mt-4 list-decimal space-y-2 rounded-2xl bg-rice-50 px-8 py-4 text-sm text-ink-900">
+            {how.steps.map((s) => <li key={s}>{s}</li>)}
+          </ol>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
+          <button ref={event ? undefined : primary} type="button" onClick={() => setOpen(false)} data-testid="install-not-now" className="rounded-lg px-3 py-2 font-medium text-paddy-800 hover:bg-rice-50">{event ? 'Not now' : 'Got it'}</button>
+          <button type="button" onClick={() => { snooze30Days(); setOpen(false); }} data-testid="install-snooze" className="rounded-lg px-3 py-2 text-ink-500 hover:bg-rice-50">Don&rsquo;t ask for 30 days</button>
         </div>
       </div>
     </div>

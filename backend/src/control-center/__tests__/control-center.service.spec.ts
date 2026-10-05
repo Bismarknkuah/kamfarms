@@ -17,6 +17,8 @@ const PERMS: Record<string, string[]> = {
   SALES_OFFICER: ['sales.create', 'tasks.complete'],
   FARM_MANAGER: ['paddy.create', 'delivery.create', 'tasks.complete'],
   ADMIN: ['dashboard.view'],
+  CEO: ['supply.view', 'dashboard.view', 'sales.release', 'finance.approve.director', 'reports.view'],
+  OPERATIONS_OFFICER: ['supply.view', 'supply.request', 'milldispatch.view', 'milldispatch.request', 'milldispatch.receive', 'tasks.complete'],
 };
 const actor = (id: string, role: string, scopes: Sc[] = GLOBAL, perms: string[] = PERMS[role]) =>
   ({ id, firstName: 'T', lastName: id, permissionCodes: new Set(perms), roles: [{ roleId: 'r', roleCode: role, permissions: perms, scopes }] }) as unknown as AuthenticatedUser;
@@ -47,8 +49,8 @@ function matches(row: any, where: any = {}): boolean {
     if (k === 'AND') return (v as any[]).every((c) => matches(row, c));
     if (k === 'OR') return (v as any[]).some((c) => matches(row, c));
     if (v && typeof v === 'object' && !(v instanceof Date)) {
-      const ops = Object.keys(v); if (!ops.every((o) => ['in', 'not'].includes(o))) throw new Error(`unknown filter ${k}: ${JSON.stringify(v)}`);
-      return ('in' in v ? v.in.includes(row[k]) : true) && ('not' in v ? row[k] !== v.not : true);
+      const ops = Object.keys(v); if (!ops.every((o) => ['in', 'not', 'gt'].includes(o))) throw new Error(`unknown filter ${k}: ${JSON.stringify(v)}`);
+      return ('in' in v ? v.in.includes(row[k]) : true) && ('not' in v ? row[k] !== v.not : true) && ('gt' in v ? row[k] > v.gt : true);
     }
     return row[k] === v;
   });
@@ -71,7 +73,7 @@ const whereOf = (h: ReturnType<typeof build>, model: string) => h.seen.filter((s
 
 describe('who has a control center', () => {
   it('the Managing Director, Farm Supervisor, Warehouse Manager and Supervisor, Operations Manager and Finance Director do; the Administrator may ask too', async () => {
-    expect([...CONTROL_CENTER_ROLES].sort()).toEqual(['FARM_DIRECTOR', 'FINANCE_DIRECTOR', 'MD', 'OPERATIONS_MANAGER', 'WAREHOUSE_MANAGER', 'WAREHOUSE_SUPERVISOR']);
+    expect([...CONTROL_CENTER_ROLES].sort()).toEqual(['CEO', 'FARM_DIRECTOR', 'FINANCE_DIRECTOR', 'MD', 'OPERATIONS_MANAGER', 'OPERATIONS_OFFICER', 'WAREHOUSE_MANAGER', 'WAREHOUSE_SUPERVISOR']);
     for (const role of CONTROL_CENTER_ROLES) await expect(build().service.forActor(actor('u', role))).resolves.toMatchObject({ role });
     await expect(build().service.forActor(actor('a', 'ADMIN', GLOBAL))).resolves.toMatchObject({ role: 'ADMIN' });
   });
@@ -214,5 +216,67 @@ describe('what a person sees follows what their role is allowed to do', () => {
     const h = build(); const v = await h.service.forActor(actor('fd-1', 'FINANCE_DIRECTOR', GLOBAL, ['sales.approve', 'finance.approve']));
     expect(countOf(v, 'orders-approve')).toBe(2);
     expect(whereOf(h, 'salesOrder')[0]).toEqual({ AND: [{}, { status: 'SUBMITTED' }] });
+  });
+});
+
+// ------------------------------------------------------------------ the CEO, the mill, and damaged-bag reviews
+const MT = (direction: string, status: string, millingCenterId: string, warehouseId: string) => ({ direction, status, millingCenterId, warehouseId });
+Object.assign(DATA, {
+  millTransfer: [
+    MT('TO_MILL', 'IN_TRANSIT', M1, W1), MT('TO_MILL', 'IN_TRANSIT', M1, W1), MT('TO_MILL', 'IN_TRANSIT', M2, W2),
+    MT('TO_MILL', 'PENDING_APPROVAL', M1, W1), MT('TO_MILL', 'PENDING_APPROVAL', M2, W2),
+    MT('TO_WAREHOUSE', 'PENDING_APPROVAL', M1, W1), MT('TO_WAREHOUSE', 'IN_TRANSIT', M1, W1), MT('TO_WAREHOUSE', 'IN_TRANSIT', M2, W2), MT('TO_WAREHOUSE', 'RECEIVED', M1, W1),
+  ],
+  inventoryBalance: [
+    { locationType: 'MILLING_CENTER', locationId: M1, productId: 'rice', bagCount: 20, quantityKg: 500 },
+    { locationType: 'MILLING_CENTER', locationId: M1, productId: 'broken', bagCount: 0, quantityKg: 80 },
+    { locationType: 'MILLING_CENTER', locationId: M1, productId: 'hull', bagCount: 0, quantityKg: 0 },        // nothing there: not "waiting"
+    { locationType: 'MILLING_CENTER', locationId: M1, productId: null, bagCount: 50, quantityKg: 2500 },      // paddy, not a finished product
+    { locationType: 'MILLING_CENTER', locationId: M2, productId: 'rice', bagCount: 5, quantityKg: 125 },
+    { locationType: 'WAREHOUSE', locationId: W1, productId: 'rice', bagCount: 9, quantityKg: 225 },
+  ],
+  receiptReview: [{ status: 'PENDING', warehouseId: W1 }, { status: 'PENDING', warehouseId: W2 }, { status: 'APPROVED', warehouseId: W1 }],
+});
+const WS_PERMS = ['supply.view', 'supply.forward', 'supply.fulfil', 'milldispatch.view', 'milldispatch.approve', 'milldispatch.receive', 'receipt.review', 'inventory.adjust', 'tasks.complete'];
+const at = (type: string, id: string): Sc[] => [{ scopeType: type, scopeId: id }];
+
+describe('the CEO and the mill: control centers and tiles', () => {
+  it('the CEO has a control center, with the tiles their permissions earn', async () => {
+    expect(keys(await build().service.forActor(actor('ceo-1', 'CEO')))).toEqual(['orders-release', 'expenses-director', 'supply-open', 'my-tasks']);
+  });
+  it('an Operations Officer sees paddy on its way to THEIR mill and the finished products waiting THERE, nothing of the other mill', async () => {
+    const v = await build().service.forActor(actor('oo-1', 'OPERATIONS_OFFICER', at('MILLING_CENTER', M1)));
+    expect(keys(v)).toEqual(['mill-paddy-coming', 'mill-products-ready', 'supply-open', 'my-tasks']);
+    expect(countOf(v, 'mill-paddy-coming')).toBe(2);       // the third is going to the other mill
+    expect(countOf(v, 'mill-products-ready')).toBe(2);     // rice and broken rice; not the empty hull, not the paddy, not the other mill's rice
+    expect(countOf(await build().service.forActor(actor('oo-2', 'OPERATIONS_OFFICER', at('MILLING_CENTER', M2))), 'mill-products-ready')).toBe(1);
+  });
+  it('an Operations Officer with no mill assigned sees zero, not the whole company', async () => {
+    const v = await build().service.forActor(actor('oo-3', 'OPERATIONS_OFFICER', []));
+    expect(countOf(v, 'mill-paddy-coming')).toBe(0); expect(countOf(v, 'mill-products-ready')).toBe(0);
+  });
+  it('a Warehouse Supervisor sees what is waiting for THEIR warehouse: paddy for the mill to approve, milled rice coming, damaged bags to review', async () => {
+    const h = build(); const v = await h.service.forActor(actor('ws-1', 'WAREHOUSE_SUPERVISOR', at('WAREHOUSE', W1), WS_PERMS));
+    expect(keys(v)).toEqual(['receipts-review', 'stock-corrections', 'supply-waiting', 'mill-approvals', 'milled-rice-coming', 'supply-open', 'my-tasks']);
+    expect(countOf(v, 'receipts-review')).toBe(1);          // the approved one and the other warehouse's are not theirs
+    expect(countOf(v, 'mill-approvals')).toBe(1);           // paddy for the mill: THEIR approval; finished products coming back are the Operations Manager's
+    expect(countOf(v, 'milled-rice-coming')).toBe(1);
+    expect(whereOf(h, 'receiptReview')[0]).toEqual({ status: 'PENDING', warehouseId: { in: [W1] } });
+    expect(whereOf(h, 'millTransfer').some((w) => JSON.stringify(w) === JSON.stringify({ status: 'PENDING_APPROVAL', OR: [{ direction: 'TO_MILL', warehouseId: { in: [W1] } }] }))).toBe(true);
+    const other = await build().service.forActor(actor('ws-2', 'WAREHOUSE_SUPERVISOR', at('WAREHOUSE', W2), WS_PERMS));
+    expect(countOf(other, 'receipts-review')).toBe(1); expect(countOf(other, 'milled-rice-coming')).toBe(1);
+  });
+  it('the Operations Manager approves finished products coming back, not paddy going out', async () => {
+    const v = await build().service.forActor(actor('om-1', 'OPERATIONS_MANAGER', GLOBAL, ['supply.view', 'milldispatch.view', 'milldispatch.approve', 'production.approve', 'tasks.complete']));
+    expect(keys(v)).toContain('mill-approvals'); expect(keys(v)).not.toContain('milled-rice-coming');
+    expect(countOf(v, 'mill-approvals')).toBe(1);           // only the one TO_WAREHOUSE request waiting
+  });
+  it('a Warehouse Manager sees milled rice coming, and no approvals', async () => {
+    const v = await build().service.forActor(actor('wm-1', 'WAREHOUSE_MANAGER', at('WAREHOUSE', W1), ['milldispatch.view', 'milldispatch.receive', 'warehouse.receive', 'supply.view', 'tasks.complete']));
+    expect(keys(v)).toContain('milled-rice-coming'); expect(keys(v)).not.toContain('mill-approvals'); expect(countOf(v, 'milled-rice-coming')).toBe(1);
+  });
+  it('the roles-only tiles are never shown to a role that merely holds the same permission', async () => {
+    const v = await build().service.forActor(actor('fd-9', 'FINANCE_DIRECTOR', GLOBAL, ['milldispatch.view', 'milldispatch.receive', 'milldispatch.request', 'tasks.complete']));
+    for (const k of ['mill-paddy-coming', 'mill-products-ready', 'milled-rice-coming']) expect(keys(v)).not.toContain(k);
   });
 });

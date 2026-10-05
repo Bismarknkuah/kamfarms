@@ -14,7 +14,7 @@ def open_tracker(b, key, **kw):
 def farm_refs(p): return sorted(c.get_attribute('data-ref') for c in p.locator('[data-testid=journey][data-kind=FARM_DISPATCH]').all())
 def card(p, ref): return p.locator(f'[data-testid=journey][data-ref="{ref}"]')
 
-TRACK = {'fm': True, 'wm1': True, 'wm2': True, 'sup': True, 'sup2': True, 'fsup': True, 'fsup2': True, 'md': True, 'ceo': True, 'sales1': False, 'sales2': False, 'fd': False, 'ops': False, 'ops2': False, 'oo': False}
+TRACK = {'fm': True, 'wm1': True, 'wm2': True, 'sup': True, 'sup2': True, 'fsup': True, 'fsup2': True, 'md': True, 'ceo': True, 'sales1': False, 'sales2': False, 'fd': True, 'ops': False, 'ops2': False, 'oo': False}
 TRACE = {'fd': True, 'md': True, 'ceo': True, 'sales1': True, 'sales2': True, 'sup': True, 'sup2': True, 'admin': True, 'wm1': False, 'wm2': False, 'fm': False, 'fsup': False, 'fsup2': False, 'ops': False, 'ops2': False, 'oo': False}
 ALL4 = sorted([A, B, C, R])
 VIS = {'fm': sorted([A, C]), 'wm1': sorted([A, R]), 'wm2': sorted([B, C]), 'sup': ALL4, 'sup2': ALL4, 'fsup': ALL4, 'fsup2': ALL4, 'md': ALL4, 'ceo': ALL4}
@@ -27,10 +27,11 @@ with sync_playwright() as pw:
     for key in sorted(set(TRACK) | set(TRACE)):
         ctx, p = U(b, key); p.goto(BASE + '/notifications'); p.wait_for_load_state('networkidle'); p.wait_for_timeout(300)
         seen_t[key] = p.locator('a[href="/track-dispatch"]').count() > 0; seen_r[key] = p.locator('a[href="/trace"]').count() > 0; ctx.close()
-    check('Track dispatch is offered to farm managers, warehouse managers, the supervisors, the Farm Supervisor, MD and CEO, and to no one else', all(seen_t[k] == v for k, v in TRACK.items()), {k: seen_t[k] for k in TRACK if seen_t[k] != TRACK[k]})
+    check('Track dispatch is offered to farm managers, warehouse managers, the supervisors, the Farm Supervisor, MD, CEO and (to follow, read only) the Finance Director, and to no one else', all(seen_t[k] == v for k, v in TRACK.items()), {k: seen_t[k] for k in TRACK if seen_t[k] != TRACK[k]})
     check('Trace batch is offered ONLY to the Finance Director, MD, CEO, Sales Officers and Warehouse Supervisors (and the Administrator\'s own menu)', all(seen_r[k] == v for k, v in TRACE.items()), {k: seen_r[k] for k in TRACE if seen_r[k] != TRACE[k]})
 
     # =============== 2. Each role tracks only what is theirs ===============
+    VIS['fd'] = VIS['md']   # the Finance Director follows everything, as the MD does (read only)
     for key, want in VIS.items():
         ctx, p = open_tracker(b, key); got = farm_refs(p)
         check(f'{key}: tracks exactly {want}', got == want, got); ctx.close()

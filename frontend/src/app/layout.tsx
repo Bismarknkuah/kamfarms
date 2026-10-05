@@ -54,10 +54,18 @@ export const viewport: Viewport = {
   themeColor: '#132C1A',
 };
 
+/**
+ * Chrome, Edge and Android fire their "this app can be installed" event ONCE, early, on whatever page is open (usually the sign-in page). This tiny script
+ * catches it the moment it happens and keeps it (lib/install.ts), so the install pop-up shown after sign-in can still use it. Without it the event was lost
+ * before anyone reached the dashboard, and people were never offered the one-tap install button.
+ */
+const INSTALL_CAPTURE = "window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__kamInstall=e;window.dispatchEvent(new Event('kam-install-ready'));});";
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${cormorant.variable} ${dmSans.variable}`}>
       <body className="bg-rice-50 font-sans text-ink-900 antialiased">
+        <script id="kam-install-capture" dangerouslySetInnerHTML={{ __html: INSTALL_CAPTURE }} />
         <ServiceWorkerRegister />
         <CallProvider>{children}</CallProvider>
       </body>

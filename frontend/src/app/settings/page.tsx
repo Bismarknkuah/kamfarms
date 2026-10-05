@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
+import { FeatureAccess } from '@/components/FeatureAccess';
 import { ApiError, type SettingGroupInfo, type SettingItem, rolesApi, settingsRegistryApi } from '@/lib/api-client';
 
 type Draft = Record<string, number | string[] | ''>;
@@ -96,6 +97,8 @@ export default function SystemSettingsPage() {
     <DashboardShell me={me}>
       <h1 className="font-display text-2xl font-medium text-paddy-900">System settings</h1>
       <p className="mt-1 max-w-3xl text-sm text-ink-500">The rules and limits the system works by. Each one starts at a standard value; change it here and the system follows, with no developer and no deployment. Every change is recorded in the audit log.</p>
+
+      {accessToken && <FeatureAccess accessToken={accessToken} />}
 
       {loadError && <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-testid="settings-load-error">{loadError}</p>}
       {!loadError && items.length === 0 && <p className="mt-6 text-sm text-ink-500">Loading the settings…</p>}

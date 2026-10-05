@@ -61,3 +61,8 @@ plain words when the server is older than the website.
 version that fails to start never replaces the one that is running. `backend/src/__tests__/app-boot.spec.ts` starts the whole
 server and checks the health route, the headers the website needs, and that the newest routes exist. See `docs/DEPLOYMENT.md`
 for what to do when the sign-in page says the server did not answer.
+
+## Controlling what each role can use (2026.10.16)
+
+In **System settings > Who can use what** you can switch features off per role. It takes effect within seconds, is recorded in the audit log, and is not reset when the system is updated (unlike changes to the
+permissions of a built-in role on the Roles page). You always keep every feature yourself. See `docs/FEATURE_ACCESS.md`.

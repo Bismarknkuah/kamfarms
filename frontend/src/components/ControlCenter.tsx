@@ -7,8 +7,8 @@ import { ApiError, type ControlCenterView, type MeResponse, controlCenterApi } f
 import { visibleNavItems } from '@/lib/nav-items';
 
 /** The roles that have a control center (the same list the server uses; the server is what actually refuses everyone else). */
-export const CONTROL_CENTER_ROLES = ['MD', 'FARM_DIRECTOR', 'WAREHOUSE_MANAGER', 'WAREHOUSE_SUPERVISOR', 'OPERATIONS_MANAGER', 'FINANCE_DIRECTOR'];
-export const hasControlCenter = (me: MeResponse) => me.roles.some((r) => CONTROL_CENTER_ROLES.includes(r.code));
+export const CONTROL_CENTER_ROLES = ['MD', 'CEO', 'FARM_DIRECTOR', 'WAREHOUSE_MANAGER', 'WAREHOUSE_SUPERVISOR', 'OPERATIONS_MANAGER', 'OPERATIONS_OFFICER', 'FINANCE_DIRECTOR'];
+export const hasControlCenter = (me: MeResponse) => me.roles.some((r) => CONTROL_CENTER_ROLES.includes(r.code)) && !me.hiddenFeatures?.includes('control-center');
 
 const COPY: Record<string, { title: string; body: string }> = {
   FINANCE_DIRECTOR: { title: 'Finance control center', body: 'Decide what is waiting for the Finance Director: orders, customer payments and expenses.' },
@@ -17,15 +17,19 @@ const COPY: Record<string, { title: string; body: string }> = {
   WAREHOUSE_MANAGER: { title: 'Warehouse control center', body: 'Count in what arrives at your warehouse and prepare the orders assigned to it.' },
   WAREHOUSE_SUPERVISOR: { title: 'Warehouse control center', body: 'Move paddy requests along, assign orders to warehouses, and move paddy between warehouses.' },
   OPERATIONS_MANAGER: { title: 'Operations control center', body: 'Approve production, move mill requests along, and keep the mills supplied.' },
+  CEO: { title: 'CEO\'s control center', body: 'Release approved orders, decide what only you can decide, and watch the whole company.' },
+  OPERATIONS_OFFICER: { title: 'Mill control center', body: 'Ask for paddy for your mill, count it in, record the milling and the packaging, and send the finished products back to the warehouse.' },
 };
 /** The pages each role runs its area from. Only the ones the person is offered in the menu are shown. */
 const SHORTCUTS: Record<string, string[]> = {
-  FINANCE_DIRECTOR: ['/finance', '/sales', '/expenses', '/reports', '/audit-log', '/analytics'],
-  MD: ['/oversight', '/track-dispatch', '/analytics', '/finance', '/sales', '/warehouse-requests', '/reports', '/audit-log'],
+  FINANCE_DIRECTOR: ['/finance', '/sales', '/expenses', '/track-dispatch', '/warehouse-requests', '/mill-dispatch', '/production', '/reports', '/analytics', '/audit-log', '/assistant'],
+  MD: ['/oversight', '/track-dispatch', '/mill-dispatch', '/analytics', '/finance', '/sales', '/warehouse-requests', '/reports', '/audit-log'],
   FARM_DIRECTOR: ['/paddy-entries', '/deliveries', '/track-dispatch', '/warehouse-requests', '/farms', '/office', '/reports'],
-  WAREHOUSE_MANAGER: ['/shipments', '/track-dispatch', '/site-deliveries', '/warehouse-requests', '/sales', '/inventory', '/packaging'],
-  WAREHOUSE_SUPERVISOR: ['/warehouse-requests', '/track-dispatch', '/site-deliveries', '/sales', '/shipments', '/warehouses', '/inventory', '/office'],
-  OPERATIONS_MANAGER: ['/production', '/warehouse-requests', '/quality', '/packaging', '/inventory', '/reports'],
+  WAREHOUSE_MANAGER: ['/shipments', '/mill-dispatch', '/track-dispatch', '/site-deliveries', '/warehouse-requests', '/sales', '/inventory', '/packaging'],
+  WAREHOUSE_SUPERVISOR: ['/warehouse-requests', '/mill-dispatch', '/track-dispatch', '/site-deliveries', '/sales', '/shipments', '/warehouses', '/inventory', '/office'],
+  OPERATIONS_MANAGER: ['/mill-dispatch', '/production', '/warehouse-requests', '/quality', '/packaging', '/inventory', '/reports'],
+  CEO: ['/oversight', '/track-dispatch', '/analytics', '/finance', '/sales', '/warehouse-requests', '/mill-dispatch', '/reports', '/audit-log'],
+  OPERATIONS_OFFICER: ['/mill-dispatch', '/production', '/packaging', '/quality', '/warehouse-requests', '/tasks'],
 };
 
 /**

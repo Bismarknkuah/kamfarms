@@ -1,6 +1,7 @@
 'use client';
 
 import { ReviewDialog } from '@/components/review/ReviewDialog';
+import { ResetApprovalQueue } from '@/components/review/ResetApprovalQueue';
 import { PaddyEntryDetails, PaymentDetails, ProductionDetails, ResetRequestDetails } from '@/components/review/EntityDetails';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -566,51 +567,6 @@ function PaddyRequestQuickAction({ accessToken }: { accessToken: string }) {
 
 // ── Farm Supervisor: respond to warehouse requests - accept with an ─
 // ETA, or decline with a reason. ─────────────────────────────────────
-function ResetApprovalQueue({ accessToken }: { accessToken: string }) {
-  const [items, setItems] = useState<ResetRequest[]>([]);
-  const [reviewing, setReviewing] = useState<string | null>(null);
-  const load = () => {
-    systemResetApi.list(accessToken).then((all) => setItems(all.filter((r) => !['APPROVED', 'REJECTED', 'EXECUTED', 'CANCELLED'].includes(r.status)))).catch(() => {});
-  };
-  useEffect(load, [accessToken]);
-  const current = items.find((r) => r.id === reviewing) ?? null;
-
-  return (
-    <div className="rounded-2xl border-2 border-husk-500 bg-husk-100/30 p-6">
-      <h2 className="font-display text-lg text-paddy-900">? System reset requests</h2>
-      <p className="mt-1 text-sm text-ink-500">{items.length} awaiting sign-off - needs both Finance Director and MD before Admin can execute.</p>
-      <div className="mt-4 space-y-3">
-        {items.map((req) => (
-          <div key={req.id} className="rounded-lg bg-white p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-mono text-xs text-ink-500">{req.requestNumber}</p>
-                <p className="font-medium text-ink-900">{req.scope}</p>
-                <p className="text-sm text-ink-500">{req.reason}</p>
-              </div>
-              <button type="button" onClick={() => setReviewing(req.id)} className="shrink-0 rounded-full bg-paddy-900 px-4 py-1 text-xs font-medium text-rice-50">Review</button>
-            </div>
-            <div className="mt-2 flex gap-4 text-xs text-ink-500">
-              <span>Finance: {req.financeApprovedBy ? `? ${req.financeApprovedBy.firstName}` : 'Pending'}</span>
-              <span>MD: {req.mdApprovedBy ? `? ${req.mdApprovedBy.firstName}` : 'Pending'}</span>
-            </div>
-          </div>
-        ))}
-        {items.length === 0 && <p className="text-sm text-ink-500">Nothing waiting - you&rsquo;re caught up.</p>}
-      </div>
-      <ReviewDialog
-        open={!!current}
-        title={current ? `Reset request ${current.requestNumber}` : ''}
-        subtitle={current?.scope}
-        details={current ? <ResetRequestDetails request={current} /> : null}
-        rejectPrompt="Why should this reset not go ahead? The person who asked for it will read this."
-        onApprove={async () => { await systemResetApi.approve(accessToken, reviewing!); load(); }}
-        onReject={async (comment) => { await systemResetApi.reject(accessToken, reviewing!, comment); load(); }}
-        onClose={() => setReviewing(null)}
-      />
-    </div>
-  );
-}
 
 export default function MyOfficePage() {
   const { me, accessToken, loading, error, hasPermission } = useCurrentUser();

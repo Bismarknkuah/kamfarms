@@ -7,6 +7,7 @@ import { DispatchTrackingController } from '../../dispatch-tracking/dispatch-tra
 import { InventoryTransactionsController } from '../../inventory-ledger/inventory-transactions.controller';
 import { ShipmentsController } from '../../logistics/shipments.controller';
 import { MillDispatchController } from '../../mill-dispatch/mill-dispatch.controller';
+import { InvoicesController } from '../../finance/invoices.controller';
 
 const required = (proto: any, method: string) => Reflect.getMetadata(PERMISSION_KEY, proto[method]);
 
@@ -40,6 +41,10 @@ describe('who holds the two permissions', () => {
   it('dispatch.track: Farm Managers, the Farm Supervisor, Warehouse Managers and Supervisors, the Finance Director (to watch), MD and CEO', () => {
     const want = ['CEO', 'FARM_DIRECTOR', 'FARM_MANAGER', 'FINANCE_DIRECTOR', 'MD', 'WAREHOUSE_MANAGER', 'WAREHOUSE_SUPERVISOR'];
     expect(holders('seed.ts', 'dispatch.track')).toEqual(want); expect(holders('sync-permissions.ts', 'dispatch.track')).toEqual(want);
+  });
+  it('raising invoices, and seeing which orders still need one, is for the Finance Director only (invoice.create)', () => {
+    expect(required(InvoicesController.prototype, 'awaiting')).toBe(PERMISSIONS.INVOICE_CREATE); expect(required(InvoicesController.prototype, 'create')).toBe(PERMISSIONS.INVOICE_CREATE);
+    expect(holders('seed.ts', 'invoice.create')).toEqual(['FINANCE_DIRECTOR']); expect(holders('sync-permissions.ts', 'invoice.create')).toEqual(['FINANCE_DIRECTOR']);
   });
   it('receipt.review (approving damaged bags on a delivery): only the Warehouse Supervisor', () => {
     expect(holders('seed.ts', 'receipt.review')).toEqual(['WAREHOUSE_SUPERVISOR']); expect(holders('sync-permissions.ts', 'receipt.review')).toEqual(['WAREHOUSE_SUPERVISOR']);

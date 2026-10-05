@@ -19,6 +19,13 @@ export class InvoicesController {
     return this.invoicesService.list(customerId);
   }
 
+  /** Fulfilled orders still waiting for an invoice. Declared before ':id' so it is not mistaken for an invoice id. */
+  @Get('awaiting')
+  @RequirePermission(PERMISSIONS.INVOICE_CREATE)
+  awaiting() {
+    return this.invoicesService.awaitingInvoice();
+  }
+
   @Get(':id')
   @RequirePermission(PERMISSIONS.FINANCE_VIEW)
   findOne(@Param('id') id: string) {

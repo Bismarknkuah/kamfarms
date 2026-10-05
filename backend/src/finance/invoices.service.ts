@@ -11,6 +11,17 @@ export class InvoicesService {
     private readonly audit: AuditService,
   ) {}
 
+  /** Fulfilled orders that have no invoice yet: what the Finance Director still has to invoice, newest first. */
+  async awaitingInvoice() {
+    const orders = await this.prisma.salesOrder.findMany({
+      where: { status: 'FULFILLED', invoices: { none: {} } },
+      orderBy: { fulfilledAt: 'desc' },
+      take: 100,
+      select: { id: true, orderNumber: true, totalAmount: true, fulfilledAt: true, customer: { select: { name: true } } },
+    });
+    return orders.map((o) => ({ id: o.id, orderNumber: o.orderNumber, customer: o.customer?.name ?? 'Customer', amount: Number(o.totalAmount), fulfilledAt: o.fulfilledAt ? o.fulfilledAt.toISOString() : null }));
+  }
+
   private async withComputedTotals<T extends { id: string; totalAmount: unknown }>(invoice: T) {
     const allocations = await this.prisma.paymentAllocation.findMany({
       where: { invoiceId: invoice.id, payment: { status: 'VERIFIED' } },

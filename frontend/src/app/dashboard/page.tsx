@@ -767,7 +767,7 @@ export default function DashboardPage() {
   if ((isFinanceDirector || isMdOrCeo) && accessToken) {
     return (
       <DashboardShell me={me}>
-        <ExecutiveDashboard me={me} accessToken={accessToken} hasPermission={hasPermission} mode={isFinanceDirector ? 'FINANCE' : 'EXECUTIVE'} />
+        <ExecutiveDashboard me={me} accessToken={accessToken} hasPermission={hasPermission} role={isFinanceDirector ? 'FINANCE_DIRECTOR' : me.roles.some((r) => r.code === 'MD') ? 'MD' : 'CEO'} />
       </DashboardShell>
     );
   }

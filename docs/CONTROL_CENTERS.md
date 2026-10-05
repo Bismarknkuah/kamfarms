@@ -67,3 +67,5 @@ A tile can be limited to certain **roles** as well as a permission (`onlyRoles` 
 Every control center now looks like the Administrator's: an italic *Control center* heading, a status line (*N waiting for you* or *Nothing is waiting for you*, and when it was refreshed), tiles with an icon
 each, and *Run your area* as cards with dark icon squares. The test hooks (`cc-title`, `cc-jurisdiction`, `cc-tiles`, `cc-tile`, `cc-count`, `cc-control`) are unchanged.
 For the Finance Director, MD and CEO the control center is part of a larger page that adds the company's money (see `docs/MONEY_CENTER.md`).
+
+Since 2026.10.18 the Finance Director, MD and CEO each have their own dashboard around the control center, with the tools to carry out their tasks on the page: `docs/EXECUTIVE_DASHBOARDS.md`.

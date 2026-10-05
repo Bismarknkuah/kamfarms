@@ -766,8 +766,15 @@ export interface TopDebtor {
   outstanding: number;
 }
 
+/** A fulfilled order that has no invoice yet. */
+export interface InvoiceAwaiting { id: string; orderNumber: string; customer: string; amount: number; fulfilledAt: string | null }
 export const invoicesApi = {
   list: (accessToken: string) => request<Invoice[]>('/invoices', { method: 'GET' }, accessToken),
+  /** Fulfilled orders still waiting for an invoice (the Finance Director). */
+  awaiting: (accessToken: string) => request<InvoiceAwaiting[]>('/invoices/awaiting', { method: 'GET', cache: 'no-store' }, accessToken),
+  /** Raise the invoice for a fulfilled order. */
+  create: (accessToken: string, data: { salesOrderId: string; discount?: number; taxRatePercent?: number; dueDate?: string }) =>
+    request<Invoice>('/invoices', { method: 'POST', body: JSON.stringify(data) }, accessToken),
 };
 
 export const paymentsApi = {
@@ -950,7 +957,7 @@ export const messagingApi = {
     request<Message[]>(`/conversations/${conversationId}/messages`, { method: 'GET' }, accessToken),
   sendMessage: (accessToken: string, conversationId: string, body: string, attachmentUrl?: string, attachmentType?: string) =>
     request<Message>(`/conversations/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ body, attachmentUrl, attachmentType }) }, accessToken),
-  createConversation: (accessToken: string, data: { type: string; title?: string; memberIds: string[] }) =>
+  createConversation: (accessToken: string, data: { type: string; title?: string; memberIds: string[]; requiresResponse?: boolean }) =>
     request<Conversation>('/conversations', { method: 'POST', body: JSON.stringify(data) }, accessToken),
 };
 

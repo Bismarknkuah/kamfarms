@@ -3,7 +3,7 @@
  * which features it has (GET /health); the website knows which it needs. When something is missing the Admin
  * dashboard says so in plain words, instead of pages quietly failing with "404".
  */
-export const REQUIRED_API_FEATURES = ['site-content', 'insights', 'settings-registry', 'system-overview', 'reports-catalog', 'admin-access', 'ai-predictions', 'sales-chain', 'ai-feedback', 'multi-size-intake', 'dispatch-requests', 'dispatch-desk', 'paddy-requests', 'paddy-transfers', 'control-center', 'dispatch-tracking', 'quick-search', 'mill-dispatch', 'damaged-bags-review', 'role-access', 'finance-center'] as const;
+export const REQUIRED_API_FEATURES = ['site-content', 'insights', 'settings-registry', 'system-overview', 'reports-catalog', 'admin-access', 'ai-predictions', 'sales-chain', 'ai-feedback', 'multi-size-intake', 'dispatch-requests', 'dispatch-desk', 'paddy-requests', 'paddy-transfers', 'control-center', 'dispatch-tracking', 'quick-search', 'mill-dispatch', 'damaged-bags-review', 'role-access', 'finance-center', 'invoices-awaiting'] as const;
 
 export const FEATURE_LABELS: Record<string, string> = {
   'site-content': 'The homepage editor',
@@ -19,6 +19,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   'control-center': 'A control center, with a menu button, for the Managing Director, CEO, Farm Supervisor, Warehouse, Operations and Finance roles',
   'damaged-bags-review': 'Spoiled or broken bags reported when a truck is counted in, held out of the stock until the Warehouse Supervisor decides',
   'role-access': 'Who can use what: the Administrator switches features off per role',
+  'invoices-awaiting': 'Raising invoices from the Finance Director\'s dashboard (the list of delivered orders still to be invoiced)',
   'finance-center': 'The company\'s money for the Finance Director, MD and CEO: spending at every farm, warehouse and milling center, sales, and the money ledger',
   'dispatch-tracking': 'Track dispatch: every step, who handled it and when, and counting a whole truck in',
   'mill-dispatch': 'Paddy sent to the milling center and finished products sent back, with approval and counting in',

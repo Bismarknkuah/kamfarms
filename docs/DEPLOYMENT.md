@@ -700,3 +700,17 @@ See `docs/MONEY_CENTER.md`.
 incremental, and `*.tsbuildinfo` files are git-ignored. A bad build now stops at the build instead of crash-looping after deploy, and the previous working version keeps running.
 
 **Rolling back:** the new column is additive and is simply left unused.
+
+## Version 2026.10.18: three separate dashboards, with every task of the role done on the page
+
+No database change. `/api/health` should show `2026.10.18`. See `docs/EXECUTIVE_DASHBOARDS.md`.
+
+**What changes for people:**
+
+1. The **Finance Director, MD and CEO** now have three different dashboards (the MD and CEO no longer share one). Each can do its role's tasks without leaving the page.
+2. The **Finance Director can raise invoices** (there was no screen for it before): delivered orders with no invoice are listed, and he raises each with its tax, discount and due date.
+   The first time he opens the page it lists **every delivered order that was never invoiced, including old ones**: tell him to expect that.
+3. All three can **sign off a system reset** and **give someone a task** from their dashboard; the MD and CEO can **announce to the team**.
+4. The CEO gets a **scorecard** and a **risk radar**; the MD gets **the business in motion** and the **set-up** cards for places and master lists.
+
+**Rolling back:** nothing to undo; the previous version simply lacks these panels.

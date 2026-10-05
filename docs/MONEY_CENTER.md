@@ -1,6 +1,6 @@
 # The company's money: dashboards and ledger (version 2026.10.17)
 
-The **Finance Director**, the **MD** and the **CEO** each have a control center built like the Administrator's. It opens with the company's money, then the work waiting for them, then
+The **Finance Director**, the **MD** and the **CEO** each have a control center built like the Administrator's (since 2026.10.18 each has a **different** dashboard: see `docs/EXECUTIVE_DASHBOARDS.md`). It opens with the company's money, then the work waiting for them, then
 where the money goes. A **Money ledger** page lists every payment and every expense.
 
 ## Who sees it
@@ -25,7 +25,7 @@ UTC (Ghana keeps GMT). The six-month chart always shows the last six months, wha
 
 **Where the money is spent** lists every active farm, warehouse and milling center (including those that spent nothing), and the head office. **Each expense is counted once, at the most specific place
 it names: the mill, else the warehouse, else the farm, else the head office**, so the four totals always add up to exactly what was spent. Spending still waiting for approval is shown on its place.
-Clicking a place opens the ledger limited to it. The MD and CEO also see the stock on the ground (the same inventory summary as before), the Watchlist and the output feedback.
+Clicking a place opens the ledger limited to it. The MD also sees the stock on the ground and the output feedback, and the CEO a scorecard and a risk radar, both with the Watchlist (see `docs/EXECUTIVE_DASHBOARDS.md`).
 
 ## The Money ledger (`/money`)
 

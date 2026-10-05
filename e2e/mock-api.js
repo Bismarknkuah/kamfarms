@@ -58,7 +58,7 @@ const actorOf = (k) => { const u = USERS[k]; return { id: u.id, email: u.email, 
 const seedText = require('fs').readFileSync(ROOT + '/prisma/seed.ts', 'utf8');
 const seedPerms = (role) => { const i = seedText.indexOf(`code: '${role}'`); if (i < 0) return []; const j = seedText.indexOf('permissionCodes: [', i); const k = seedText.indexOf(']', j); return [...seedText.slice(j, k).replace(/\/\/[^\n]*/g, '').matchAll(/'([a-z_.]+)'/g)].map((m) => m[1]); };
 const FD_READ = ['supply.view', 'dispatch.track', 'milldispatch.view', 'delivery.view', 'warehouse.inventory.view', 'milling.view', 'ai.use', 'insights.view', 'farm.view', 'warehouse.view', 'expense.view', 'sales.view'];
-for (const u of Object.values(USERS)) { if (u.role === 'ADMIN') continue; const take = (c) => c.startsWith('milldispatch.') || c === 'receipt.review' || (u.role === 'FINANCE_DIRECTOR' && FD_READ.includes(c)) || (u.role === 'CEO' && ['finance.approve.director', 'supply.view'].includes(c)) || (['reports.view', 'reports.export'].includes(c) && ['FINANCE_DIRECTOR', 'MD', 'CEO'].includes(u.role)); u.perms = [...new Set([...u.perms, ...seedPerms(u.role).filter(take)])]; }
+for (const u of Object.values(USERS)) { if (u.role === 'ADMIN') continue; const take = (c) => c.startsWith('milldispatch.') || c === 'receipt.review' || (u.role === 'FINANCE_DIRECTOR' && FD_READ.includes(c)) || (u.role === 'CEO' && ['finance.approve.director', 'supply.view'].includes(c)) || (['reports.view', 'reports.export', 'messages.send', 'messages.broadcast', 'tasks.assign', 'reset.approve', 'invoice.create', 'organization.manage', 'masterdata.manage'].includes(c) && ['FINANCE_DIRECTOR', 'MD', 'CEO'].includes(u.role)); u.perms = [...new Set([...u.perms, ...seedPerms(u.role).filter(take)])]; }
 // What the Administrator switched off: the REAL service, over a stand-in table.
 const { RoleAccessService } = require(B + '/access/role-access.service');
 const ROLE_NAMES = { SALES_OFFICER: 'Sales Officer', FINANCE_DIRECTOR: 'Finance Director', MD: 'Managing Director', CEO: 'CEO', OPERATIONS_MANAGER: 'Operations Manager', OPERATIONS_OFFICER: 'Operations Officer', WAREHOUSE_SUPERVISOR: 'Warehouse Supervisor', WAREHOUSE_MANAGER: 'Warehouse Manager', FARM_DIRECTOR: 'Farm Supervisor', FARM_MANAGER: 'Farm Manager' };
@@ -711,6 +711,56 @@ const moneyPrisma = {
 const moneySvc = new FinanceCenterService(moneyPrisma);
 sRoute('get', '/api/finance-center/overview', null, (d, a, req) => moneySvc.overview(a, req.query.period, MONEY_NOW));
 sRoute('get', '/api/finance-center/ledger', null, (d, a, req) => moneySvc.ledger(a, req.query));
+// ---- what the three desks do: raise an invoice (the REAL invoice service), the people directory, give a task, announce to the team ----
+const { InvoicesService } = require(B + '/finance/invoices.service');
+const { CreateInvoiceDto } = require(B + '/finance/dto/create-invoice.dto');
+const prevSeedDesk = seedX;
+seedX = function () {
+  prevSeedDesk(); const yr = new Date().getFullYear();
+  const item = (total) => [{ productId: 'prod1', packagingSizeId: 'ps1', bagCount: 100, unitPrice: total / 100, lineTotal: total }];
+  X.inv = {
+    orders: [
+      { id: 'a0000001-0000-4000-8000-000000000001', orderNumber: 'SO-2026-000031', status: 'FULFILLED', totalAmount: 4200, fulfilledAt: new Date('2026-10-12T10:00:00Z'), customerId: 'C1', customer: { name: 'Adom Foods' }, items: item(4200) },
+      { id: 'a0000002-0000-4000-8000-000000000002', orderNumber: 'SO-2026-000032', status: 'FULFILLED', totalAmount: 1800, fulfilledAt: new Date('2026-10-10T10:00:00Z'), customerId: 'C2', customer: { name: 'Boateng Stores' }, items: item(1800) },
+      { id: 'a0000003-0000-4000-8000-000000000003', orderNumber: 'SO-2026-000033', status: 'FULFILLED', totalAmount: 900, fulfilledAt: new Date('2026-10-08T10:00:00Z'), customerId: 'C1', customer: { name: 'Adom Foods' }, items: item(900) },
+      { id: 'a0000004-0000-4000-8000-000000000004', orderNumber: 'SO-2026-000034', status: 'APPROVED', totalAmount: 700, fulfilledAt: null, customerId: 'C2', customer: { name: 'Boateng Stores' }, items: item(700) },
+    ],
+    invoices: [{ id: 'iv-0', invoiceNumber: `INV-${yr}-000001`, salesOrderId: 'a0000003-0000-4000-8000-000000000003', customerId: 'C1', totalAmount: 900, customer: { name: 'Adom Foods' } }],
+  };
+  X.tasksNew = []; X.convs = []; X.convMsgs = [];
+};
+seedX();
+const invTx = { invoice: {
+  count: async ({ where }) => X.inv.invoices.filter((i) => i.invoiceNumber.startsWith(where.invoiceNumber.startsWith)).length,
+  create: async ({ data }) => { const { items, ...row } = data; const o = X.inv.orders.find((x) => x.id === row.salesOrderId); const inv = { id: `iv-${X.inv.invoices.length}`, ...row, totalAmount: Number(row.totalAmount), customer: { name: o.customer.name } }; X.inv.invoices.push(inv); return inv; },
+} };
+const invPrisma = {
+  salesOrder: {
+    findMany: async ({ where, take }) => X.inv.orders.filter((o) => o.status === where.status && !X.inv.invoices.some((i) => i.salesOrderId === o.id)).sort((a, b) => b.fulfilledAt - a.fulfilledAt).slice(0, take),
+    findUnique: async ({ where }) => X.inv.orders.find((o) => o.id === where.id) || null,
+  },
+  invoice: { findFirst: async ({ where }) => X.inv.invoices.find((i) => i.salesOrderId === where.salesOrderId) || null, findUnique: async ({ where }) => { const i = X.inv.invoices.find((x) => x.id === where.id); return i ? { ...i, items: [], salesOrder: X.inv.orders.find((o) => o.id === i.salesOrderId) } : null; }, count: invTx.invoice.count },
+  paymentAllocation: { findMany: async () => [] },
+  $transaction: async (cb) => cb(invTx),
+};
+const invSvc = Object.create(InvoicesService.prototype); invSvc.prisma = invPrisma; invSvc.audit = { record: async () => {} };
+sRoute('get', '/api/invoices/awaiting', null, () => invSvc.awaitingInvoice());
+sRoute('post', '/api/invoices', CreateInvoiceDto, (d, a) => invSvc.createFromSalesOrder(d, a));
+app.get('/api/users/directory', (req, res) => { if (!who(req)) return fail(res, 401, 'Please sign in again.'); ok(res, Object.values(USERS).map((u) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName, roleCode: u.role, roleName: ROLE_NAMES[u.role] || u.role }))); });
+app.post('/api/tasks', async (req, res) => {
+  const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); const r = await restricted(k); log(req, { body: req.body });
+  if (!r.permissionCodes.has('tasks.assign')) return fail(res, 403, 'You do not have permission to assign tasks.');
+  const b = req.body || {}; if (String(b.title || '').trim().length < 3) return fail(res, 400, 'title must be longer than or equal to 3 characters');
+  if (!b.assignedToId && !b.assignedRoleCode) return fail(res, 400, 'A task must be assigned to either a specific user or a role.');
+  const t = { id: `tk${X.tasksNew.length + 1}`, taskNumber: `TASK-2026-${String(X.tasksNew.length + 1).padStart(6, '0')}`, ...b, createdById: USERS[k].id }; X.tasksNew.push(t); ok(res, t);
+});
+app.post('/api/conversations', async (req, res) => {
+  const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); const r = await restricted(k); log(req, { body: req.body }); const b = req.body || {};
+  if (['BROADCAST', 'ANNOUNCEMENT'].includes(b.type) && !r.permissionCodes.has('messages.broadcast')) return fail(res, 403, 'You do not have permission to create broadcasts or announcements.');
+  const c = { id: `cv${X.convs.length + 1}`, type: b.type, title: b.title, memberIds: b.memberIds, requiresResponse: !!b.requiresResponse }; X.convs.push(c); ok(res, c);
+});
+app.post('/api/conversations/:id/messages', (req, res) => { const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); log(req, { body: req.body }); const m = { id: `m${X.convMsgs.length + 1}`, conversationId: req.params.id, body: (req.body || {}).body }; X.convMsgs.push(m); ok(res, m); });
+app.get('/__desks', (req, res) => res.json({ tasks: X.tasksNew, convs: X.convs, msgs: X.convMsgs, invoices: X.inv.invoices }));
 // the settings screen expects groups and items (an empty list would crash it); the real values are not needed to test the screens around them
 app.get('/api/settings/registry', (req, res) => ok(res, { groups: [], items: [] }));
 // ---- anything else the pages ask for: empty, so they load ----

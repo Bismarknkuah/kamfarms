@@ -7,7 +7,7 @@
 # is configured (railway.json) to build this file directly rather than
 # infer a Nixpacks plan from a custom buildCommand string.
 #
-# BUILD_MARKER: 2026-09-07-r5 - bump this comment on every push that
+# BUILD_MARKER: 2026-10-05-r6 - bump this comment on every push that
 # touches backend/ source. Editing this file at all invalidates Docker's
 # build cache from this point forward (BuildKit keys each layer on the
 # preceding layers' content hash), so a stale cached "success" that
@@ -29,6 +29,9 @@ RUN npm install --workspace=backend --include-workspace-root --include=dev --leg
 COPY backend backend
 RUN npx prisma@5.22.0 generate --schema=prisma/schema.prisma
 RUN npm run build --workspace=backend
+# Every compiled file must exist (docker/check-dist.sh): a missing one would crash the server at start-up, so stop the build instead.
+COPY docker/check-dist.sh /tmp/check-dist.sh
+RUN sh /tmp/check-dist.sh
 # Fail the build loudly right here if the compiled entrypoint is missing,
 # rather than shipping a broken image that only fails at container start.
 # Lists what actually got produced (or the absence of dist/ entirely) so

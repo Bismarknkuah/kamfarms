@@ -204,27 +204,20 @@ export class ProductionRecordsService {
       const brokenRiceProductId = await this.upsertByproduct(tx, 'Broken Rice', 'Milling byproduct - broken grains');
       const riceHullProductId = await this.upsertByproduct(tx, 'Rice Hull', 'Milling byproduct - husk');
 
-      // The mill's own paddy (what the warehouse sent it and it counted in) is used first; only what the mill does not have comes from the warehouse, as it always did.
-      const atMill = await this.ledger.getBalance(tx, { locationType: LocationType.MILLING_CENTER, locationId: record.millingCenterId, paddyGradeId: record.paddyGradeId });
-      const millKg = Number(atMill?.quantityKg ?? 0);
-      const millBags = atMill?.bagCount ?? 0;
-      const fromMillKg = Math.min(millKg, paddyProcessedKg);
-      const fromWarehouseKg = paddyProcessedKg - fromMillKg;
-      if (fromWarehouseKg > 0.001) {
-        await this.ledger.recordTransaction(tx, {
-          type: 'PADDY_SENT_TO_MILL',
-          sourceLocationType: LocationType.WAREHOUSE,
-          sourceLocationId: warehouseId,
-          destLocationType: LocationType.MILLING_CENTER,
-          destLocationId: record.millingCenterId,
-          paddyGradeId: record.paddyGradeId,
-          quantityKg: fromWarehouseKg,
-          referenceDocument: record.recordNumber,
-          userId: actor.id,
-        });
-        await this.ledger.adjustBalance(tx, { locationType: LocationType.WAREHOUSE, locationId: warehouseId, paddyGradeId: record.paddyGradeId }, -fromWarehouseKg);
-        await this.ledger.adjustBalance(tx, { locationType: LocationType.MILLING_CENTER, locationId: record.millingCenterId, paddyGradeId: record.paddyGradeId }, fromWarehouseKg);
-      }
+      await this.ledger.recordTransaction(tx, {
+        type: 'PADDY_SENT_TO_MILL',
+        sourceLocationType: LocationType.WAREHOUSE,
+        sourceLocationId: warehouseId,
+        destLocationType: LocationType.MILLING_CENTER,
+        destLocationId: record.millingCenterId,
+        paddyGradeId: record.paddyGradeId,
+        quantityKg: paddyProcessedKg,
+        referenceDocument: record.recordNumber,
+        userId: actor.id,
+      });
+      await this.ledger.adjustBalance(tx, { locationType: LocationType.WAREHOUSE, locationId: warehouseId, paddyGradeId: record.paddyGradeId }, -paddyProcessedKg);
+      await this.ledger.adjustBalance(tx, { locationType: LocationType.MILLING_CENTER, locationId: record.millingCenterId, paddyGradeId: record.paddyGradeId }, paddyProcessedKg);
+
       await this.ledger.recordTransaction(tx, {
         type: 'PADDY_PROCESSED',
         sourceLocationType: LocationType.MILLING_CENTER,
@@ -234,10 +227,7 @@ export class ProductionRecordsService {
         referenceDocument: record.recordNumber,
         userId: actor.id,
       });
-      // The bags the mill used up go with the kilograms, in the same proportion, so its bag count never drifts from its weight.
-      const bagsUsed = millKg > 0 && millBags > 0 ? Math.min(millBags, Math.round((millBags * fromMillKg) / millKg)) : 0;
-      if (bagsUsed > 0) await this.ledger.adjustBalance(tx, { locationType: LocationType.MILLING_CENTER, locationId: record.millingCenterId, paddyGradeId: record.paddyGradeId }, -paddyProcessedKg, -bagsUsed);
-      else await this.ledger.adjustBalance(tx, { locationType: LocationType.MILLING_CENTER, locationId: record.millingCenterId, paddyGradeId: record.paddyGradeId }, -paddyProcessedKg);
+      await this.ledger.adjustBalance(tx, { locationType: LocationType.MILLING_CENTER, locationId: record.millingCenterId, paddyGradeId: record.paddyGradeId }, -paddyProcessedKg);
 
       await this.ledger.recordTransaction(tx, {
         type: 'RICE_RECOVERED',

@@ -2163,26 +2163,3 @@ export interface SearchGroup { key: string; label: string; results: SearchResult
 export const searchApi = {
   search: (accessToken: string, q: string) => request<{ q: string; groups: SearchGroup[] }>(`/search?q=${encodeURIComponent(q)}`, { method: 'GET', cache: 'no-store' }, accessToken),
 };
-
-export interface MillDispatchLine { key: string; kind: 'PADDY' | 'PACKAGED_RICE' | 'BROKEN_RICE' | 'RICE_HULL'; label: string; bags: number; kg: number; receivedBags: number | null; receivedKg: number | null }
-export interface MillDispatchView {
-  id: string; transferNumber: string; direction: 'TO_MILL' | 'TO_WAREHOUSE'; status: 'PENDING_APPROVAL' | 'IN_TRANSIT' | 'RECEIVED' | 'REJECTED' | 'CANCELLED'; label: string;
-  warehouse: { id: string; name: string }; millingCenter: { id: string; name: string }; from: string; to: string; lines: MillDispatchLine[]; totalBags: number; totalKg: number;
-  driverName: string | null; vehiclePlate: string | null; notes: string | null; requestedBy: string; requestedAt: string; approvedBy: string | null; approvedAt: string | null; decisionNote: string | null;
-  receivedBy: string | null; receivedAt: string | null; receiveNote: string | null; varianceKg: number | null; approverRole: string; receiverRole: string;
-  canApprove: boolean; canReceive: boolean; canCancel: boolean; steps: { label: string; who: string | null; at: string | null; state: 'done' | 'current' | 'upcoming' | 'stopped' }[];
-}
-export interface MillDispatchOptions {
-  toMill: { places: { warehouse: { id: string; name: string }; mills: { id: string; name: string }[]; paddy: { paddyGradeId: string; label: string; bags: number }[] }[] } | null;
-  toWarehouse: { mills: { id: string; name: string; warehouse: { id: string; name: string }; packaged: { productId: string; packagingSizeId: string; label: string; bags: number; kg: number }[]; broken: { productId: string; kg: number } | null; hull: { productId: string; kg: number } | null }[] } | null;
-}
-export interface MillDispatchInput { direction: 'TO_MILL' | 'TO_WAREHOUSE'; millingCenterId: string; lines: { kind: string; paddyGradeId?: string; productId?: string; packagingSizeId?: string; bags?: number; kg?: number }[]; driverName?: string; vehiclePlate?: string; notes?: string }
-export const millDispatchApi = {
-  list: (accessToken: string) => request<MillDispatchView[]>('/mill-dispatches', { method: 'GET', cache: 'no-store' }, accessToken),
-  options: (accessToken: string) => request<MillDispatchOptions>('/mill-dispatches/options', { method: 'GET', cache: 'no-store' }, accessToken),
-  request: (accessToken: string, data: MillDispatchInput) => request<MillDispatchView>('/mill-dispatches', { method: 'POST', body: JSON.stringify(data) }, accessToken),
-  approve: (accessToken: string, id: string, note?: string) => request<MillDispatchView>(`/mill-dispatches/${id}/approve`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
-  reject: (accessToken: string, id: string, reason: string) => request<MillDispatchView>(`/mill-dispatches/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }, accessToken),
-  cancel: (accessToken: string, id: string, note?: string) => request<MillDispatchView>(`/mill-dispatches/${id}/cancel`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
-  receive: (accessToken: string, id: string, data: { lines: { key: string; bags?: number; kg?: number }[]; notes?: string }) => request<MillDispatchView>(`/mill-dispatches/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
-};

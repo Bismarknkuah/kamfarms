@@ -88,13 +88,6 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'dispatch.track',
   },
   {
-    label: 'Mill dispatch',
-    href: '/mill-dispatch',
-    icon: 'factory',
-    description: 'Paddy sent from the warehouse to the milling center, and finished products sent back, each with the supervisor\'s approval and counted in at the other end.',
-    permission: 'milldispatch.view',
-  },
-  {
     label: 'Log paddy intake',
     href: '/log-paddy-intake',
     icon: 'wheat',

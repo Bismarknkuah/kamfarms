@@ -7,7 +7,7 @@ import { AuthenticatedUser } from '../../auth/types/authenticated-user';
 describe('PackagingBatchesService.create', () => {
   const operator = { id: 'operator-1' } as AuthenticatedUser;
 
-  function buildService(settings?: any) {
+  function buildService() {
     const prisma = {
       millingCenter: { findUnique: jest.fn().mockResolvedValue({ id: 'mc-1', isActive: true, warehouseId: 'wh-1' }) },
       packagingSize: { findUnique: jest.fn().mockResolvedValue({ id: 'size-25', isActive: true, sizeKg: 25 }) },
@@ -27,7 +27,7 @@ describe('PackagingBatchesService.create', () => {
     };
     const audit = { record: jest.fn() } as unknown as AuditService;
     const ledger = { recordTransaction: jest.fn(), adjustBalance: jest.fn() } as unknown as InventoryLedgerService;
-    const service = new PackagingBatchesService(prisma as any, audit, ledger, settings);
+    const service = new PackagingBatchesService(prisma as any, audit, ledger);
     return { service, prisma, ledger };
   }
 
@@ -48,30 +48,12 @@ describe('PackagingBatchesService.create', () => {
       expect.anything(),
       expect.objectContaining({ type: 'PACKAGED_RICE_CREATED', quantityKg: 2500, bagCount: 100 }),
     );
-    // By default the packaged bags WAIT AT THE MILL until the Operations Officer sends them and the warehouse counts them in.
     expect(ledger.adjustBalance).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ locationType: 'MILLING_CENTER', locationId: 'mc-1', productId: 'prod-1', packagingSizeId: 'size-25' }),
+      expect.objectContaining({ locationType: 'WAREHOUSE', locationId: 'wh-1', packagingSizeId: 'size-25' }),
       2500,
       100,
     );
-    expect(ledger.recordTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ type: 'PACKAGED_RICE_CREATED', destLocationType: 'MILLING_CENTER', destLocationId: 'mc-1' }));
-    expect(ledger.adjustBalance).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ locationType: 'WAREHOUSE' }), expect.anything(), expect.anything());
-  });
-
-  it('with the setting turned off, the packaged bags go straight into the warehouse, as they used to', async () => {
-    const { service, ledger } = buildService({ getNumber: async () => 0 });
-    await service.create(baseDto, operator);
-    expect(ledger.adjustBalance).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ locationType: 'WAREHOUSE', locationId: 'wh-1', packagingSizeId: 'size-25' }), 2500, 100);
-    expect(ledger.recordTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ type: 'PACKAGED_RICE_CREATED', destLocationType: 'WAREHOUSE', destLocationId: 'wh-1' }));
-  });
-
-  it('either way the bulk rice is taken from the mill\'s stock, and never more than there is', async () => {
-    for (const settings of [undefined, { getNumber: async () => 0 }]) {
-      const { service, ledger } = buildService(settings as any);
-      await service.create(baseDto, operator);
-      expect(ledger.adjustBalance).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ locationType: 'MILLING_CENTER', locationId: 'mc-1', productId: 'prod-1', packagingSizeId: null }), -2500);
-    }
   });
 
   it('with no packaging loss specified, consumes exactly the packaged total from bulk stock', async () => {

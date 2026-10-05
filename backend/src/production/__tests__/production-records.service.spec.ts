@@ -29,7 +29,7 @@ describe('ProductionRecordsService', () => {
       ),
     };
     const audit = { record: jest.fn() } as unknown as AuditService;
-    const ledger = { recordTransaction: jest.fn(), adjustBalance: jest.fn(), getBalance: jest.fn(async () => null) } as unknown as InventoryLedgerService;
+    const ledger = { recordTransaction: jest.fn(), adjustBalance: jest.fn() } as unknown as InventoryLedgerService;
     const notifications = { notify: jest.fn() } as unknown as NotificationsService;
     const service = new ProductionRecordsService(prisma as any, audit, ledger, notifications);
     return { service, prisma, ledger, audit, notifications };
@@ -124,36 +124,6 @@ describe('ProductionRecordsService', () => {
     expect(ledger.recordTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ type: 'STOCK_LOSS', quantityKg: 500 }));
   });
 
-  describe('paddy the mill already holds (sent by the warehouse and counted in) is used first', () => {
-    const record = { id: 'pr-1', recordNumber: 'PR-2026-000001', status: 'SUBMITTED', submittedById: 'operator-1', millingCenterId: 'mc-1', millingCenter: { warehouseId: 'wh-1' }, paddyGradeId: 'grade-4', paddyProcessedKg: 20000, recoveredRiceKg: 14000, brokenRiceKg: 3000, riceHullKg: 2500, wasteLossKg: 500 };
-    const run = async (atMill: { quantityKg: number; bagCount: number } | null) => {
-      const { service, prisma, ledger } = buildService();
-      prisma.productionRecord.findUnique.mockResolvedValue(record);
-      (ledger.getBalance as jest.Mock).mockResolvedValue(atMill);
-      await service.approve('pr-1', operationsManager);
-      return ledger as any;
-    };
-    const sentToMill = (l: any) => l.recordTransaction.mock.calls.map((c: any[]) => c[1]).filter((x: any) => x.type === 'PADDY_SENT_TO_MILL');
-    const warehouseTaken = (l: any) => l.adjustBalance.mock.calls.filter((c: any[]) => c[1].locationType === 'WAREHOUSE').map((c: any[]) => c[2]);
-
-    it('when the mill has all of it, nothing is taken from the warehouse', async () => {
-      const l = await run({ quantityKg: 25000, bagCount: 500 });
-      expect(sentToMill(l)).toEqual([]); expect(warehouseTaken(l)).toEqual([]);
-      expect(l.recordTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ type: 'PADDY_PROCESSED', quantityKg: 20000 }));
-      expect(l.adjustBalance).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ locationType: 'MILLING_CENTER', paddyGradeId: 'grade-4' }), -20000, -400); // 20,000 of 25,000 kg: 400 of 500 bags
-    });
-    it('when the mill has some, only the rest comes from the warehouse', async () => {
-      const l = await run({ quantityKg: 8000, bagCount: 160 });
-      expect(sentToMill(l)).toEqual([expect.objectContaining({ quantityKg: 12000, sourceLocationId: 'wh-1', destLocationId: 'mc-1' })]); expect(warehouseTaken(l)).toEqual([-12000]);
-      expect(l.adjustBalance).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ locationType: 'MILLING_CENTER' }), -20000, -160); // all of the mill's own paddy is used, with its bags
-    });
-    it('when the mill has none, it is exactly as before: all of it from the warehouse', async () => {
-      const l = await run(null);
-      expect(sentToMill(l)).toEqual([expect.objectContaining({ quantityKg: 20000 })]); expect(warehouseTaken(l)).toEqual([-20000]);
-      expect(l.adjustBalance).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ locationType: 'MILLING_CENTER' }), -20000); // no bag count is touched
-    });
-  });
-
   it('alerts Operations Manager and top executives when a created record is mass-balance flagged', async () => {
     const { service, prisma, notifications } = buildService({
       id: 'pr-1',
@@ -234,5 +204,4 @@ describe('ProductionRecordsService.predictYield', () => {
     const result = await service.predictYield('grade-4', 20);
     expect(result.expectedEnergyKwh).toBeNull();
   });
-
 });

@@ -6,6 +6,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 import { findSingleLocationScope } from '@/lib/nav-items';
 import { ReviewDialog } from '@/components/review/ReviewDialog';
 import { ExpenseDetails } from '@/components/review/EntityDetails';
+import { CategoryPicker } from '@/components/CategoryPicker';
 import { expensesApi, masterDataApi, farmEquipmentApi, farmsApi, warehouseEquipmentApi, warehousesApi, Expense, ExpenseCategory, FarmEquipment, Farm, WarehouseEquipment, Warehouse, ApiError } from '@/lib/api-client';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -394,10 +395,11 @@ export default function ExpensesPage() {
         <div className="mt-4 rounded-2xl border border-husk-300 bg-husk-100/30 p-5">
           <h3 className="font-display text-lg text-paddy-900">Log an expense</h3>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">
-              <option value="">Category…</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <CategoryPicker categories={categories} value={categoryId} onSelect={(catId: string, customLabel?: string) => {
+              setCategoryId(catId);
+              if (customLabel) setCustomCategoryLabel(customLabel);
+              else if (categories.find((c) => c.id === catId)?.name !== 'Other') setCustomCategoryLabel('');
+            }} />
             <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount (GHS)" className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm" />
             <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">

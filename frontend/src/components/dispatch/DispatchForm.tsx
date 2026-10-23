@@ -13,7 +13,7 @@ const num = (s: string) => (s.trim() === '' ? undefined : parseFloat(s));
 const OPEN = ['REQUESTED', 'PREPARING'];
 
 /**
- * The farm manager loads the truck and submits ONE dispatch. Size 4 and Size 5 are BOTH on the form, whatever was asked for: the request's sizes
+ * The farm manager loads the truck and submits ONE dispatch. Size 3 and Size 4 are BOTH on the form, whatever was asked for: the request's sizes
  * are filled in (and any difference from what was asked is flagged), and a size nobody asked for can still go on the truck. Bags are what is
  * counted; kilograms are optional. Every tap is answered: what is wrong, or that it was sent, or why it was not.
  */

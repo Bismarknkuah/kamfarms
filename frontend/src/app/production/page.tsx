@@ -40,7 +40,7 @@ export default function ProductionPage() {
   const [showReceiptPanel, setShowReceiptPanel] = useState(false);
   const [receiptMillingCenterId, setReceiptMillingCenterId] = useState('');
   const [receiptDate, setReceiptDate] = useState(new Date().toISOString().slice(0, 10));
-  // One row per grade - the exact request: both Size 4 and Size 5
+  // One row per grade - the exact request: both Size 3 and Size 4
   // confirmed as received today, in the same submission.
   const [receiptRows, setReceiptRows] = useState([{ paddyGradeId: '', bagCount: '' }]);
   const [receiptNotes, setReceiptNotes] = useState('');
@@ -307,7 +307,7 @@ export default function ProductionPage() {
       {showReceiptPanel && (
         <div className="mt-4 rounded-2xl border-2 border-husk-700 bg-rice-50 p-6">
           <h2 className="font-display text-2xl font-medium text-paddy-900">Confirm paddy received at milling</h2>
-          <p className="mt-1 text-sm text-ink-500">What actually arrived today - add one row per size, so both Size 4 and Size 5 can be confirmed together.</p>
+          <p className="mt-1 text-sm text-ink-500">What actually arrived today - add one row per size, so both Size 3 and Size 4 can be confirmed together.</p>
 
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <select value={receiptMillingCenterId} onChange={(e) => setReceiptMillingCenterId(e.target.value)} className="rounded-lg border border-paddy-100 px-3 py-2 text-sm">

@@ -6,10 +6,10 @@ import { Minus, Plus } from 'lucide-react';
 export interface SizeGrade { id: string; label: string; isActive?: boolean }
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-/** Size 4 and Size 5: the two sizes this business deals in. If a system has not got both, the first two sizes stand in. */
+/** Size 3 and Size 4: the two sizes this business deals in. If a system has not got both, the first two sizes stand in. */
 export function primarySizes<T extends SizeGrade>(grades: T[]): T[] {
   const active = grades.filter((g) => g.isActive !== false);
-  const picked = [active.find((g) => norm(g.label) === 'size4'), active.find((g) => norm(g.label) === 'size5')].filter(Boolean) as T[];
+  const picked = [active.find((g) => norm(g.label) === 'size3'), active.find((g) => norm(g.label) === 'size4')].filter(Boolean) as T[];
   return picked.length === 2 ? picked : active.slice(0, 2);
 }
 

@@ -27,7 +27,7 @@ describe('the catalogue of features that can be switched off', () => {
     expect(new Set(ACCESS_FEATURES.map((f) => f.key)).size).toBe(ACCESS_FEATURES.length);
     for (const f of ACCESS_FEATURES.filter((x) => x.ui)) expect(f.permissions).toEqual([]);
     const all = ACCESS_FEATURES.flatMap((f) => f.permissions);
-    for (const core of ['sales.create', 'sales.approve', 'payment.verify', 'warehouse.receive', 'paddy.create', 'delivery.create', 'settings.manage', 'roles.manage']) expect(all).not.toContain(core);
+    for (const core of ['sales.create', 'sales.approve', 'payment.verify', 'warehouse.receive', 'paddy.create', 'delivery.create', 'paddy.approve', 'invoice.create', 'delivery.approve', 'production.create', 'settings.manage', 'roles.manage']) expect(all).not.toContain(core);
   });
 });
 

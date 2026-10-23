@@ -15,7 +15,7 @@ interface Props { accessToken: string; hasPermission: (code: string) => boolean;
 
 /**
  * A warehouse's place for deliveries: the paddy COMING to it from another warehouse (count it in with one big button), and the paddy it SENDS
- * out (Size 4 and Size 5, bags only, where to). Paddy from farms is counted in on the Shipments page, as before.
+ * out (Size 3 and Size 4, bags only, where to). Paddy from farms is counted in on the Shipments page, as before.
  */
 export function DeliveriesDesk({ accessToken, hasPermission, focusTransfer = null, sendFor = null }: Props) {
   const canSend = hasPermission('warehouse.transfer');
@@ -78,7 +78,7 @@ export function DeliveriesDesk({ accessToken, hasPermission, focusTransfer = nul
     const lines = linesOf(bags); const out: string[] = [];
     if (!from) out.push('Choose the warehouse the paddy leaves from.');
     if (!to) out.push('Choose where it is going.');
-    if (lines.length === 0) out.push('Put the bags on Size 4 or Size 5.');
+    if (lines.length === 0) out.push('Put the bags on Size 3 or Size 4.');
     for (const l of lines) { const have = stockHere.find((s) => s.paddyGradeId === l.paddyGradeId); if (have && l.bags > have.bags) out.push(`${fromName} has only ${have.bags} bag${have.bags === 1 ? '' : 's'} of ${have.label}.`); }
     setProblems(out); setActionError(null);
     if (out.length > 0) return;

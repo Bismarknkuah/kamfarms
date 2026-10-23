@@ -28,7 +28,15 @@ async function main() {
   console.log(`Synced ${EXPENSE_CATEGORIES.length} expense categories - any other existing category in the database is left untouched.`);
 }
 
+async function syncPaddyGrades() {
+  for (const g of [{ code: 'SIZE_3', label: 'Size 3' }, { code: 'SIZE_4', label: 'Size 4' }]) {
+    await prisma.paddyGrade.upsert({ where: { code: g.code }, update: {}, create: g });
+  }
+  console.log('Paddy grades synced: Size 3, Size 4 (Size 5 retired)');
+}
+
 main()
+  .then(syncPaddyGrades)
   .catch((e) => {
     console.error(e);
     process.exit(1);

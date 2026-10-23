@@ -1219,7 +1219,7 @@ export const paddyTypesApi = {
 export interface PaddyEntry {
   id: string;
   entryNumber: string;
-  /** Sizes saved together as one intake share this reference (e.g. 17 bags of Size 4 and 3 bags of Size 5). */
+  /** Sizes saved together as one intake share this reference (e.g. 17 bags of Size 3 and 3 bags of Size 4). */
   intakeRef?: string | null;
   status: string;
   farm: { name: string; code: string };
@@ -2220,7 +2220,7 @@ export const financeCenterApi = {
   ledger: (accessToken: string, params: Record<string, string>) => request<MoneyLedger>(`/finance-center/ledger?${new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()}`, { method: 'GET', cache: 'no-store' }, accessToken),
 };
 
-export interface AccessFeatureInfo { key: string; label: string; description: string; pages: string[]; ui: boolean }
+export interface AccessFeatureInfo { key: string; label: string; description: string; pages: string[]; ui: boolean; module?: string }
 export interface AccessRoleInfo { code: string; name: string; held: string[]; denied: string[] }
 export interface AccessMatrix { features: AccessFeatureInfo[]; roles: AccessRoleInfo[] }
 export const accessApi = {

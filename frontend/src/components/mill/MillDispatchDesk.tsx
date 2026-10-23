@@ -55,7 +55,7 @@ export function MillDispatchDesk({ accessToken, hasPermission, focusId = null }:
     if (!mill) out.push('Choose the milling center.');
     if (form === 'TO_MILL') {
       for (const l of linesOf(paddy)) { lines.push({ kind: 'PADDY', paddyGradeId: l.paddyGradeId, bags: l.bags }); const have = chosenPaddy.find((g) => g.paddyGradeId === l.paddyGradeId); if (have && l.bags > have.bags) out.push(`The warehouse has only ${have.bags} bag${have.bags === 1 ? '' : 's'} of ${have.label}.`); }
-      if (lines.length === 0) out.push('Put the bags on Size 4 or Size 5.');
+      if (lines.length === 0) out.push('Put the bags on Size 3 or Size 4.');
     } else if (chosen) {
       for (const p of chosen.packaged) { const n = packaged[`${p.productId}:${p.packagingSizeId}`] ?? 0; if (n > 0) { lines.push({ kind: 'PACKAGED_RICE', productId: p.productId, packagingSizeId: p.packagingSizeId, bags: n }); if (n > p.bags) out.push(`The mill has only ${p.bags} bags of ${p.label}.`); } }
       if (Number(broken) > 0) { lines.push({ kind: 'BROKEN_RICE', kg: Number(broken) }); if (chosen.broken && Number(broken) > chosen.broken.kg) out.push(`The mill has only ${chosen.broken.kg} kg of broken rice.`); }

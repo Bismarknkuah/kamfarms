@@ -385,8 +385,9 @@ async function main() {
     await prisma.expenseCategory.upsert({ where: { name }, update: {}, create: { name } });
   }
 
+  await prisma.paddyGrade.upsert({ where: { code: 'SIZE_3' }, update: {}, create: { code: 'SIZE_3', label: 'Size 3' } });
   await prisma.paddyGrade.upsert({ where: { code: 'SIZE_4' }, update: {}, create: { code: 'SIZE_4', label: 'Size 4' } });
-  await prisma.paddyGrade.upsert({ where: { code: 'SIZE_5' }, update: {}, create: { code: 'SIZE_5', label: 'Size 5' } });
+  // Size 5 removed: only Size 3 and Size 4 are used
 
   const sizes: [string, number][] = [['1KG', 1], ['2KG', 2], ['5KG', 5], ['10KG', 10], ['25KG', 25], ['50KG', 50]];
   for (const [label, kg] of sizes) {

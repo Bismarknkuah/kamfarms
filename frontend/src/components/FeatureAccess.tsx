@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { accessApi, ApiError, type AccessMatrix } from '@/lib/api-client';
 
+const MODULE_LABELS: Record<string, string> = { general: 'Everyday tools', logistics: 'Paddy and dispatch', operations: 'Mill and quality', finance: 'Money', insight: 'Reports and insight', people: 'People' };
+const MODULE_ORDER = ['general', 'logistics', 'operations', 'finance', 'insight', 'people'];
 const same = (a: string[], b: string[]) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
 
 /**
@@ -28,7 +30,7 @@ export function FeatureAccess({ accessToken }: { accessToken: string }) {
     try {
       for (const code of changed) await accessApi.save(accessToken, code, draft[code] ?? []);
       const n = changed.length; await load();
-      setNotice(`Saved for ${n === 1 ? 'one role' : `${n} roles`}. They see the change as soon as they open or refresh a page.`);
+      setNotice(`Saved for ${n === 1 ? 'one role' : `${n} roles`}. People who are signed in now see the change within 15 seconds.`);
     } catch (e) { setError(e instanceof ApiError ? e.message : 'That did not save. Nothing was changed: please try again.'); }
     finally { setSaving(false); }
   };
@@ -53,7 +55,13 @@ export function FeatureAccess({ accessToken }: { accessToken: string }) {
                 </tr>
               </thead>
               <tbody>
-                {data.features.map((f) => (
+                {MODULE_ORDER.flatMap((m) => {
+                  const rows = data.features.filter((f) => (f.module ?? 'general') === m);
+                  return rows.length === 0 ? [] : [{ module: m, rows }];
+                }).map((g) => (
+                  <Fragment key={g.module}>
+                    <tr data-testid="fa-module-row"><td colSpan={data.roles.length + 1} className="bg-rice-50 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-paddy-900">{MODULE_LABELS[g.module] ?? g.module}</td></tr>
+                {g.rows.map((f) => (
                   <tr key={f.key} className="border-b border-paddy-100/60 align-top" data-testid="fa-row" data-feature={f.key}>
                     <th scope="row" className="sticky left-0 z-10 bg-white py-3 pr-4 text-left font-normal">
                       <span className="block font-medium text-ink-900">{f.label}</span>
@@ -70,6 +78,8 @@ export function FeatureAccess({ accessToken }: { accessToken: string }) {
                       );
                     })}
                   </tr>
+                ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

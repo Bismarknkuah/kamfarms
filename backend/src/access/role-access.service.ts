@@ -64,7 +64,7 @@ export class RoleAccessService {
     const roles = await this.prisma.role.findMany({ where: { code: { not: ADMIN } } as any, include: { permissions: { include: { permission: true } } }, orderBy: { name: 'asc' } });
     const map = await this.denials();
     return {
-      features: ACCESS_FEATURES.map(({ key, label, description, pages, ui }) => ({ key, label, description, pages, ui: !!ui })),
+      features: ACCESS_FEATURES.map(({ key, label, description, pages, ui, module }) => ({ key, label, description, pages, ui: !!ui, module: module ?? 'general' })),
       roles: roles.map((r: any) => {
         const have = new Set<string>(r.permissions.map((p: any) => p.permission.code));
         const held = ACCESS_FEATURES.filter((f) => (f.key === 'control-center' ? (CONTROL_CENTER_ROLES as readonly string[]).includes(r.code) : f.permissions.length === 0 ? true : f.permissions.some((p) => have.has(p)))).map((f) => f.key);

@@ -45,7 +45,7 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
   const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
 
   // One row per grade - a single intake trip is very often more than
-  // one grade at once (e.g. 7 bags of Size 4, 2 bags of Size 5), and
+  // one grade at once (e.g. 7 bags of Size 3, 2 bags of Size 4), and
   // forcing two completely separate trips through this form just to
   // record what actually happened as one delivery was the real
   // friction here. Farm/date/moisture/quality/notes are shared across
@@ -101,7 +101,7 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
   const validRows = rows.filter((r) => r.paddyGradeId && r.bagCount);
   const totalBags = validRows.reduce((sum, r) => sum + (parseInt(r.bagCount, 10) || 0), 0);
 
-  // Size 4 and Size 5 are on the form from the start: nobody has to choose a size or add a line.
+  // Size 3 and Size 4 are on the form from the start: nobody has to choose a size or add a line.
   useEffect(() => {
     if (grades.length === 0) return;
     setRows((prev) => (prev.length === 1 && !prev[0].paddyGradeId && !prev[0].bagCount ? primarySizes(grades).map((g) => ({ paddyGradeId: g.id, bagCount: '', weightKg: '' })) : prev));
@@ -207,7 +207,7 @@ export function PaddyQuickAction({ accessToken, meId }: { accessToken: string; m
           {/* Step 2 - what's in this intake */}
           <div className="rounded-xl bg-white/60 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-soil-500">2. What's in this intake?</p>
-            <p className="mt-0.5 text-xs text-ink-500">Add one row per size - you can mix Size 4 and Size 5 bags from the same trip.</p>
+            <p className="mt-0.5 text-xs text-ink-500">Add one row per size - you can mix Size 3 and Size 4 bags from the same trip.</p>
             <div className="mt-3 space-y-3">
               {rows.map((row, index) => {
                 const otherSelected = rows.filter((_, i) => i !== index).map((r) => r.paddyGradeId);

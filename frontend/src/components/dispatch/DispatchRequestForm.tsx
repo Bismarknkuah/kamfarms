@@ -10,7 +10,7 @@ const dayFrom = (n: number) => new Date(Date.now() + n * 86400000).toISOString()
 const WHEN = [['Today', 0], ['Tomorrow', 1], ['In 3 days', 3], ['In a week', 7]] as const;
 
 /**
- * The Farm Director asks a farm manager to dispatch: which farm, which warehouse (shown with where it is), Size 4 and Size 5 bags, the day it is
+ * The Farm Director asks a farm manager to dispatch: which farm, which warehouse (shown with where it is), Size 3 and Size 4 bags, the day it is
  * needed, and a note if wanted. It becomes the farm manager's task and appears on the Dispatch desk of both of them.
  */
 export function DispatchRequestForm({ accessToken, onSent, onClose }: { accessToken: string; onSent: () => void; onClose?: () => void }) {
@@ -43,7 +43,7 @@ export function DispatchRequestForm({ accessToken, onSent, onClose }: { accessTo
     if (!orderFarmId) problems.push('Choose the farm the bags will leave from.');
     if (!orderWarehouseId) problems.push('Choose the warehouse the bags must go to.');
     if (!orderDate) problems.push('Choose the date the bags are needed at the warehouse.');
-    if (linesOf(bags).length === 0) problems.push('Put the bags on Size 4 or Size 5.');
+    if (linesOf(bags).length === 0) problems.push('Put the bags on Size 3 or Size 4.');
     setOrderProblems(problems);
     if (problems.length > 0) return;
     setCreatingOrder(true);

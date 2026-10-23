@@ -603,7 +603,7 @@ model PaddyType {
   @@map("paddy_types")
 }
 
-// Configurable - Admin defines grades (e.g. "Size 4", "Size 5") without code changes
+// Configurable - Admin defines grades (e.g. "Size 3", "Size 4") without code changes
 model PaddyGrade {
   id          String   @id @default(uuid())
   code        String   @unique // e.g. SIZE_4
@@ -934,7 +934,7 @@ model PaddyEntry {
   // what keeps that estimate honest instead of silently indistinguishable
   // from an actual measurement.
   weightEstimated  Boolean          @default(false) @map("weight_estimated")
-  /// Sizes saved together as one intake share this reference, e.g. "17 bags of Size 4 and 3 bags of Size 5". Each size keeps its own approval.
+  /// Sizes saved together as one intake share this reference, e.g. "17 bags of Size 3 and 3 bags of Size 4". Each size keeps its own approval.
   intakeRef        String?          @map("intake_ref")
   moisturePercent  Decimal?         @map("moisture_percent") @db.Decimal(5, 2)
   qualityGrade     String?          @map("quality_grade")

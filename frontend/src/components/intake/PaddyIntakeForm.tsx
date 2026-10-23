@@ -6,7 +6,7 @@ import { IntakeFailure, IntakeSuccess } from '@/components/intake/IntakeFeedback
 import { SizeBags, linesOf } from '@/components/SizeBags';
 
 /**
- * ONE intake with every size that arrived: Size 4 and Size 5 are already on the form with a big minus, a number and a plus, saved together (all or
+ * ONE intake with every size that arrived: Size 3 and Size 4 are already on the form with a big minus, a number and a plus, saved together (all or
  * none) and sent for approval in the same step. Bags are what is counted; kilograms are optional, for the places that have a scale. After saving it
  * SAYS so, and when saving fails it says nothing was saved and why. Nothing happens silently.
  */
@@ -36,7 +36,7 @@ export function PaddyIntakeForm({ accessToken, farms, grades, canSubmit, onSaved
     const out: string[] = [];
     if (!farmId) out.push('Choose the farm.');
     if (!entryDate) out.push('Enter the date.');
-    if (going.length === 0) out.push('Put the bags on Size 4 or Size 5.');
+    if (going.length === 0) out.push('Put the bags on Size 3 or Size 4.');
     for (const l of going) if (kg[l.paddyGradeId] && !(parseFloat(kg[l.paddyGradeId]) > 0)) out.push(`${labelOf(l.paddyGradeId)}: kilograms must be more than zero, or left blank.`);
     return out;
   };

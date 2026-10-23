@@ -11,7 +11,7 @@ const dayFrom = (n: number) => new Date(Date.now() + n * 86400000).toISOString()
 const WHEN = [['Today', 0], ['Tomorrow', 1], ['In 3 days', 3], ['In a week', 7]] as const;
 
 /**
- * Ask for paddy: pick the warehouse (or the mill) that needs it, put the bags on Size 4 and Size 5, say when it is needed, and send. It goes to
+ * Ask for paddy: pick the warehouse (or the mill) that needs it, put the bags on Size 3 and Size 4, say when it is needed, and send. It goes to
  * the next person in the chain, who is told and given a task with a link.
  */
 export function SupplyRequestForm({ accessToken, allowWarehouse, allowMill, onlyWarehouseIds, onlyMillIds, onSent, onClose }: {
@@ -47,7 +47,7 @@ export function SupplyRequestForm({ accessToken, allowWarehouse, allowMill, only
     setSent(null); setFailure(null);
     const found: string[] = [];
     if (!target) found.push(kind === 'WAREHOUSE' ? 'Choose the warehouse that needs the paddy.' : 'Choose the mill that needs the paddy.');
-    if (linesOf(bags).length === 0) found.push('Put the bags you need on Size 4 or Size 5.');
+    if (linesOf(bags).length === 0) found.push('Put the bags you need on Size 3 or Size 4.');
     if (!neededBy) found.push('Choose the day you need it.');
     setProblems(found);
     if (found.length > 0) return;

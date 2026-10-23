@@ -714,3 +714,9 @@ No database change. `/api/health` should show `2026.10.18`. See `docs/EXECUTIVE_
 4. The CEO gets a **scorecard** and a **risk radar**; the MD gets **the business in motion** and the **set-up** cards for places and master lists.
 
 **Rolling back:** nothing to undo; the previous version simply lacks these panels.
+
+## 2026.10.19 - Sizes 3 and 4, expense category picker, "Who can use what"
+
+- Paddy sizes are now **Size 3** and **Size 4**. Size 5 is retired: it is no longer seeded or shown on any form. `prisma/sync-expense-categories.ts` (run on every deploy) makes sure Size 3 and Size 4 exist. An existing Size 5 row in the database is left alone so old records keep their history; to hide it from the "Another size" list, switch it off under Master data > Paddy sizes.
+- Logging an expense: the category is picked from a list that pops up. If the right name is not there, type the exact name in the box under the list. It is saved on the expense with the "Other" category.
+- Settings > "Who can use what" now covers more features (money pages, approving expenses, messages to everyone, giving out tasks, quality checks, stock corrections), grouped by area. Changes reach signed-in people within 15 seconds.

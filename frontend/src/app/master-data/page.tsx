@@ -34,7 +34,7 @@ export default function MasterDataPage() {
   const loadAll = (token: string) => {
     masterDataApi.products(token).then(setProducts).catch(() => {});
     masterDataApi.packagingSizes(token).then(setPackagingSizes).catch(() => {});
-    paddyGradesApi.list(token).then(setPaddyGrades).catch(() => {});
+    paddyGradesApi.list(token, true).then(setPaddyGrades).catch(() => {});
     paddyTypesApi.list(token).then(setPaddyTypes).catch(() => {});
   };
 

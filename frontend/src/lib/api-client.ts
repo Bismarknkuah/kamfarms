@@ -1202,7 +1202,9 @@ export interface PaddyType {
 }
 
 export const paddyGradesApi = {
-  list: (accessToken: string) => request<PaddyGrade[]>('/master-data/paddy-grades', { method: 'GET' }, accessToken),
+  /** Sizes in use. A size that has been switched off (e.g. Size 5) is left out, unless the Master data page asks for every size. */
+  list: (accessToken: string, includeInactive = false) => request<PaddyGrade[]>('/master-data/paddy-grades', { method: 'GET' }, accessToken)
+    .then((all) => (includeInactive ? all : all.filter((g) => g.isActive !== false))),
   create: (accessToken: string, data: { code: string; label: string; description?: string }) =>
     request<PaddyGrade>('/master-data/paddy-grades', { method: 'POST', body: JSON.stringify(data) }, accessToken),
   toggle: (accessToken: string, id: string, isActive: boolean) =>

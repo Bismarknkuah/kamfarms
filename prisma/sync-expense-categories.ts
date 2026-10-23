@@ -32,6 +32,8 @@ async function syncPaddyGrades() {
   for (const g of [{ code: 'SIZE_3', label: 'Size 3' }, { code: 'SIZE_4', label: 'Size 4' }]) {
     await prisma.paddyGrade.upsert({ where: { code: g.code }, update: {}, create: g });
   }
+  const retired = await prisma.paddyGrade.updateMany({ where: { code: 'SIZE_5', isActive: true }, data: { isActive: false } });
+  if (retired.count > 0) console.log('Size 5 switched off (history kept).');
   console.log('Paddy grades synced: Size 3, Size 4 (Size 5 retired)');
 }
 

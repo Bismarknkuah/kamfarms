@@ -742,3 +742,12 @@ No database change. `/api/health` should show `2026.10.18`. See `docs/EXECUTIVE_
 **Overview.** Every role now sees a greeting and then the analytics of its own area, and nothing else: no control center, "Run your area", shortcuts, task strips or desks (every page is in the side menu; the Control center page is still in the menu where a role has one). New analytics: Sales (own orders for a Sales Officer, company for Finance/management), Finance (billed, collected, spent, ageing, debtors), and System (people, sign-ins, audit activity) for the Administrator. New endpoints `GET /api/overview/analytics/{sales,finance,system}`. The Administrator's demo-access switch moved to Admin > Demo access.
 
 No database migration. Health reports `2026.10.31` with the feature `report-areas`; deploy the API with the website.
+
+## 2026.11.01 - Overview for each place
+
+- A Farm Manager, Warehouse Manager or Operations Officer now sees an Overview of only their own farm, warehouse or milling center
+  (`GET /api/overview/analytics/my-farm`, `my-warehouse`, `my-mill`). The server returns only the places the person is assigned to; a person assigned to
+  nothing gets nothing. Other roles are refused these routes.
+- The MD / CEO get a "company today" pulse (`/pulse`), the Auditor gets a controls view (`/audit`), Sales shows what customers owe, and Finance shows
+  payments to verify and expenses to approve.
+- No database change. Redeploy the API first, then the web app.

@@ -47,6 +47,9 @@ const USERS = {
   wm2: { id: 'u-wm2', email: 'warehousemanager.2@kam.local', firstName: 'Abena', lastName: 'Gyasi', role: 'WAREHOUSE_MANAGER', scopes: [{ scopeType: 'WAREHOUSE', scopeId: WH2 }], perms: ['dispatch.track', 'supply.view', 'supply.request', 'dashboard.view', 'sales.fulfill', 'warehouse.view', 'warehouse.receive'] },
   fsup: { id: 'u-fsup', email: 'farmdirector@kam.local', firstName: 'Efua', lastName: 'Mensah', role: 'FARM_DIRECTOR', scopes: GLOBAL, perms: ['dispatch.track', 'inventory.adjust', 'supply.view', 'supply.fulfil', 'dashboard.view', 'delivery.create', 'delivery.view', 'delivery.approve', 'delivery.reject', 'farm.inventory.view', 'paddy.approve', 'tasks.assign', 'tasks.complete'] },
   fm: { id: 'u-fm', email: 'farmmanager@kam.local', firstName: 'Yaa', lastName: 'Owusu', role: 'FARM_MANAGER', scopes: [{ scopeType: 'FARM', scopeId: '33333333-3333-4333-8333-333333333333' }], perms: ['dispatch.track', 'dashboard.view', 'paddy.create', 'paddy.submit', 'delivery.create', 'delivery.view', 'farm.inventory.view', 'tasks.complete'] },
+  auditor: { id: 'u-auditor', email: 'auditor@kam.local', firstName: 'Abena', lastName: 'Tetteh', role: 'AUDITOR', scopes: GLOBAL, perms: ['dashboard.view', 'audit.view', 'reports.view', 'reports.export'] },
+  fm2: { id: 'u-fm2', email: 'farmmanager.2@kam.local', firstName: 'Esi', lastName: 'Badu', role: 'FARM_MANAGER', scopes: [{ scopeType: 'FARM', scopeId: '88888888-8888-4888-8888-888888888888' }], perms: ['dispatch.track', 'dashboard.view', 'paddy.create', 'paddy.submit', 'delivery.create', 'delivery.view', 'farm.inventory.view', 'tasks.complete'] },
+  oo2: { id: 'u-oo2', email: 'operationsofficer.2@kam.local', firstName: 'Kofi', lastName: 'Ofori', role: 'OPERATIONS_OFFICER', scopes: [{ scopeType: 'MILLING_CENTER', scopeId: '77777777-7777-4777-8777-777777777777' }], perms: ['dashboard.view', 'milling.view', 'production.create', 'supply.view', 'supply.request'] },
   oo: { id: 'u-oo', email: 'operationsofficer@kam.local', firstName: 'Ama', lastName: 'Frimpong', role: 'OPERATIONS_OFFICER', scopes: [{ scopeType: 'MILLING_CENTER', scopeId: '66666666-6666-4666-8666-666666666666' }], perms: ['dashboard.view', 'milling.view', 'production.create', 'supply.view', 'supply.request'] },
   fsup2: { id: 'u-fsup2', email: 'farmdirector.2@kam.local', firstName: 'Kofi', lastName: 'Ansah', role: 'FARM_DIRECTOR', scopes: [{ scopeType: 'FARM', scopeId: '33333333-3333-4333-8333-333333333333' }], perms: ['dispatch.track', 'inventory.adjust', 'supply.view', 'supply.fulfil', 'dashboard.view', 'delivery.create', 'delivery.view', 'delivery.approve', 'delivery.reject', 'farm.inventory.view', 'paddy.approve', 'tasks.assign', 'tasks.complete'] },
   ops2: { id: 'u-ops2', email: 'operationsmanager.2@kam.local', firstName: 'Esi', lastName: 'Quaye', role: 'OPERATIONS_MANAGER', scopes: [{ scopeType: 'MILLING_CENTER', scopeId: '66666666-6666-4666-8666-666666666666' }], perms: ['inventory.adjust', 'supply.view', 'supply.request', 'supply.forward', 'dashboard.view', 'milling.view', 'production.approve', 'reports.view', 'ai.view', 'ai.use'] },
@@ -643,6 +646,39 @@ const ovPrisma = {
   machine: { groupBy: async () => [{ status: 'RUNNING', _count: { _all: 3 } }, { status: 'FAULT', _count: { _all: 1 } }, { status: 'MAINTENANCE', _count: { _all: 1 } }] },
 };
 const ovSvc = new OverviewAnalyticsService(ovPrisma);
+// One farm / warehouse / mill at a time, for the people who work there: the REAL PlaceOverviewService over small per-place tables.
+const { PlaceOverviewService } = require(B + '/overview/place-overview.service');
+const PLACE_FARM = { [FARM]: { stock: [{ quantityKg: 9000, bagCount: 180, paddyGrade: { label: 'Size 3' } }], recent: 'PE-A-1' }, [OV_FARM_B]: { stock: [{ quantityKg: 3000, bagCount: 60, paddyGrade: { label: 'Size 4' } }], recent: 'PE-B-1' } };
+const placePrisma = {
+  ...ovPrisma,
+  paddyEntry: {
+    findMany: async ({ where, take }) => (take
+      ? [{ entryNumber: PLACE_FARM[where.farmId].recent, entryDate: dAgo(1), bagCount: 80, status: 'APPROVED', paddyGrade: { label: 'Size 3' } }]
+      : ovEntries().filter((e) => e.farmId === where.farmId).map((e) => ({ ...e, bagCount: Math.round(e.weightKg / 50) }))),
+    count: async () => 1,
+  },
+  inventoryBalance: { findMany: async ({ where }) => {
+    if (where.locationType === 'FARM') return PLACE_FARM[where.locationId].stock;
+    return where.locationId === WH1
+      ? [{ quantityKg: 20000, bagCount: 400, paddyGradeId: 'g', productId: null, paddyGrade: { label: 'Size 3' } }, { quantityKg: 5000, bagCount: 200, paddyGradeId: null, productId: 'p', packagingSize: { label: '25 KG' } }]
+      : [{ quantityKg: 8000, bagCount: 160, paddyGradeId: 'g', productId: null, paddyGrade: { label: 'Size 4' } }, { quantityKg: 1500, bagCount: 60, paddyGradeId: null, productId: 'p', packagingSize: { label: '10 KG' } }];
+  } },
+  shipment: { findMany: async ({ where }) => {
+    if (where.farmId) return where.farmId === FARM ? [{ expectedKg: 5000, receivedAt: null, deliveryReport: { totalDeliveryCost: 1500 } }] : [{ expectedKg: 4000, receivedAt: dAgo(1), deliveryReport: { totalDeliveryCost: 1000 } }];
+    const wh = where.warehouseId === WH1;
+    if (where.receivedAt === null) return wh ? [{ shipmentNumber: 'SH-1', expectedKg: 5000, departedAt: dAgo(0), farm: { name: 'Nkawkaw Farm' } }] : [];
+    if (where.receivedAt) return [{ receivedAt: dAgo(1), receivedKg: wh ? 3900 : 4000, varianceKg: wh ? -100 : 0, varianceRequiresApproval: wh }];
+    return [{ shipmentNumber: wh ? 'SH-1' : 'SH-2', departedAt: dAgo(1), expectedKg: 4000, receivedAt: null, farm: { name: wh ? 'Nkawkaw Farm' : 'Sefwi Farm' } }];
+  } },
+  productionRecord: {
+    findMany: async ({ where, take }) => (take
+      ? [{ recordNumber: where.millingCenterId === MILL1 ? 'PR-1' : 'PR-2', date: dAgo(1), paddyProcessedKg: 10000, recoveredRiceKg: 7000, status: 'APPROVED' }]
+      : ovProd().filter((r) => r.millingCenterId === where.millingCenterId)),
+    count: async () => 2,
+  },
+  machine: { findMany: async ({ where }) => (where.millingCenterId === MILL1 ? [{ machineName: 'Huller Alpha', status: 'RUNNING' }] : [{ machineName: 'Polisher Beta', status: 'FAULT' }]) },
+};
+const placeSvc = new PlaceOverviewService(placePrisma);
 // Sales, money and system figures: small tables under the REAL BusinessAnalyticsService.
 const { BusinessAnalyticsService } = require(B + '/overview/business-analytics.service');
 const { OverviewAnalyticsController } = require(B + '/overview/overview-analytics.controller');
@@ -655,14 +691,25 @@ const bizPrisma = {
   invoice: { findMany: async ({ where }) => (where.status && where.status.in
     ? [{ totalAmount: '8000', dueDate: dAgo(10), customer: { name: 'Ama Retail' }, allocations: [{ amountApplied: '3000' }] }, { totalAmount: '2000', dueDate: dAgo(-5), customer: { name: 'Kwesi Stores' }, allocations: [] }]
     : [{ issueDate: dAgo(2), totalAmount: '15000' }, { issueDate: dAgo(8), totalAmount: '6000' }]) },
-  payment: { findMany: async () => [{ paymentDate: dAgo(2), amount: '9000', method: 'BANK_TRANSFER' }, { paymentDate: dAgo(6), amount: '1500', method: 'CASH' }] },
-  expense: { findMany: async () => [{ date: dAgo(2), amount: '2400', category: { name: 'Fuel' } }, { date: dAgo(7), amount: '1800', category: { name: 'Labour' } }] },
+  payment: { count: async () => 2, findMany: async () => [{ paymentDate: dAgo(2), amount: '9000', method: 'BANK_TRANSFER' }, { paymentDate: dAgo(6), amount: '1500', method: 'CASH' }] },
+  expense: { count: async () => 1, findMany: async () => [{ date: dAgo(2), amount: '2400', category: { name: 'Fuel' } }, { date: dAgo(7), amount: '1800', category: { name: 'Labour' } }] },
+  inventoryAdjustment: { groupBy: async () => [{ status: 'APPROVED', _count: { _all: 3 } }, { status: 'PENDING', _count: { _all: 1 } }] },
   user: { groupBy: async () => [{ status: 'ACTIVE', _count: { _all: 14 } }, { status: 'DISABLED', _count: { _all: 2 } }, { status: 'LOCKED', _count: { _all: 1 } }] },
   loginAttempt: { findMany: async () => [{ createdAt: dAgo(1), success: true, reason: null }, { createdAt: dAgo(1), success: true, reason: null }, { createdAt: dAgo(2), success: false, reason: 'Wrong password' }] },
   auditLog: { findMany: async () => [{ createdAt: dAgo(1), action: 'user.create' }, { createdAt: dAgo(2), action: 'paddy.approve' }, { createdAt: dAgo(3), action: 'user.update' }] },
 };
-const ovCtl = new OverviewAnalyticsController(ovSvc, new BusinessAnalyticsService(bizPrisma));
-const OV_NEEDS = { farms: ['reports.view'], warehouses: ['reports.view'], operations: ['reports.view'], executive: ['reports.view'], sales: ['sales.view', 'sales.create', 'finance.view'], finance: ['finance.view'], system: ['users.manage'] };
+// the pulse and audit views count across the company: borrow the per-place tables and add counts
+const bizAll = {
+  ...bizPrisma,
+  salesOrder: { findMany: bizPrisma.salesOrder.findMany, count: async () => 1 },
+  paddyEntry: { count: async () => 2 },
+  productionRecord: { findMany: async () => ovProd().filter((r) => r.massBalanceFlag !== undefined).map((r) => ({ ...r })), count: async () => 1 },
+  inventoryBalance: { findMany: async () => [{ locationType: 'FARM', quantityKg: 12000, paddyGradeId: 'g', productId: null }, { locationType: 'WAREHOUSE', quantityKg: 28000, paddyGradeId: 'g', productId: null }, { locationType: 'WAREHOUSE', quantityKg: 6500, paddyGradeId: null, productId: 'p' }] },
+  shipment: { findMany: async () => [{ expectedKg: 5000 }], count: async () => 1 },
+  machine: { count: async () => 1 },
+};
+const ovCtl = new OverviewAnalyticsController(ovSvc, new BusinessAnalyticsService(bizAll), placeSvc);
+const OV_NEEDS = { farms: ['reports.view'], warehouses: ['reports.view'], operations: ['reports.view'], executive: ['reports.view'], sales: ['sales.view', 'sales.create', 'finance.view'], finance: ['finance.view'], system: ['users.manage'], pulse: ['reports.view'], audit: ['reports.view'], myFarm: ['reports.view'], myWarehouse: ['reports.view'], myMill: ['reports.view'] };
 const ovRoute = (name) => app.get('/api/overview/analytics/' + name, async (req, res) => {
   const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.');
   const a = actorOf(k); a.permissionCodes = new Set([...a.permissionCodes, ...seedPerms(USERS[k].role)]);
@@ -671,6 +718,14 @@ const ovRoute = (name) => app.get('/api/overview/analytics/' + name, async (req,
   try { ok(res, await ovCtl[name](a, req.query.days)); } catch (e) { fail(res, e && e.getStatus ? e.getStatus() : 500, String((e && e.getResponse && e.getResponse().message) || (e && e.message) || e)); }
 });
 for (const n of ['farms', 'warehouses', 'operations', 'executive', 'sales', 'finance', 'system']) ovRoute(n);
+for (const [n, path] of [['pulse', 'pulse'], ['audit', 'audit'], ['myFarm', 'my-farm'], ['myWarehouse', 'my-warehouse'], ['myMill', 'my-mill']]) {
+  app.get('/api/overview/analytics/' + path, async (req, res) => {
+    const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.');
+    const a = actorOf(k); a.permissionCodes = new Set([...a.permissionCodes, ...seedPerms(USERS[k].role)]);
+    if (!OV_NEEDS[n].some((c) => a.permissionCodes.has(c))) return fail(res, 403, 'You do not have permission to do this.');
+    try { ok(res, await ovCtl[n](a, req.query.days)); } catch (e) { fail(res, e && e.getStatus ? e.getStatus() : 500, String((e && e.getResponse && e.getResponse().message) || (e && e.message) || e)); }
+  });
+}
 // the reports a role may download come from the REAL area rules and catalog
 const { reportAreas } = require(B + '/reports/report-areas');
 const { ReportCatalogService } = require(B + '/reports/report-catalog.service');

@@ -26,10 +26,18 @@ export class BusinessAnalyticsService {
     const w = this.window(rawDays);
     const company = actor.permissionCodes.has(PERMISSIONS.FINANCE_VIEW);
     const mine = company ? {} : { salesOfficerId: actor.id };
-    const orders = await this.prisma.salesOrder.findMany({
+    const [owedRows, orders] = await Promise.all([
+      this.prisma.invoice.findMany({ where: { status: { in: ['OPEN', 'PARTIALLY_PAID'] }, ...(company ? {} : { salesOrder: { salesOfficerId: actor.id } }) }, select: { totalAmount: true, dueDate: true, allocations: { select: { amountApplied: true } } } }),
+      this.prisma.salesOrder.findMany({
       where: { ...mine, createdAt: { gte: w.since }, status: { not: 'DRAFT' } },
       select: { createdAt: true, status: true, totalAmount: true, totalKg: true, customer: { select: { name: true } }, salesOfficer: { select: { firstName: true, lastName: true } } },
-    });
+      }),
+    ]);
+    let owed = 0; let owedLate = 0;
+    for (const inv of owedRows) {
+      const left = Math.max(0, num(inv.totalAmount) - inv.allocations.reduce((a, x) => a + num(x.amountApplied), 0));
+      owed += left; if (inv.dueDate && inv.dueDate.getTime() < w.now.getTime()) owedLate += left;
+    }
     const trend = new Map(w.keys.map((k) => [k, { bucket: k, orders: 0, value: 0 }]));
     const status: Record<string, number> = {};
     const customers = new Map<string, { name: string; value: number; orders: number }>();
@@ -51,7 +59,7 @@ export class BusinessAnalyticsService {
     const rank = (m: Map<string, { name: string; value: number; orders: number }>) => [...m.values()].sort((a, b) => b.value - a.value).slice(0, 6).map((r) => ({ ...r, value: money(r.value) }));
     return {
       days: w.days, unit: w.unit, company,
-      totals: { orders: orders.length, value: money(value), kg: round0(kg), fulfilled, inProgress, waitingForApproval: waiting, lost, averageOrder: orders.length ? money(value / orders.length) : 0 },
+      totals: { owed: money(owed), owedLate: money(owedLate), orders: orders.length, value: money(value), kg: round0(kg), fulfilled, inProgress, waitingForApproval: waiting, lost, averageOrder: orders.length ? money(value / orders.length) : 0 },
       trend: [...trend.values()].map((t) => ({ ...t, value: money(t.value) })),
       status: Object.entries(status).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
       topCustomers: rank(customers),
@@ -61,6 +69,10 @@ export class BusinessAnalyticsService {
 
   async finance(actor: AuthenticatedUser, rawDays?: string) {
     const w = this.window(rawDays);
+    const [toVerify, toApprove] = await Promise.all([
+      this.prisma.payment.count({ where: { status: 'PENDING_VERIFICATION' } }),
+      this.prisma.expense.count({ where: { status: 'PENDING' } }),
+    ]);
     const [invoicedRows, payments, expenses, openInvoices] = await Promise.all([
       this.prisma.invoice.findMany({ where: { issueDate: { gte: w.since }, status: { not: 'CANCELLED' } }, select: { issueDate: true, totalAmount: true } }),
       this.prisma.payment.findMany({ where: { paymentDate: { gte: w.since }, status: { in: ['VERIFIED', 'PARTIALLY_APPLIED'] } }, select: { paymentDate: true, amount: true, method: true } }),
@@ -86,7 +98,7 @@ export class BusinessAnalyticsService {
     }
     return {
       days: w.days, unit: w.unit,
-      totals: { invoiced: money(invoiced), collected: money(collected), spent: money(spent), outstanding: money(outstanding), overdue: money(overdue), estimatedProfit: money(invoiced - spent) },
+      totals: { paymentsToVerify: toVerify, expensesToApprove: toApprove, invoiced: money(invoiced), collected: money(collected), spent: money(spent), outstanding: money(outstanding), overdue: money(overdue), estimatedProfit: money(invoiced - spent) },
       trend: [...trend.values()].map((t) => ({ bucket: t.bucket, invoiced: money(t.invoiced), collected: money(t.collected), spent: money(t.spent) })),
       expensesByCategory: [...cats.entries()].map(([name, amount]) => ({ name, amount: money(amount) })).sort((a, b) => b.amount - a.amount).slice(0, 8),
       paymentsByMethod: Object.entries(methods).map(([name, amount]) => ({ name, amount: money(amount) })),
@@ -122,6 +134,66 @@ export class BusinessAnalyticsService {
       trend: [...trend.values()],
       failedReasons: [...reasons.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5),
       activityByArea: [...actions.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 8),
+    };
+  }
+
+  /** The company in one glance for top management: stock along the chain, money, and what is waiting. */
+  async pulse(actor: AuthenticatedUser, rawDays?: string) {
+    const w = this.window(rawDays);
+    const [balances, onRoad, runs, waitingPaddy, waitingRuns, waitingOrders, waitingPayments, varianceHold, faults, sales, fin] = await Promise.all([
+      this.prisma.inventoryBalance.findMany({ where: { locationType: { in: ['FARM', 'WAREHOUSE'] } }, select: { locationType: true, quantityKg: true, paddyGradeId: true, productId: true } }),
+      this.prisma.shipment.findMany({ where: { receivedAt: null }, select: { expectedKg: true } }),
+      this.prisma.productionRecord.findMany({ where: { status: 'APPROVED', date: { gte: w.since } }, select: { paddyProcessedKg: true, recoveredRiceKg: true, massBalanceFlag: true } }),
+      this.prisma.paddyEntry.count({ where: { status: 'SUBMITTED' } }),
+      this.prisma.productionRecord.count({ where: { status: 'SUBMITTED' } }),
+      this.prisma.salesOrder.count({ where: { status: 'SUBMITTED' } }),
+      this.prisma.payment.count({ where: { status: 'PENDING_VERIFICATION' } }),
+      this.prisma.shipment.count({ where: { varianceRequiresApproval: true, receivedAt: { gte: w.since } } }),
+      this.prisma.machine.count({ where: { status: 'FAULT' } }),
+      this.sales(actor, rawDays),
+      this.finance(actor, rawDays),
+    ]);
+    let farmPaddy = 0; let warehousePaddy = 0; let packaged = 0;
+    for (const b of balances) {
+      const q = num(b.quantityKg);
+      if (b.locationType === 'FARM' && b.paddyGradeId) farmPaddy += q;
+      else if (b.locationType === 'WAREHOUSE' && b.paddyGradeId) warehousePaddy += q;
+      else if (b.locationType === 'WAREHOUSE' && b.productId) packaged += q;
+    }
+    const processed = runs.reduce((a, r) => a + num(r.paddyProcessedKg), 0); const rice = runs.reduce((a, r) => a + num(r.recoveredRiceKg), 0);
+    return {
+      days: w.days,
+      stock: { farmPaddyKg: round0(farmPaddy), onRoadKg: round0(onRoad.reduce((a, s) => a + num(s.expectedKg), 0)), warehousePaddyKg: round0(warehousePaddy), packagedKg: round0(packaged) },
+      production: { processedKg: round0(processed), recoveredKg: round0(rice), recoveryPct: processed > 0 ? Math.round((rice / processed) * 1000) / 10 : null },
+      money: { sales: sales.totals.value, orders: sales.totals.orders, collected: fin.totals.collected, spent: fin.totals.spent, estimatedProfit: fin.totals.estimatedProfit, owed: fin.totals.outstanding, late: fin.totals.overdue },
+      waiting: { paddyEntries: waitingPaddy, productionRuns: waitingRuns, salesOrders: waitingOrders, payments: waitingPayments, countGaps: varianceHold, flaggedRuns: runs.filter((r) => r.massBalanceFlag).length, machineFaults: faults },
+    };
+  }
+
+  /** For the Auditor (and management): how well the controls are working. Corrections, rejections, flags and sign-in trouble, counted. */
+  async audit(_actor: AuthenticatedUser, rawDays?: string) {
+    const w = this.window(rawDays);
+    const [adjustments, rejectedPaddy, rejectedRuns, flagged, gaps, attempts, logs] = await Promise.all([
+      this.prisma.inventoryAdjustment.groupBy({ by: ['status'], where: { requestedAt: { gte: w.since } }, _count: { _all: true } }),
+      this.prisma.paddyEntry.count({ where: { status: 'REJECTED', updatedAt: { gte: w.since } } }),
+      this.prisma.productionRecord.count({ where: { status: 'REJECTED', updatedAt: { gte: w.since } } }),
+      this.prisma.productionRecord.count({ where: { massBalanceFlag: true, date: { gte: w.since } } }),
+      this.prisma.shipment.count({ where: { varianceRequiresApproval: true, receivedAt: { gte: w.since } } }),
+      this.prisma.loginAttempt.findMany({ where: { createdAt: { gte: w.since } }, select: { createdAt: true, success: true } }),
+      this.prisma.auditLog.findMany({ where: { createdAt: { gte: w.since } }, select: { createdAt: true, action: true } }),
+    ]);
+    const adj: Record<string, number> = {};
+    for (const g of adjustments) adj[g.status] = g._count._all;
+    const trend = new Map(w.keys.map((k) => [k, { bucket: k, recorded: 0, failedSignIns: 0 }]));
+    let failed = 0;
+    for (const a of attempts) if (!a.success) { failed += 1; const t = trend.get(bucketOf(a.createdAt, w.unit)); if (t) t.failedSignIns += 1; }
+    const areas = new Map<string, number>();
+    for (const l of logs) { const t = trend.get(bucketOf(l.createdAt, w.unit)); if (t) t.recorded += 1; const a = l.action.split('.')[0] || 'other'; areas.set(a, (areas.get(a) ?? 0) + 1); }
+    return {
+      days: w.days, unit: w.unit,
+      totals: { corrections: Object.values(adj).reduce((a, b) => a + b, 0), correctionsApproved: adj['APPROVED'] ?? 0, correctionsRejected: adj['REJECTED'] ?? 0, correctionsWaiting: adj['PENDING'] ?? 0, rejectedPaddy, rejectedRuns, flaggedRuns: flagged, countGaps: gaps, failedSignIns: failed, recorded: logs.length },
+      trend: [...trend.values()],
+      activityByArea: [...areas.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 8),
     };
   }
 }

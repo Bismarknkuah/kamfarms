@@ -9,23 +9,28 @@ import { ExecutiveAnalyticsView } from './ExecutiveAnalytics';
 import { SalesAnalytics } from './SalesAnalytics';
 import { FinanceAnalytics } from './FinanceAnalytics';
 import { SystemAnalytics } from './SystemAnalytics';
+import { FarmPlace } from './FarmPlace';
+import { WarehousePlace } from './WarehousePlace';
+import { MillPlace } from './MillPlace';
+import { PulseAnalytics } from './PulseAnalytics';
+import { AuditAnalytics } from './AuditAnalytics';
 
-export type Block = 'executive' | 'finance' | 'sales' | 'farm' | 'warehouse' | 'operations' | 'system';
+export type Block = 'executive' | 'finance' | 'sales' | 'farm' | 'warehouse' | 'operations' | 'system' | 'farmPlace' | 'warehousePlace' | 'millPlace' | 'pulse' | 'audit';
 
 /** The analytics each role sees on its Overview, in order. The server enforces the same areas, so a block here that a role may not read would simply say so. */
 export const BLOCKS_BY_ROLE: Record<string, Block[]> = {
   ADMIN: ['system'],
-  MD: ['executive', 'sales', 'finance'],
-  CEO: ['executive', 'sales', 'finance'],
-  AUDITOR: ['executive'],
+  MD: ['pulse', 'executive', 'sales', 'finance'],
+  CEO: ['pulse', 'executive', 'sales', 'finance'],
+  AUDITOR: ['audit', 'executive'],
   FINANCE_DIRECTOR: ['finance', 'sales'],
   FINANCE_OFFICER: ['finance', 'sales'],
   FARM_DIRECTOR: ['farm'],
-  FARM_MANAGER: ['farm'],
+  FARM_MANAGER: ['farmPlace'],
   WAREHOUSE_SUPERVISOR: ['warehouse'],
-  WAREHOUSE_MANAGER: ['warehouse'],
+  WAREHOUSE_MANAGER: ['warehousePlace'],
   OPERATIONS_MANAGER: ['operations'],
-  OPERATIONS_OFFICER: ['operations'],
+  OPERATIONS_OFFICER: ['millPlace'],
   SALES_OFFICER: ['sales'],
 };
 
@@ -60,6 +65,11 @@ export function Overview({ me, accessToken, hasPermission }: { me: MeResponse; a
           case 'farm': return <FarmAnalytics key={b} accessToken={accessToken} />;
           case 'warehouse': return <WarehouseAnalytics key={b} accessToken={accessToken} />;
           case 'operations': return <OperationsAnalytics key={b} accessToken={accessToken} />;
+          case 'farmPlace': return <FarmPlace key={b} accessToken={accessToken} />;
+          case 'warehousePlace': return <WarehousePlace key={b} accessToken={accessToken} />;
+          case 'millPlace': return <MillPlace key={b} accessToken={accessToken} />;
+          case 'pulse': return <PulseAnalytics key={b} accessToken={accessToken} />;
+          case 'audit': return <AuditAnalytics key={b} accessToken={accessToken} />;
           case 'system': return <SystemAnalytics key={b} accessToken={accessToken} />;
         }
       })}

@@ -11,7 +11,7 @@ describe('BusinessAnalyticsService.sales', () => {
     { createdAt: recent(3), status: 'REJECTED', totalAmount: '100', totalKg: '50', customer: { name: 'Kwesi' }, salesOfficer: { firstName: 'Esi', lastName: 'B' } },
     { createdAt: recent(3), status: 'RESERVED', totalAmount: '600', totalKg: '300', customer: { name: 'Kwesi' }, salesOfficer: { firstName: 'Esi', lastName: 'B' } },
   ];
-  const build = () => { const prisma: any = { salesOrder: { findMany: jest.fn(async () => orders) } }; return { prisma, svc: new BusinessAnalyticsService(prisma) }; };
+  const build = () => { const prisma: any = { invoice: { findMany: jest.fn(async () => []) }, salesOrder: { findMany: jest.fn(async () => orders) } }; return { prisma, svc: new BusinessAnalyticsService(prisma) }; };
 
   it('limits a Sales Officer to their own orders in the database query', async () => {
     const { prisma, svc } = build();
@@ -46,8 +46,8 @@ describe('BusinessAnalyticsService.finance', () => {
           { totalAmount: '300', dueDate: recent(100), customer: { name: 'B' }, allocations: [{ amountApplied: '300' }] },
         ]
       : [{ issueDate: recent(1), totalAmount: '1800' }, { issueDate: recent(4), totalAmount: '200' }])) },
-    payment: { findMany: jest.fn(async () => [{ paymentDate: recent(1), amount: '900', method: 'BANK_TRANSFER' }, { paymentDate: recent(2), amount: '100', method: 'CASH' }]) },
-    expense: { findMany: jest.fn(async () => [{ date: recent(1), amount: '250', category: { name: 'Fuel' } }, { date: recent(3), amount: '150', category: { name: 'Labour' } }]) },
+    payment: { count: jest.fn(async () => 2), findMany: jest.fn(async () => [{ paymentDate: recent(1), amount: '900', method: 'BANK_TRANSFER' }, { paymentDate: recent(2), amount: '100', method: 'CASH' }]) },
+    expense: { count: jest.fn(async () => 1), findMany: jest.fn(async () => [{ date: recent(1), amount: '250', category: { name: 'Fuel' } }, { date: recent(3), amount: '150', category: { name: 'Labour' } }]) },
   };
 
   it('works out invoiced, collected, spent and an estimated profit from decimals', async () => {
@@ -84,7 +84,7 @@ describe('BusinessAnalyticsService.system', () => {
 
 describe('analytics views are kept to each role\'s own area', () => {
   const stub: any = { farms: jest.fn(async () => 'f'), warehouses: jest.fn(async () => 'w'), operations: jest.fn(async () => 'o'), executive: jest.fn(async () => 'e'), sales: jest.fn(async () => 's'), finance: jest.fn(async () => 'x'), system: jest.fn(async () => 'y') };
-  const c = new OverviewAnalyticsController(stub, stub);
+  const c = new OverviewAnalyticsController(stub, stub, stub);
   const as = (code: string) => actor('u', [], code);
 
   it('keeps the warehouse view from the Farm Supervisor and the farm view from the Warehouse Supervisor', () => {

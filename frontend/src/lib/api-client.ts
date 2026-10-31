@@ -2299,7 +2299,7 @@ export interface OvOperations {
 }
 export interface OvSales {
   days: number; unit: 'day' | 'week'; company: boolean;
-  totals: { orders: number; value: number; kg: number; fulfilled: number; inProgress: number; waitingForApproval: number; lost: number; averageOrder: number };
+  totals: { owed: number; owedLate: number; orders: number; value: number; kg: number; fulfilled: number; inProgress: number; waitingForApproval: number; lost: number; averageOrder: number };
   trend: { bucket: string; orders: number; value: number }[];
   status: { name: string; count: number }[];
   topCustomers: { name: string; value: number; orders: number }[];
@@ -2307,7 +2307,7 @@ export interface OvSales {
 }
 export interface OvFinance {
   days: number; unit: 'day' | 'week';
-  totals: { invoiced: number; collected: number; spent: number; outstanding: number; overdue: number; estimatedProfit: number };
+  totals: { paymentsToVerify: number; expensesToApprove: number; invoiced: number; collected: number; spent: number; outstanding: number; overdue: number; estimatedProfit: number };
   trend: { bucket: string; invoiced: number; collected: number; spent: number }[];
   expensesByCategory: { name: string; amount: number }[];
   paymentsByMethod: { name: string; amount: number }[];
@@ -2322,7 +2322,31 @@ export interface OvSystem {
   failedReasons: { name: string; count: number }[];
   activityByArea: { name: string; count: number }[];
 }
+export interface OvPlaceRecent { ref: string; date: string; label: string; amount: string; status: string }
+export interface OvSizeRow { label: string; kg: number; bags: number }
+export interface OvFarmPlace { id: string; name: string; totals: { intakeKg: number; intakeBags: number; stockKg: number; stockBags: number; pending: number; rejected: number; sentKg: number; onRoadKg: number; deliveryCost: number; avgMoisture: number | null }; trend: { bucket: string; kg: number }[]; stockBySize: OvSizeRow[]; recent: OvPlaceRecent[] }
+export interface OvWarehousePlace { id: string; name: string; totals: { paddyKg: number; packagedKg: number; incomingKg: number; incomingTrucks: number; receivedKg: number; varianceKg: number; variancePct: number | null; awaitingReview: number }; trend: { bucket: string; kg: number }[]; paddyBySize: OvSizeRow[]; riceBySize: OvSizeRow[]; onTheWay: { ref: string; from: string; kg: number; departed: string }[]; recent: OvPlaceRecent[] }
+export interface OvMillPlace { id: string; name: string; totals: { processedKg: number; recoveredKg: number; brokenKg: number; hullKg: number; recoveryPct: number | null; kwhPerTonne: number | null; runs: number; flagged: number; runtimeHours: number; awaitingApproval: number }; trend: { bucket: string; processedKg: number; recoveryPct: number | null }[]; machines: { name: string; status: string }[]; recent: OvPlaceRecent[] }
+export interface OvPlaces<T> { days: number; unit: 'day' | 'week'; places: T[] }
+export interface OvPulse {
+  days: number;
+  stock: { farmPaddyKg: number; onRoadKg: number; warehousePaddyKg: number; packagedKg: number };
+  production: { processedKg: number; recoveredKg: number; recoveryPct: number | null };
+  money: { sales: number; orders: number; collected: number; spent: number; estimatedProfit: number; owed: number; late: number };
+  waiting: { paddyEntries: number; productionRuns: number; salesOrders: number; payments: number; countGaps: number; flaggedRuns: number; machineFaults: number };
+}
+export interface OvAudit {
+  days: number; unit: 'day' | 'week';
+  totals: { corrections: number; correctionsApproved: number; correctionsRejected: number; correctionsWaiting: number; rejectedPaddy: number; rejectedRuns: number; flaggedRuns: number; countGaps: number; failedSignIns: number; recorded: number };
+  trend: { bucket: string; recorded: number; failedSignIns: number }[];
+  activityByArea: { name: string; count: number }[];
+}
 export const overviewApi = {
+  myFarm: (t: string, days: OverviewDays) => request<OvPlaces<OvFarmPlace>>(`/overview/analytics/my-farm?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
+  myWarehouse: (t: string, days: OverviewDays) => request<OvPlaces<OvWarehousePlace>>(`/overview/analytics/my-warehouse?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
+  myMill: (t: string, days: OverviewDays) => request<OvPlaces<OvMillPlace>>(`/overview/analytics/my-mill?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
+  pulse: (t: string, days: OverviewDays) => request<OvPulse>(`/overview/analytics/pulse?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
+  audit: (t: string, days: OverviewDays) => request<OvAudit>(`/overview/analytics/audit?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
   sales: (t: string, days: OverviewDays) => request<OvSales>(`/overview/analytics/sales?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
   finance: (t: string, days: OverviewDays) => request<OvFinance>(`/overview/analytics/finance?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
   system: (t: string, days: OverviewDays) => request<OvSystem>(`/overview/analytics/system?days=${days}`, { method: 'GET', cache: 'no-store' }, t),

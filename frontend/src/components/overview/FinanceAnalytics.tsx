@@ -23,7 +23,9 @@ export function FinanceAnalytics({ accessToken }: { accessToken: string }) {
             <Kpi label="Spent" value={ghs(t.spent)} note="expenses not rejected" id="fin-spent" />
             <Kpi label="Estimated profit" value={ghs(t.estimatedProfit)} note="billed less spent" tone={t.estimatedProfit < 0 ? 'warn' : 'good'} id="fin-profit" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Kpi label="Payments to verify" value={`${t.paymentsToVerify}`} note="recorded by sales, not yet checked" tone={t.paymentsToVerify ? 'warn' : 'good'} id="fin-verify" />
+            <Kpi label="Expenses to approve" value={`${t.expensesToApprove}`} note="waiting for a decision" tone={t.expensesToApprove ? 'warn' : 'good'} id="fin-approve" />
             <Kpi label="Owed to us" value={ghs(t.outstanding)} note="open invoices, all time" id="fin-owed" />
             <Kpi label="Late" value={ghs(t.overdue)} note="past the due date" tone={t.overdue > 0 ? 'warn' : 'plain'} id="fin-late" />
           </div>

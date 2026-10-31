@@ -15,10 +15,11 @@ export function SalesAnalytics({ accessToken }: { accessToken: string }) {
     <AnalyticsFrame id="sales-analytics" title={d?.company ? 'Sales performance' : 'My sales'} note={d?.company ? 'Orders placed by every salesperson, their value, and where they stand.' : 'Your orders: what you sold, what is still moving, and who buys the most.'} days={a.days} setDays={a.setDays} loading={a.loading} error={a.error} refresh={a.refresh} ready={!!d} empty={!!t && t.orders === 0}>
       {d && t && (
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             <Kpi label="Sales value" value={ghs(t.value)} note={`${t.orders} order${t.orders === 1 ? '' : 's'}, last ${d.days} days`} tone="dark" id="sales-value" />
             <Kpi label="Delivered" value={`${t.fulfilled}`} note={`${kg(t.kg)} KG ordered in total`} id="sales-fulfilled" />
             <Kpi label="In progress" value={`${t.inProgress + t.waitingForApproval}`} note={`${t.waitingForApproval} waiting for approval`} id="sales-progress" />
+            <Kpi label="Owed by customers" value={ghs(t.owed)} note={t.owedLate > 0 ? `${ghs(t.owedLate)} is late` : 'nothing late'} tone={t.owedLate > 0 ? 'warn' : 'plain'} id="sales-owed" />
             <Kpi label="Average order" value={ghs(t.averageOrder)} note={t.lost > 0 ? `${t.lost} rejected or cancelled` : 'none lost'} tone={t.lost > 0 ? 'warn' : 'plain'} id="sales-average" />
           </div>
           <div className="grid gap-4 lg:grid-cols-3">

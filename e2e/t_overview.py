@@ -5,7 +5,7 @@ def run():
     reset()
     with sync_playwright() as p:
         b = p.chromium.launch()
-        blocks = [('fsup', 'farm-analytics'), ('sup', 'warehouse-analytics'), ('ops', 'ops-analytics'), ('md', 'exec-analytics'), ('sales1', 'sales-analytics'), ('fd', 'finance-analytics'), ('admin', 'system-analytics'), ('fm', 'farm-analytics'), ('wm1', 'warehouse-analytics'), ('oo', 'ops-analytics')]
+        blocks = [('fsup', 'farm-analytics'), ('sup', 'warehouse-analytics'), ('ops', 'ops-analytics'), ('md', 'exec-analytics'), ('sales1', 'sales-analytics'), ('fd', 'finance-analytics'), ('admin', 'system-analytics'), ('fm', 'farm-place'), ('wm1', 'warehouse-place'), ('oo', 'mill-place'), ('md', 'pulse'), ('auditor', 'audit-analytics')]
         for key, bid in blocks:
             ctx, page = as_user(b, key)
             page.goto(BASE + '/dashboard')
@@ -38,6 +38,28 @@ def run():
         check('scoped Farm Director sees own farm', 'Nkawkaw Farm' in txt)
         check('scoped Farm Director does not see the other farm', 'Sefwi Farm' not in txt)
         ctx.close()
+
+        # each person works at one place and sees only that place
+        def place_text(key, bid):
+            ctx, page = as_user(b, key); page.goto(BASE + '/dashboard')
+            page.wait_for_selector(f'[data-testid={bid}] [data-testid=place]', timeout=15000)
+            names = [e.get_attribute('data-place') for e in page.locator(f'[data-testid={bid}] [data-testid=place]').all()]
+            t = page.locator(f'[data-testid={bid}]').inner_text(); ctx.close(); return names, t
+        n, t = place_text('fm', 'farm-place')
+        check('Farm Manager A sees only their farm', n == ['Nkawkaw Farm'] and 'Sefwi Farm' not in t and 'PE-B-1' not in t, n)
+        n, t = place_text('fm2', 'farm-place')
+        check('Farm Manager B sees only their farm', n == ['Sefwi Farm'] and 'Nkawkaw Farm' not in t and 'PE-A-1' not in t, n)
+        n, t = place_text('wm1', 'warehouse-place')
+        check('Warehouse Manager 1 sees only their warehouse', n == ['Tamale Warehouse'] and 'Kumasi' not in t and 'SH-2' not in t, n)
+        n, t = place_text('wm2', 'warehouse-place')
+        check('Warehouse Manager 2 sees only their warehouse', n == ['Kumasi Warehouse'] and 'Tamale' not in t and 'SH-1' not in t, n)
+        n, t = place_text('oo', 'mill-place')
+        check('Operations Officer 1 sees only their mill', n == ['Tamale Mill'] and 'Kumasi' not in t and 'Polisher Beta' not in t, n)
+        n, t = place_text('oo2', 'mill-place')
+        check('Operations Officer 2 sees only their mill', n == ['Kumasi Mill'] and 'Tamale' not in t and 'Huller Alpha' not in t, n)
+        check('the server gives a Farm Manager no warehouse or mill view', http('/api/overview/analytics/my-warehouse', 'GET', 'tok-fm')[0] == 403 and http('/api/overview/analytics/my-mill', 'GET', 'tok-fm')[0] == 403)
+        check('the server gives a Warehouse Manager no farm view', http('/api/overview/analytics/my-farm', 'GET', 'tok-wm1')[0] == 403)
+        check('the server gives a Sales Officer no place view', http('/api/overview/analytics/my-farm', 'GET', 'tok-sales1')[0] == 403 and http('/api/overview/analytics/pulse', 'GET', 'tok-sales1')[0] == 403)
 
         # reports: each role gets only the reports of its own area
         def report_titles(key):

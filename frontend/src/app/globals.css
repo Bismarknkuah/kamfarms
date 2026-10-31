@@ -64,3 +64,24 @@ html { scroll-padding-top: 5rem; }
 @media (prefers-reduced-motion: reduce) {
   .kam-kenburns, .kam-rise, .kam-drift, .kam-pulse-ring { animation: none !important; opacity: 1 !important; transform: none !important; }
 }
+
+/* ---- Homepage 2026.10.31: marquee band, floating light, shimmer on the hero accent ---- */
+@keyframes kam-marquee { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+.kam-marquee-row { animation: kam-marquee 38s linear infinite; }
+.kam-marquee:hover .kam-marquee-row { animation-play-state: paused; }
+
+@keyframes kam-float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-14px) rotate(1.5deg); } }
+.kam-float { animation: kam-float 7s ease-in-out infinite; }
+
+@keyframes kam-shimmer { from { background-position: 0% 50%; } to { background-position: 200% 50%; } }
+.kam-shimmer {
+  background-image: linear-gradient(100deg, #E7C978 0%, #C9982F 30%, #F6E9C8 50%, #C9982F 70%, #E7C978 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: kam-shimmer 6s linear infinite;
+}
+
+@keyframes kam-scroll-cue { 0%, 100% { transform: translateY(0); opacity: 0.9; } 50% { transform: translateY(8px); opacity: 0.4; } }
+.kam-scroll-cue { animation: kam-scroll-cue 1.8s ease-in-out infinite; }

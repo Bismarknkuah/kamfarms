@@ -132,10 +132,11 @@ export class ReportsService {
   }
 
   /** Spec section 32 -- per-warehouse paddy/packaged-rice/production summary. */
-  async warehouseReport(filters: { warehouseId?: string }) {
-    const warehouses = await this.prisma.warehouse.findMany({
-      where: filters.warehouseId ? { id: filters.warehouseId } : { isActive: true },
-    });
+  async warehouseReport(filters: { warehouseId?: string }, actor?: AuthenticatedUser) {
+    // Only the person's own warehouses (everything, for company-wide access).
+    const mine = actor ? scopedLocationIds(actor, 'WAREHOUSE') : { isGlobal: true, ids: [] as string[] };
+    const wanted = mine.isGlobal ? (filters.warehouseId ? { id: filters.warehouseId } : { isActive: true }) : { id: filters.warehouseId && mine.ids.includes(filters.warehouseId) ? filters.warehouseId : { in: mine.ids } };
+    const warehouses = await this.prisma.warehouse.findMany({ where: wanted as any });
 
     return Promise.all(
       warehouses.map(async (warehouse) => {

@@ -4,6 +4,7 @@ import { InsightsService } from '../insights/insights.service';
 import { PERMISSIONS } from '../common/constants/permissions';
 import { scopedLocationIds } from '../common/utils/scope.util';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { ReportArea, coversArea } from './report-areas';
 
 /**
  * The reports each role may download. A report appears for a person only if their role holds BOTH the right to
@@ -33,6 +34,8 @@ export interface ReportDef {
   description: string;
   group: string;
   anyOf: string[];
+  /** The business areas this report belongs to; the person's role must cover at least one. */
+  areas: ReportArea[];
   dated: boolean;
   jurisdiction: Jurisdiction;
   build: (c: Ctx) => Promise<ReportRow[]>;
@@ -55,7 +58,7 @@ const orScopes = (parts: Record<string, unknown>[]) => (parts.length === 0 ? { i
  */
 export const REPORTS: ReportDef[] = [
   {
-    id: 'paddy-intake', title: 'Paddy intake', group: 'Farms', anyOf: [PERMISSIONS.FARM_INVENTORY_VIEW], dated: true, jurisdiction: 'farms',
+    id: 'paddy-intake', areas: ['farm', 'oversight'], title: 'Paddy intake', group: 'Farms', anyOf: [PERMISSIONS.FARM_INVENTORY_VIEW], dated: true, jurisdiction: 'farms',
     description: 'Every paddy entry: farm, grade, bags, weight, moisture and whether it was approved.',
     async build(c) {
       const rows = await c.db.paddyEntry.findMany({
@@ -66,7 +69,7 @@ export const REPORTS: ReportDef[] = [
     },
   },
   {
-    id: 'deliveries', title: 'Deliveries and receipts', group: 'Warehouses', anyOf: [PERMISSIONS.WAREHOUSE_INVENTORY_VIEW, PERMISSIONS.DELIVERY_CREATE, PERMISSIONS.DELIVERY_APPROVE], dated: true, jurisdiction: 'farms-and-warehouses',
+    id: 'deliveries', areas: ['farm', 'warehouse', 'oversight'], title: 'Deliveries and receipts', group: 'Stock movement', anyOf: [PERMISSIONS.WAREHOUSE_INVENTORY_VIEW, PERMISSIONS.DELIVERY_CREATE, PERMISSIONS.DELIVERY_APPROVE], dated: true, jurisdiction: 'farms-and-warehouses',
     description: 'Paddy sent from farms to warehouses: what was expected, what was received, and the difference.',
     async build(c) {
       const scope = c.farm.isGlobal ? {} : orScopes([...(c.farm.ids.length ? [{ farmId: inIds(c.farm.ids) }] : []), ...(c.warehouse.ids.length ? [{ warehouseId: inIds(c.warehouse.ids) }] : [])]);
@@ -78,7 +81,7 @@ export const REPORTS: ReportDef[] = [
     },
   },
   {
-    id: 'stock-corrections', title: 'Stock corrections', group: 'Warehouses', anyOf: [PERMISSIONS.FARM_INVENTORY_VIEW, PERMISSIONS.WAREHOUSE_INVENTORY_VIEW, PERMISSIONS.INVENTORY_ADJUST], dated: true, jurisdiction: 'farms-and-warehouses',
+    id: 'stock-corrections', areas: ['farm', 'warehouse', 'milling', 'oversight'], title: 'Stock corrections', group: 'Stock movement', anyOf: [PERMISSIONS.FARM_INVENTORY_VIEW, PERMISSIONS.WAREHOUSE_INVENTORY_VIEW, PERMISSIONS.INVENTORY_ADJUST], dated: true, jurisdiction: 'farms-and-warehouses',
     description: 'Every request to change a stock count, with the reason given and whether it was approved.',
     async build(c) {
       const scope = c.farm.isGlobal ? {} : orScopes([
@@ -96,7 +99,7 @@ export const REPORTS: ReportDef[] = [
     },
   },
   {
-    id: 'production-runs', title: 'Milling runs', group: 'Milling', anyOf: [PERMISSIONS.MILLING_VIEW], dated: true, jurisdiction: 'milling',
+    id: 'production-runs', areas: ['milling', 'oversight'], title: 'Milling runs', group: 'Milling', anyOf: [PERMISSIONS.MILLING_VIEW], dated: true, jurisdiction: 'milling',
     description: 'Each milling run: paddy in, rice out, the recovery rate and power used.',
     async build(c) {
       const rows = await c.db.productionRecord.findMany({
@@ -110,7 +113,7 @@ export const REPORTS: ReportDef[] = [
     },
   },
   {
-    id: 'machine-power', title: 'Machine power readings', group: 'Milling', anyOf: [PERMISSIONS.MACHINE_VIEW], dated: true, jurisdiction: 'milling',
+    id: 'machine-power', areas: ['milling', 'oversight'], title: 'Machine power readings', group: 'Milling', anyOf: [PERMISSIONS.MACHINE_VIEW], dated: true, jurisdiction: 'milling',
     description: 'Power meter readings for each machine, with any reading flagged as unusual.',
     async build(c) {
       const rows = await c.db.meterReading.findMany({
@@ -121,7 +124,7 @@ export const REPORTS: ReportDef[] = [
     },
   },
   {
-    id: 'expenses', title: 'Expenses', group: 'Finance', anyOf: [PERMISSIONS.FINANCE_VIEW, PERMISSIONS.EXPENSE_CREATE, PERMISSIONS.EXPENSE_VIEW], dated: true, jurisdiction: 'farms-and-warehouses',
+    id: 'expenses', areas: ['farm', 'warehouse', 'milling', 'finance', 'oversight'], title: 'Expenses', group: 'Finance', anyOf: [PERMISSIONS.FINANCE_VIEW, PERMISSIONS.EXPENSE_CREATE, PERMISSIONS.EXPENSE_VIEW], dated: true, jurisdiction: 'farms-and-warehouses',
     description: 'Every expense with its category, amount and approval status. Receipt photos are not included.',
     async build(c) {
       const scope = c.farm.isGlobal ? {} : orScopes([...(c.farm.ids.length ? [{ farmId: inIds(c.farm.ids) }] : []), ...(c.warehouse.ids.length ? [{ warehouseId: inIds(c.warehouse.ids) }] : [])]);
@@ -133,7 +136,7 @@ export const REPORTS: ReportDef[] = [
     },
   },
   {
-    id: 'audit-log', title: 'Audit log', group: 'Administration', anyOf: [PERMISSIONS.AUDIT_VIEW], dated: true, jurisdiction: 'company',
+    id: 'audit-log', areas: ['admin', 'oversight'], title: 'Audit log', group: 'Administration', anyOf: [PERMISSIONS.AUDIT_VIEW], dated: true, jurisdiction: 'company',
     description: 'Who did what and when, across the whole system.',
     async build(c) {
       const rows = await c.db.auditLog.findMany({ where: { ...dated(c, 'createdAt') }, orderBy: { createdAt: 'desc' }, take: ROW_LIMIT, select: { createdAt: true, user: { select: { firstName: true, lastName: true, email: true } }, action: true, entity: true, entityId: true, reason: true } });
@@ -141,7 +144,7 @@ export const REPORTS: ReportDef[] = [
     },
   },
   {
-    id: 'users-and-access', title: 'People and access', group: 'Administration', anyOf: [PERMISSIONS.USERS_MANAGE], dated: false, jurisdiction: 'company',
+    id: 'users-and-access', areas: ['admin'], title: 'People and access', group: 'Administration', anyOf: [PERMISSIONS.USERS_MANAGE], dated: false, jurisdiction: 'company',
     description: 'Every account with its roles, status and when the person last signed in.',
     async build(c) {
       const rows = await c.db.user.findMany({ where: { deletedAt: null }, orderBy: { firstName: 'asc' }, take: ROW_LIMIT, select: { firstName: true, lastName: true, email: true, status: true, mustChangePassword: true, lastLoginAt: true, createdAt: true, roles: { select: { role: { select: { name: true } } } } } });
@@ -149,7 +152,7 @@ export const REPORTS: ReportDef[] = [
     },
   },
   {
-    id: 'watchlist', title: 'Watchlist flags', group: 'Oversight', anyOf: [PERMISSIONS.INSIGHTS_VIEW], dated: false, jurisdiction: 'company',
+    id: 'watchlist', areas: ['oversight'], title: 'Watchlist flags', group: 'Oversight', anyOf: [PERMISSIONS.INSIGHTS_VIEW], dated: false, jurisdiction: 'company',
     description: 'Everything the Watchlist currently flags, with what each place\'s history predicts and what was recorded.',
     async build(c) {
       if (!c.insights) return [];
@@ -169,7 +172,7 @@ export class ReportCatalogService {
   ) {}
 
   private allowed(def: ReportDef, actor: AuthenticatedUser) {
-    return actor.permissionCodes.has(PERMISSIONS.REPORTS_EXPORT) && def.anyOf.some((p) => actor.permissionCodes.has(p));
+    return actor.permissionCodes.has(PERMISSIONS.REPORTS_EXPORT) && coversArea(actor, def.areas) && def.anyOf.some((p) => actor.permissionCodes.has(p));
   }
 
   /** What "your jurisdiction" means for this person and this report, in words. */

@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { Sprout, Warehouse, Factory } from 'lucide-react';
 import { overviewApi } from '@/lib/api-client';
 import { useOverviewAnalytics } from './useOverviewAnalytics';
@@ -19,9 +18,9 @@ export function ExecutiveAnalyticsView({ accessToken }: { accessToken: string })
       {d && (
         <div className="space-y-5">
           <div className="grid gap-3 lg:grid-cols-3">
-            <Stage href="/farms" icon={Sprout} title="Farms" lines={[['Paddy in', tonnes(d.farm.totals.intakeKg)], ['On farms now', tonnes(d.farm.totals.stockKg)], ['Waiting approval', `${d.farm.totals.pendingEntries}`]]} />
-            <Stage href="/warehouses" icon={Warehouse} title="Warehouses" lines={[['Paddy on hand', tonnes(d.warehouse.totals.paddyKg)], ['Packaged rice', tonnes(d.warehouse.totals.packagedKg)], ['On the way', tonnes(d.warehouse.totals.incomingKg)]]} />
-            <Stage href="/production" icon={Factory} title="Mills" lines={[['Paddy milled', tonnes(d.operations.totals.processedKg)], ['Recovery', pc(d.operations.totals.recoveryPct)], ['Power / tonne', d.operations.totals.kwhPerTonne === null ? 'no data' : `${d.operations.totals.kwhPerTonne} kWh`]]} />
+            <Stage icon={Sprout} title="Farms" lines={[['Paddy in', tonnes(d.farm.totals.intakeKg)], ['On farms now', tonnes(d.farm.totals.stockKg)], ['Waiting approval', `${d.farm.totals.pendingEntries}`]]} />
+            <Stage icon={Warehouse} title="Warehouses" lines={[['Paddy on hand', tonnes(d.warehouse.totals.paddyKg)], ['Packaged rice', tonnes(d.warehouse.totals.packagedKg)], ['On the way', tonnes(d.warehouse.totals.incomingKg)]]} />
+            <Stage icon={Factory} title="Mills" lines={[['Paddy milled', tonnes(d.operations.totals.processedKg)], ['Recovery', pc(d.operations.totals.recoveryPct)], ['Power / tonne', d.operations.totals.kwhPerTonne === null ? 'no data' : `${d.operations.totals.kwhPerTonne} kWh`]]} />
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
             <ChartCard id="exec-intake" title={`Paddy in, ${d.farm.unit === 'day' ? 'per day' : 'per week'}`} note="By farm."><StackedTrend unit={d.farm.unit} keys={d.farm.farms.map((f) => f.name)} rows={d.farm.trend.map((r) => ({ bucket: r.bucket, values: r.byFarm }))} /></ChartCard>
@@ -45,11 +44,11 @@ export function ExecutiveAnalyticsView({ accessToken }: { accessToken: string })
   );
 }
 
-function Stage({ href, icon: Icon, title, lines }: { href: string; icon: typeof Sprout; title: string; lines: [string, string][] }) {
+function Stage({ icon: Icon, title, lines }: { icon: typeof Sprout; title: string; lines: [string, string][] }) {
   return (
-    <Link href={href} data-testid="exec-stage" className="group rounded-2xl border border-paddy-100 bg-white p-4 transition hover:border-paddy-500 hover:shadow-sm">
+    <div data-testid="exec-stage" className="rounded-2xl border border-paddy-100 bg-white p-4">
       <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-paddy-900 text-husk-300"><Icon className="h-5 w-5" aria-hidden /></span><h3 className="font-display text-lg font-medium text-paddy-900">{title}</h3></div>
       <dl className="mt-3 space-y-1.5">{lines.map(([k, v]) => <div key={k} className="flex justify-between text-sm"><dt className="text-ink-500">{k}</dt><dd className="font-medium text-ink-900">{v}</dd></div>)}</dl>
-    </Link>
+    </div>
   );
 }

@@ -1,11 +1,12 @@
 'use client';
 
+import { DemoModeSwitch } from '@/components/admin/DemoModeSwitch';
 import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import { backupApi, systemResetApi, ResetRequest, ApiError } from '@/lib/api-client';
 
-const TABS = ['Backups', 'System reset'] as const;
+const TABS = ['Backups', 'System reset', 'Demo access'] as const;
 const RESET_TYPES = ['CLEAR_TEST_DATA', 'RESET_INVENTORY', 'RESET_TRANSACTIONS', 'RESET_MODULE', 'RESET_DATE_RANGE', 'FULL_OPERATIONAL_RESET', 'OTHER'] as const;
 // Only these tables can actually be executed once fully approved -
 // confirmed directly against the backend's own allowlist, not assumed.
@@ -132,6 +133,8 @@ export default function AdminPage() {
           <p className="mt-6 text-sm text-ink-500">You don&rsquo;t have permission to view backup status.</p>
         )
       )}
+
+      {tab === 'Demo access' && accessToken && <div className="mt-4"><DemoModeSwitch accessToken={accessToken} /></div>}
 
       {tab === 'System reset' && (
         <div className="mt-6 space-y-3">

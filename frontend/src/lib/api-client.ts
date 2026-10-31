@@ -201,6 +201,8 @@ export interface ExecutiveSummary {
 }
 
 export const reportsApi = {
+  /** The areas of work whose reports this person gets: farm, warehouse, milling, sales, finance, oversight, admin. */
+  areas: (accessToken: string) => request<{ areas: string[] }>('/reports/areas', { method: 'GET' }, accessToken),
   executiveSummary: (accessToken: string) =>
     request<ExecutiveSummary>('/reports/executive-summary', { method: 'GET' }, accessToken),
   /** Binary file responses (CSV/Excel/PDF) never go through request()  - 
@@ -2295,7 +2297,35 @@ export interface OvOperations {
   machines: Record<string, number>;
   totals: { processedKg: number; recoveredKg: number; brokenKg: number; hullKg: number; lossKg: number; recoveryPct: number | null; kwhPerTonne: number | null; runs: number; flagged: number; awaitingApproval: number };
 }
+export interface OvSales {
+  days: number; unit: 'day' | 'week'; company: boolean;
+  totals: { orders: number; value: number; kg: number; fulfilled: number; inProgress: number; waitingForApproval: number; lost: number; averageOrder: number };
+  trend: { bucket: string; orders: number; value: number }[];
+  status: { name: string; count: number }[];
+  topCustomers: { name: string; value: number; orders: number }[];
+  bySalesperson: { name: string; value: number; orders: number }[];
+}
+export interface OvFinance {
+  days: number; unit: 'day' | 'week';
+  totals: { invoiced: number; collected: number; spent: number; outstanding: number; overdue: number; estimatedProfit: number };
+  trend: { bucket: string; invoiced: number; collected: number; spent: number }[];
+  expensesByCategory: { name: string; amount: number }[];
+  paymentsByMethod: { name: string; amount: number }[];
+  aging: { name: string; amount: number }[];
+  topDebtors: { name: string; amount: number }[];
+}
+export interface OvSystem {
+  days: number; unit: 'day' | 'week';
+  users: { total: number; active: number; disabled: number; locked: number; pending: number };
+  totals: { signedIn: number; failed: number; recorded: number };
+  trend: { bucket: string; signedIn: number; failed: number; changes: number }[];
+  failedReasons: { name: string; count: number }[];
+  activityByArea: { name: string; count: number }[];
+}
 export const overviewApi = {
+  sales: (t: string, days: OverviewDays) => request<OvSales>(`/overview/analytics/sales?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
+  finance: (t: string, days: OverviewDays) => request<OvFinance>(`/overview/analytics/finance?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
+  system: (t: string, days: OverviewDays) => request<OvSystem>(`/overview/analytics/system?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
   farms: (t: string, days: OverviewDays) => request<OvFarms>(`/overview/analytics/farms?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
   warehouses: (t: string, days: OverviewDays) => request<OvWarehouses>(`/overview/analytics/warehouses?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
   operations: (t: string, days: OverviewDays) => request<OvOperations>(`/overview/analytics/operations?days=${days}`, { method: 'GET', cache: 'no-store' }, t),

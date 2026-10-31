@@ -732,3 +732,13 @@ No database change. `/api/health` should show `2026.10.18`. See `docs/EXECUTIVE_
 - New read-only endpoints: `GET /api/overview/analytics/{farms,warehouses,operations,executive}?days=7|30|90`. They need `reports.view` and only count the places the person is scoped to, so a farm-scoped Farm Director sees only that farm.
 - New: `DELETE /api/notifications/:id` and `DELETE /api/notifications?scope=read|older|all&days=N`.
 - No database migration is needed. Health reports version `2026.10.24` and the features `overview-analytics` and `notification-clear`. Deploy the API before (or together with) the website; the Admin dashboard says so if the server is behind.
+
+## 2026.10.31 - New homepage, reports kept to each role's area, a clean Overview
+
+**Homepage.** Redesigned: shimmering headline accent, floating product photo, a drifting band of the product and its pack sizes, figures that count up, a bento features grid and a connected "field to bag" path. All text still comes from the Administrator's homepage editor; nothing needs a database change.
+
+**Reports by area of work.** Every report belongs to an area (farm, warehouse, milling, sales, finance, oversight, administration) and each role covers only its own: Farm Supervisor/Manager = farm; Warehouse Supervisor/Manager = warehouse; Operations Manager/Officer = milling; Sales Officer = sales; Finance Director/Officer = finance and sales; the Administrator = administration plus farm, warehouse and milling; the MD, CEO and Auditor = everything. A role the Administrator makes follows the kind of permissions it holds. This is enforced on the server for the Reports page cards, the "More reports" list and every download (`403 REPORT_OUTSIDE_AREA`), and the same areas guard the analytics endpoints. The warehouse report is now limited to the caller's own warehouses (before, any report reader could fetch every warehouse). New: `GET /api/reports/areas`. The rules live in `backend/src/reports/report-areas.ts`.
+
+**Overview.** Every role now sees a greeting and then the analytics of its own area, and nothing else: no control center, "Run your area", shortcuts, task strips or desks (every page is in the side menu; the Control center page is still in the menu where a role has one). New analytics: Sales (own orders for a Sales Officer, company for Finance/management), Finance (billed, collected, spent, ageing, debtors), and System (people, sign-ins, audit activity) for the Administrator. New endpoints `GET /api/overview/analytics/{sales,finance,system}`. The Administrator's demo-access switch moved to Admin > Demo access.
+
+No database migration. Health reports `2026.10.31` with the feature `report-areas`; deploy the API with the website.

@@ -8,6 +8,7 @@ import { PERMISSIONS } from '../common/constants/permissions';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { ReportCatalogService } from './report-catalog.service';
+import { ReportArea, coversArea, reportAreas } from './report-areas';
 
 type ExportFormat = 'csv' | 'xlsx' | 'pdf' | undefined;
 
@@ -20,6 +21,13 @@ export class ReportsController {
     private readonly exportService: ExportService,
     @Optional() private readonly catalog?: ReportCatalogService,
   ) {}
+
+  /** A report outside the person's own area is refused, whatever other permission they hold. */
+  private requireArea(actor: AuthenticatedUser, areas: ReportArea[]) {
+    if (!coversArea(actor, areas)) {
+      throw new ForbiddenException({ message: 'That report is outside your area of work.', errorCode: 'REPORT_OUTSIDE_AREA' });
+    }
+  }
 
   /** Shared export handling: no format -> JSON envelope; format=csv/
    * xlsx/pdf streams a downloadable file instead. Exporting requires
@@ -60,6 +68,13 @@ export class ReportsController {
     res.json({ success: true, message: null, errorCode: null, data: rows });
   }
 
+  /** The areas of work this person's reports come from (farm, warehouse, milling, sales, finance...). The Reports page shows only these. */
+  @Get('areas')
+  @RequirePermission(PERMISSIONS.REPORTS_VIEW)
+  areas(@CurrentUser() actor: AuthenticatedUser) {
+    return { areas: [...reportAreas(actor)] };
+  }
+
   /** The reports this person may download, each cut down to their own jurisdiction. */
   @Get('catalog')
   @RequirePermission(PERMISSIONS.REPORTS_EXPORT)
@@ -82,7 +97,8 @@ export class ReportsController {
 
   @Get('executive-summary')
   @RequirePermission(PERMISSIONS.REPORTS_VIEW)
-  async executiveSummary() {
+  async executiveSummary(@CurrentUser() actor: AuthenticatedUser) {
+    this.requireArea(actor, ['oversight']);
     return this.reportsService.executiveSummary();
   }
 
@@ -96,6 +112,7 @@ export class ReportsController {
     @Query('to') to?: string,
     @Query('format') format?: ExportFormat,
   ) {
+    this.requireArea(actor, ['farm', 'oversight']);
     const rows = await this.reportsService.farmReport({ farmId, from, to }, actor);
     return this.respondWithFormat(res, actor, rows, 'farm-report', 'Farm Intake Report', format);
   }
@@ -108,7 +125,8 @@ export class ReportsController {
     @Query('warehouseId') warehouseId?: string,
     @Query('format') format?: ExportFormat,
   ) {
-    const rows = await this.reportsService.warehouseReport({ warehouseId });
+    this.requireArea(actor, ['warehouse', 'oversight']);
+    const rows = await this.reportsService.warehouseReport({ warehouseId }, actor);
     return this.respondWithFormat(res, actor, rows, 'warehouse-report', 'Warehouse Inventory Report', format);
   }
 
@@ -123,6 +141,7 @@ export class ReportsController {
     @Query('to') to?: string,
     @Query('format') format?: ExportFormat,
   ) {
+    this.requireArea(actor, ['sales', 'finance', 'oversight']);
     // A Sales Officer (holds sales.create, not finance.view) is scoped
     // to their own sales only, regardless of what salesOfficerId they
     // pass - a real, confirmed gap this closes: the endpoint never
@@ -154,6 +173,7 @@ export class ReportsController {
     @Query('to') to?: string,
     @Query('format') format?: ExportFormat,
   ) {
+    this.requireArea(actor, ['finance', 'oversight']);
     const report = await this.reportsService.financeReport({ from, to });
     if (!format) {
       res.json({ success: true, message: null, errorCode: null, data: report });
@@ -172,7 +192,8 @@ export class ReportsController {
 
   @Get('analytics')
   @RequirePermission(PERMISSIONS.FINANCE_VIEW)
-  async executiveAnalytics() {
+  async executiveAnalytics(@CurrentUser() actor: AuthenticatedUser) {
+    this.requireArea(actor, ['finance', 'oversight']);
     return this.reportsService.executiveAnalytics();
   }
 
@@ -183,7 +204,15 @@ export class ReportsController {
     @CurrentUser() actor: AuthenticatedUser,
     @Query('format') format?: ExportFormat,
   ) {
-    const overview = await this.reportsService.inventoryByLocation(actor);
+    const full = await this.reportsService.inventoryByLocation(actor);
+    // Only the kinds of place the person's area covers: a Farm Director gets the farms, a Warehouse Manager the warehouses.
+    const mine = reportAreas(actor);
+    const all = mine.has('oversight');
+    const overview = {
+      farms: all || mine.has('farm') ? full.farms : [],
+      warehouses: all || mine.has('warehouse') || mine.has('sales') ? full.warehouses : [],
+      millingCenters: all || mine.has('milling') ? full.millingCenters : [],
+    };
     if (!format) {
       res.json({ success: true, message: null, errorCode: null, data: overview });
       return;
@@ -215,6 +244,7 @@ export class ReportsController {
     @Query('warehouseId') warehouseId?: string,
     @Query('format') format?: ExportFormat,
   ) {
+    if (format) this.requireArea(actor, ['warehouse', 'oversight']);
     const overview = await this.reportsService.warehouseOverview(actor, warehouseId);
     if (!format) {
       res.json({ success: true, message: null, errorCode: null, data: overview });
@@ -240,6 +270,7 @@ export class ReportsController {
     @Query('farmId') farmId?: string,
     @Query('format') format?: ExportFormat,
   ) {
+    if (format) this.requireArea(actor, ['farm', 'oversight']);
     const overview = await this.reportsService.farmOverview(actor, farmId);
     if (!format) {
       res.json({ success: true, message: null, errorCode: null, data: overview });
@@ -261,6 +292,7 @@ export class ReportsController {
     @Query('millingCenterId') millingCenterId?: string,
     @Query('format') format?: ExportFormat,
   ) {
+    if (format) this.requireArea(actor, ['milling', 'oversight']);
     const overview = await this.reportsService.productionOverview(actor, millingCenterId);
     if (!format) {
       res.json({ success: true, message: null, errorCode: null, data: overview });

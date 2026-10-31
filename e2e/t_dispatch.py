@@ -138,13 +138,7 @@ with sync_playwright() as pw:
     mm.goto(BASE + '/deliveries?tab=reports'); mm.wait_for_selector('text=DR-2026-000777')
     check('whereas the person who prepared it is offered to submit it', mm.get_by_role('button', name='Submit for approval').count() == 1); ctx.close()
 
-    # =============== 6. The same desk on both dashboards, and on My Office ===============
-    ctx, d = as_user(b, 'fsup'); d.goto(BASE + '/dashboard'); box = d.get_by_test_id('dashboard-dispatch-desk'); box.wait_for(); box.get_by_test_id('request-card').first.wait_for()
-    check('the Farm Supervisor\'s dashboard carries the Dispatch desk, with what waits for their decision first', 'Waiting for your decision' in txt(box) and card(box, 'RQ-2026-009002').get_by_test_id('act-review').count() == 1 and box.get_by_test_id('request-card').count() >= 3)
-    check('and no page errors on the Farm Supervisor\'s dashboard', not d.errors, d.errors[:2]); ctx.close()
-    ctx, d = as_user(b, 'fm'); d.goto(BASE + '/dashboard'); box = d.get_by_test_id('dashboard-dispatch-desk'); box.wait_for(); box.get_by_test_id('request-card').first.wait_for()
-    check('the Farm Manager\'s dashboard carries the SAME desk, with their next move first', 'Your move' in txt(box) and box.get_by_test_id('act-dispatch').count() >= 1 and box.get_by_test_id('act-review').count() == 0)
-    check('and no page errors on the Farm Manager\'s dashboard', not d.errors, d.errors[:2]); ctx.close()
+    # =============== 6. The same desk on My Office ===============
     ctx, o = as_user(b, 'fm'); o.goto(BASE + '/office'); o.get_by_test_id('dispatch-desk').wait_for(); o.get_by_test_id('request-card').first.wait_for()
     check('My Office shows the same desk for the farm manager, with their next move', o.get_by_test_id('act-dispatch').count() >= 1 and not o.errors, o.errors[:2]); ctx.close()
 

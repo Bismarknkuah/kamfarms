@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import { reportsApi, ApiError } from '@/lib/api-client';
@@ -86,29 +86,33 @@ function ReportCard({
 export default function ReportsPage() {
   const { me, accessToken, loading, error, hasPermission } = useCurrentUser();
   const [period, setPeriod] = useState<Period>('monthly');
+  // Which areas of work this person's reports come from. The server decides (and enforces it on every download); this only decides what to show.
+  const [areas, setAreas] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!accessToken) return;
+    reportsApi.areas(accessToken).then((r) => setAreas(r.areas)).catch(() => setAreas([]));
+  }, [accessToken]);
 
   if (loading) return <main className="flex min-h-screen items-center justify-center bg-rice-50"><p className="text-sm text-ink-500">Loading…</p></main>;
   if (error || !me || !accessToken) return <main className="flex min-h-screen items-center justify-center bg-rice-50"><p className="text-sm text-red-600">{error}</p></main>;
 
   const { from, to } = periodToRange(period);
 
-  const canFarm = hasPermission('farm.view');
-  const canWarehouse = hasPermission('warehouse.view');
-  const canSales = hasPermission('sales.view') || hasPermission('sales.create') || hasPermission('finance.view');
-  const canFinance = hasPermission('finance.view');
-  // Inventory-by-location is scoped server-side to this person's own
-  // farm(s)/warehouse(s) already (confirmed directly against the
-  // backend) - broadly useful to show whenever reports.view is held,
-  // since what comes back is never more than they're entitled to see.
-  const canInventory = hasPermission('reports.view');
+  const has = (...wanted: string[]) => (areas ?? []).some((a) => wanted.includes(a));
+  const canFarm = hasPermission('farm.view') && has('farm', 'oversight');
+  const canWarehouse = hasPermission('warehouse.view') && has('warehouse', 'oversight');
+  const canSales = (hasPermission('sales.view') || hasPermission('sales.create') || hasPermission('finance.view')) && has('sales', 'finance', 'oversight');
+  const canFinance = hasPermission('finance.view') && has('finance', 'oversight');
+  // Stock by place: the server returns only the kinds of place of this person's own area.
+  const canInventory = hasPermission('reports.view') && has('farm', 'warehouse', 'milling', 'sales', 'oversight');
 
-  const noReportsAvailable = !canFarm && !canWarehouse && !canSales && !canFinance && !canInventory;
+  const noReportsAvailable = areas !== null && !canFarm && !canWarehouse && !canSales && !canFinance && !canInventory;
 
   return (
     <DashboardShell me={me}>
       <h1 className="font-display text-2xl font-medium text-paddy-900">Reports</h1>
       <p className="mt-1 text-sm text-ink-500">
-        Only the reports your role actually covers - each one downloads exactly the data you already have access to, nothing more.
+        Only the reports of your own area of work, each limited to your own places. Reports from other areas are not shown, and the server refuses them if asked.
       </p>
 
       <div className="mt-4 flex items-center gap-2 rounded-2xl border border-paddy-100 bg-white p-4">
@@ -165,7 +169,7 @@ export default function ReportsPage() {
         {canInventory && (
           <ReportCard
             title="Inventory by location"
-            description="Every farm, warehouse, and milling center's current stock, in one table."
+            description="The current stock at the places of your own area of work, in one table."
             onDownload={(format) => reportsApi.downloadInventory(accessToken, format)}
           />
         )}

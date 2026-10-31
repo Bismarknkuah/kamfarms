@@ -1,0 +1,68 @@
+'use client';
+
+import type { MeResponse } from '@/lib/api-client';
+import { OverviewGreeting } from './OverviewGreeting';
+import { FarmAnalytics } from './FarmAnalytics';
+import { WarehouseAnalytics } from './WarehouseAnalytics';
+import { OperationsAnalytics } from './OperationsAnalytics';
+import { ExecutiveAnalyticsView } from './ExecutiveAnalytics';
+import { SalesAnalytics } from './SalesAnalytics';
+import { FinanceAnalytics } from './FinanceAnalytics';
+import { SystemAnalytics } from './SystemAnalytics';
+
+export type Block = 'executive' | 'finance' | 'sales' | 'farm' | 'warehouse' | 'operations' | 'system';
+
+/** The analytics each role sees on its Overview, in order. The server enforces the same areas, so a block here that a role may not read would simply say so. */
+export const BLOCKS_BY_ROLE: Record<string, Block[]> = {
+  ADMIN: ['system'],
+  MD: ['executive', 'sales', 'finance'],
+  CEO: ['executive', 'sales', 'finance'],
+  AUDITOR: ['executive'],
+  FINANCE_DIRECTOR: ['finance', 'sales'],
+  FINANCE_OFFICER: ['finance', 'sales'],
+  FARM_DIRECTOR: ['farm'],
+  FARM_MANAGER: ['farm'],
+  WAREHOUSE_SUPERVISOR: ['warehouse'],
+  WAREHOUSE_MANAGER: ['warehouse'],
+  OPERATIONS_MANAGER: ['operations'],
+  OPERATIONS_OFFICER: ['operations'],
+  SALES_OFFICER: ['sales'],
+};
+
+export function blocksFor(me: MeResponse, hasPermission: (c: string | string[]) => boolean): Block[] {
+  const out: Block[] = [];
+  const add = (b: Block) => { if (!out.includes(b)) out.push(b); };
+  for (const r of me.roles) {
+    const known = BLOCKS_BY_ROLE[r.code];
+    if (known) { known.forEach(add); continue; }
+    // A role the Administrator made: the analytics follow the kind of work its permissions cover.
+    if (hasPermission('farm.inventory.view')) add('farm');
+    if (hasPermission('warehouse.inventory.view')) add('warehouse');
+    if (hasPermission('milling.view')) add('operations');
+    if (hasPermission(['sales.create', 'sales.view'])) add('sales');
+    if (hasPermission('finance.view')) add('finance');
+  }
+  return out;
+}
+
+/** The Overview for every role: a greeting, then the analytics of the person's own area. No shortcuts and no tasks: the side menu has the pages. */
+export function Overview({ me, accessToken, hasPermission }: { me: MeResponse; accessToken: string; hasPermission: (c: string | string[]) => boolean }) {
+  const blocks = blocksFor(me, hasPermission);
+  return (
+    <div data-testid="overview" data-role={me.roles.map((r) => r.code).join(',')}>
+      <OverviewGreeting me={me} />
+      {blocks.length === 0 && <p data-testid="overview-none" className="rounded-2xl border border-dashed border-paddy-100 bg-white px-4 py-8 text-center text-sm text-ink-500">There are no figures for your role yet.</p>}
+      {blocks.map((b) => {
+        switch (b) {
+          case 'executive': return <ExecutiveAnalyticsView key={b} accessToken={accessToken} />;
+          case 'finance': return <FinanceAnalytics key={b} accessToken={accessToken} />;
+          case 'sales': return <SalesAnalytics key={b} accessToken={accessToken} />;
+          case 'farm': return <FarmAnalytics key={b} accessToken={accessToken} />;
+          case 'warehouse': return <WarehouseAnalytics key={b} accessToken={accessToken} />;
+          case 'operations': return <OperationsAnalytics key={b} accessToken={accessToken} />;
+          case 'system': return <SystemAnalytics key={b} accessToken={accessToken} />;
+        }
+      })}
+    </div>
+  );
+}

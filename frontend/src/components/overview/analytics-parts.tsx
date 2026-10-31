@@ -110,6 +110,25 @@ export function MeasureTrend({ rows, dataKey, unit, color = PALETTE[0], suffix =
   );
 }
 
+/** Several measures over time on one chart (invoiced / collected / spent, signed in / failed), as lines. */
+export function MultiTrend({ rows, series, unit, money = false }: { rows: ({ bucket: string } & Record<string, number | string>)[]; series: { key: string; label: string; color: string }[]; unit: 'day' | 'week'; money?: boolean }) {
+  if (rows.every((r) => series.every((s) => !r[s.key]))) return <NoData />;
+  const data = rows.map((r) => ({ label: shortDate(r.bucket), ...Object.fromEntries(series.map((s) => [s.label, r[s.key]])) }));
+  const fmt = (v: number) => (money ? (v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`) : `${v}`);
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={data} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#E7E2D4" vertical={false} />
+        <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" aria-label={unit === 'day' ? 'Day' : 'Week starting'} />
+        <YAxis tick={{ fontSize: 11 }} width={48} tickFormatter={fmt} />
+        <Tooltip formatter={(v: number, n: string) => [money ? ghs(v) : v.toLocaleString('en-US'), n]} />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        {series.map((s) => <Line key={s.key} type="monotone" dataKey={s.label} stroke={s.color} strokeWidth={2.5} dot={{ r: 2.5 }} />)}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
 /** Places side by side, one bar each, so the best and the weakest are obvious at a glance. */
 export function PlaceBars({ rows, label, format = (n: number) => `${kg(n)} KG`, color = PALETTE[0] }: { rows: { name: string; value: number | null }[]; label: string; format?: (n: number) => string; color?: string }) {
   const real = rows.filter((r) => r.value !== null) as { name: string; value: number }[];

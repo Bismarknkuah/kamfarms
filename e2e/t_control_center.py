@@ -11,7 +11,7 @@ pages = []
 def U(b, key, **kw):
     ctx, p = as_user(b, key, **kw); pages.append(p); return ctx, p
 def open_cc(b, key, **kw):
-    ctx, p = U(b, key, **kw); p.goto(BASE + '/dashboard'); p.get_by_test_id('control-center').wait_for(); p.get_by_test_id('cc-tile').first.wait_for(); p.wait_for_timeout(300); return ctx, p
+    ctx, p = U(b, key, **kw); p.goto(BASE + '/control-center'); p.get_by_test_id('control-center').wait_for(); p.get_by_test_id('cc-tile').first.wait_for(); p.wait_for_timeout(300); return ctx, p
 def tiles(p): return {t.get_attribute('data-key'): int(txt(t.get_by_test_id('cc-count')).replace(',', '')) for t in p.get_by_test_id('cc-tile').all()}
 def geometry(p):
     return p.evaluate('''() => { const r = (sel) => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return { l: b.left, r: b.right, c: (b.left + b.right) / 2 }; };
@@ -100,7 +100,7 @@ with sync_playwright() as pw:
         check(f'{key}: no control center on their home page', p.get_by_test_id('control-center').count() == 0 and 'Application error' not in txt(p.locator('body'))); ctx.close()
 
     # =============== 6. A phone ===============
-    ctx, ph = U(b, 'fd', viewport={'width': 390, 'height': 844}); ph.goto(BASE + '/dashboard'); ph.get_by_test_id('control-center').wait_for(); ph.get_by_test_id('cc-tile').first.wait_for(); ph.wait_for_timeout(400)
+    ctx, ph = U(b, 'fd', viewport={'width': 390, 'height': 844}); ph.goto(BASE + '/control-center'); ph.get_by_test_id('control-center').wait_for(); ph.get_by_test_id('cc-tile').first.wait_for(); ph.wait_for_timeout(400)
     check('on a phone the control center does not scroll sideways', ph.evaluate('document.documentElement.scrollWidth - window.innerWidth') <= 1, ph.evaluate('document.documentElement.scrollWidth')); ctx.close()
     check('no page threw an error anywhere', not any(pg.errors for pg in pages), [e for pg in pages for e in pg.errors][:3])
     b.close()

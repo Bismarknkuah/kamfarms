@@ -3,7 +3,7 @@
  * which features it has (GET /health); the website knows which it needs. When something is missing the Admin
  * dashboard says so in plain words, instead of pages quietly failing with "404".
  */
-export const REQUIRED_API_FEATURES = ['site-content', 'insights', 'settings-registry', 'system-overview', 'reports-catalog', 'admin-access', 'ai-predictions', 'sales-chain', 'ai-feedback', 'multi-size-intake', 'dispatch-requests', 'dispatch-desk', 'paddy-requests', 'paddy-transfers', 'control-center', 'dispatch-tracking', 'quick-search', 'mill-dispatch', 'damaged-bags-review', 'role-access', 'finance-center', 'invoices-awaiting', 'size3', 'category-picker', 'role-features-v2', 'overview-analytics', 'notification-clear'] as const;
+export const REQUIRED_API_FEATURES = ['site-content', 'insights', 'settings-registry', 'system-overview', 'reports-catalog', 'admin-access', 'ai-predictions', 'sales-chain', 'ai-feedback', 'multi-size-intake', 'dispatch-requests', 'dispatch-desk', 'paddy-requests', 'paddy-transfers', 'control-center', 'dispatch-tracking', 'quick-search', 'mill-dispatch', 'damaged-bags-review', 'role-access', 'finance-center', 'invoices-awaiting', 'size3', 'category-picker', 'role-features-v2', 'overview-analytics', 'notification-clear', 'report-areas'] as const;
 
 export const FEATURE_LABELS: Record<string, string> = {
   'site-content': 'The homepage editor',
@@ -28,6 +28,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   'paddy-requests': 'Paddy requests passed up the chain: warehouse to Farm Director, mill to warehouse, with stock checks and where-is-the-paddy',
   'dispatch-desk': 'The shared Dispatch desk: one dispatch with every size, approved as one, for the Farm Supervisor and the farm manager',
   'overview-analytics': 'The analytics views on the Farm Supervisor, Warehouse Supervisor, Operations Manager and top-management overviews',
+  'report-areas': 'Reports and analytics kept to each role\'s own area of work (a Farm Supervisor gets no warehouse report), and analytics for Sales, Finance and the Administrator',
   'notification-clear': 'Deleting old notifications, one by one or in bulk, for every role',
   'ai-predictions': 'The AI predictions and answers limited to each person\'s own places',
 };

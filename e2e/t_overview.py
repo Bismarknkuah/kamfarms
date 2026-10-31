@@ -5,7 +5,7 @@ def run():
     reset()
     with sync_playwright() as p:
         b = p.chromium.launch()
-        blocks = [('fsup', 'farm-analytics'), ('sup', 'warehouse-analytics'), ('ops', 'ops-analytics'), ('md', 'exec-analytics')]
+        blocks = [('fsup', 'farm-analytics'), ('sup', 'warehouse-analytics'), ('ops', 'ops-analytics'), ('md', 'exec-analytics'), ('sales1', 'sales-analytics'), ('fd', 'finance-analytics'), ('admin', 'system-analytics'), ('fm', 'farm-analytics'), ('wm1', 'warehouse-analytics'), ('oo', 'ops-analytics')]
         for key, bid in blocks:
             ctx, page = as_user(b, key)
             page.goto(BASE + '/dashboard')
@@ -16,7 +16,12 @@ def run():
                 check(f'{key}: {bid} renders KPIs', False, str(e)[:120])
                 ctx.close(); continue
             blk = page.locator(f'[data-testid={bid}]')
-            if key != 'md': check(f'{key}: overview header shows', page.locator('[data-testid=overview-header]').count() >= 1)
+            check(f'{key}: starts with the greeting', page.locator('[data-testid=overview-greeting]').count() == 1 and 'Good' in page.locator('[data-testid=overview-greeting]').inner_text())
+            ov = page.locator('[data-testid=overview]')
+            check(f'{key}: nothing to click except the analytics controls (no links)', ov.locator('a').count() == 0, ov.locator('a').count())
+            txt = ov.inner_text()
+            check(f'{key}: no control center, run-your-area, quick access or task strips', not any(x in txt for x in ['Control center', 'Run your area', 'Quick access', 'Needs your attention', 'Your activity this month', 'Tap to review']))
+            check(f'{key}: the greeting comes first, the analytics straight after', ov.locator('> *').first.get_attribute('data-testid') == 'overview-greeting-card')
             check(f'{key}: {bid} has KPIs', blk.locator('[data-testid=kpi]').count() >= 3)
             check(f'{key}: {bid} has a chart', blk.locator('svg.recharts-surface').count() >= 1 or blk.locator('[data-testid=place-bar]').count() >= 1)
             for d in (7, 90, 30):
@@ -33,6 +38,22 @@ def run():
         check('scoped Farm Director sees own farm', 'Nkawkaw Farm' in txt)
         check('scoped Farm Director does not see the other farm', 'Sefwi Farm' not in txt)
         ctx.close()
+
+        # reports: each role gets only the reports of its own area
+        def report_titles(key):
+            ctx, page = as_user(b, key); page.goto(BASE + '/reports'); page.wait_for_selector('h1:has-text("Reports")'); page.wait_for_timeout(1200)
+            t = page.locator('main').inner_text(); ctx.close(); return t
+        t = report_titles('fsup')
+        check('Farm Supervisor sees the farm intake report', 'Farm intake report' in t)
+        check('Farm Supervisor sees no warehouse, finance or milling reports', not any(x in t for x in ['Warehouse report', 'Finance report', 'Milling runs', 'Machine power', 'Audit log']), t[:300])
+        t = report_titles('sup')
+        check('Warehouse Supervisor sees the warehouse report and no farm intake report', 'Warehouse report' in t and 'Farm intake report' not in t and 'Paddy intake' not in t, t[:300])
+        t = report_titles('ops')
+        check('Operations Manager sees milling reports and no farm, warehouse or finance report', 'Milling runs' in t and not any(x in t for x in ['Farm intake report', 'Warehouse report', 'Finance report']), t[:300])
+        t = report_titles('fd')
+        check('Finance Director sees the finance report and no milling run report', 'Finance report' in t and 'Milling runs' not in t, t[:300])
+        check('the server refuses a Farm Supervisor the warehouse analytics', http('/api/overview/analytics/warehouses', 'GET', 'tok-fsup')[0] == 403)
+        check('the server refuses a Sales Officer the finance analytics', http('/api/overview/analytics/finance', 'GET', 'tok-sales1')[0] == 403)
 
         # notifications: every role can delete; each only their own
         for key in ('fsup', 'sup', 'ops', 'md', 'fm'):

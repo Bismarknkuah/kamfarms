@@ -58,7 +58,9 @@ const actorOf = (k) => { const u = USERS[k]; return { id: u.id, email: u.email, 
 const seedText = require('fs').readFileSync(ROOT + '/prisma/seed.ts', 'utf8');
 const seedPerms = (role) => { const i = seedText.indexOf(`code: '${role}'`); if (i < 0) return []; const j = seedText.indexOf('permissionCodes: [', i); const k = seedText.indexOf(']', j); return [...seedText.slice(j, k).replace(/\/\/[^\n]*/g, '').matchAll(/'([a-z_.]+)'/g)].map((m) => m[1]); };
 const FD_READ = ['supply.view', 'dispatch.track', 'milldispatch.view', 'delivery.view', 'warehouse.inventory.view', 'milling.view', 'ai.use', 'insights.view', 'farm.view', 'warehouse.view', 'expense.view', 'sales.view'];
-for (const u of Object.values(USERS)) { if (u.role === 'ADMIN') continue; const take = (c) => c.startsWith('milldispatch.') || c === 'receipt.review' || (u.role === 'FINANCE_DIRECTOR' && FD_READ.includes(c)) || (u.role === 'CEO' && ['finance.approve.director', 'supply.view'].includes(c)) || (['reports.view', 'reports.export', 'messages.send', 'messages.broadcast', 'tasks.assign', 'reset.approve', 'invoice.create', 'organization.manage', 'masterdata.manage'].includes(c) && ['FINANCE_DIRECTOR', 'MD', 'CEO'].includes(u.role)); u.perms = [...new Set([...u.perms, ...seedPerms(u.role).filter(take)])]; }
+// the permissions that decide which reports a role is offered come from the real seed too
+const AREA_PERMS = ['reports.view', 'reports.export', 'farm.view', 'farm.inventory.view', 'warehouse.view', 'warehouse.inventory.view', 'milling.view', 'machine.view', 'finance.view', 'expense.view'];
+for (const u of Object.values(USERS)) { if (u.role === 'ADMIN') continue; const take = (c) => c.startsWith('milldispatch.') || c === 'receipt.review' || (u.role === 'FINANCE_DIRECTOR' && FD_READ.includes(c)) || (u.role === 'CEO' && ['finance.approve.director', 'supply.view'].includes(c)) || (['reports.view', 'reports.export', 'messages.send', 'messages.broadcast', 'tasks.assign', 'reset.approve', 'invoice.create', 'organization.manage', 'masterdata.manage'].includes(c) && ['FINANCE_DIRECTOR', 'MD', 'CEO'].includes(u.role)); u.perms = [...new Set([...u.perms, ...seedPerms(u.role).filter((c) => take(c) || AREA_PERMS.includes(c))])]; }
 // What the Administrator switched off: the REAL service, over a stand-in table.
 const { RoleAccessService } = require(B + '/access/role-access.service');
 const ROLE_NAMES = { SALES_OFFICER: 'Sales Officer', FINANCE_DIRECTOR: 'Finance Director', MD: 'Managing Director', CEO: 'CEO', OPERATIONS_MANAGER: 'Operations Manager', OPERATIONS_OFFICER: 'Operations Officer', WAREHOUSE_SUPERVISOR: 'Warehouse Supervisor', WAREHOUSE_MANAGER: 'Warehouse Manager', FARM_DIRECTOR: 'Farm Supervisor', FARM_MANAGER: 'Farm Manager' };
@@ -641,12 +643,40 @@ const ovPrisma = {
   machine: { groupBy: async () => [{ status: 'RUNNING', _count: { _all: 3 } }, { status: 'FAULT', _count: { _all: 1 } }, { status: 'MAINTENANCE', _count: { _all: 1 } }] },
 };
 const ovSvc = new OverviewAnalyticsService(ovPrisma);
-const ovRoute = (name, fn) => app.get('/api/overview/analytics/' + name, async (req, res) => {
+// Sales, money and system figures: small tables under the REAL BusinessAnalyticsService.
+const { BusinessAnalyticsService } = require(B + '/overview/business-analytics.service');
+const { OverviewAnalyticsController } = require(B + '/overview/overview-analytics.controller');
+const bizPrisma = {
+  salesOrder: { findMany: async ({ where }) => [
+    { createdAt: dAgo(1), status: 'FULFILLED', totalAmount: '12000', totalKg: '2500', salesOfficerId: 'u-sales1', customer: { name: 'Ama Retail' }, salesOfficer: { firstName: 'Nana', lastName: 'Yeboah' } },
+    { createdAt: dAgo(3), status: 'SUBMITTED', totalAmount: '4000', totalKg: '800', salesOfficerId: 'u-sales1', customer: { name: 'Kwesi Stores' }, salesOfficer: { firstName: 'Nana', lastName: 'Yeboah' } },
+    { createdAt: dAgo(5), status: 'RESERVED', totalAmount: '9000', totalKg: '1800', salesOfficerId: 'u-sales2', customer: { name: 'Ama Retail' }, salesOfficer: { firstName: 'Akosua', lastName: 'Frimpong' } },
+  ].filter((o) => !where.salesOfficerId || o.salesOfficerId === where.salesOfficerId) },
+  invoice: { findMany: async ({ where }) => (where.status && where.status.in
+    ? [{ totalAmount: '8000', dueDate: dAgo(10), customer: { name: 'Ama Retail' }, allocations: [{ amountApplied: '3000' }] }, { totalAmount: '2000', dueDate: dAgo(-5), customer: { name: 'Kwesi Stores' }, allocations: [] }]
+    : [{ issueDate: dAgo(2), totalAmount: '15000' }, { issueDate: dAgo(8), totalAmount: '6000' }]) },
+  payment: { findMany: async () => [{ paymentDate: dAgo(2), amount: '9000', method: 'BANK_TRANSFER' }, { paymentDate: dAgo(6), amount: '1500', method: 'CASH' }] },
+  expense: { findMany: async () => [{ date: dAgo(2), amount: '2400', category: { name: 'Fuel' } }, { date: dAgo(7), amount: '1800', category: { name: 'Labour' } }] },
+  user: { groupBy: async () => [{ status: 'ACTIVE', _count: { _all: 14 } }, { status: 'DISABLED', _count: { _all: 2 } }, { status: 'LOCKED', _count: { _all: 1 } }] },
+  loginAttempt: { findMany: async () => [{ createdAt: dAgo(1), success: true, reason: null }, { createdAt: dAgo(1), success: true, reason: null }, { createdAt: dAgo(2), success: false, reason: 'Wrong password' }] },
+  auditLog: { findMany: async () => [{ createdAt: dAgo(1), action: 'user.create' }, { createdAt: dAgo(2), action: 'paddy.approve' }, { createdAt: dAgo(3), action: 'user.update' }] },
+};
+const ovCtl = new OverviewAnalyticsController(ovSvc, new BusinessAnalyticsService(bizPrisma));
+const OV_NEEDS = { farms: ['reports.view'], warehouses: ['reports.view'], operations: ['reports.view'], executive: ['reports.view'], sales: ['sales.view', 'sales.create', 'finance.view'], finance: ['finance.view'], system: ['users.manage'] };
+const ovRoute = (name) => app.get('/api/overview/analytics/' + name, async (req, res) => {
   const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.');
-  if (!seedPerms(USERS[k].role).includes('reports.view')) return fail(res, 403, 'You do not have permission to do this.');
-  try { ok(res, await ovSvc[fn](actorOf(k), req.query.days)); } catch (e) { fail(res, 500, String(e && e.message || e)); }
+  const a = actorOf(k); a.permissionCodes = new Set([...a.permissionCodes, ...seedPerms(USERS[k].role)]);
+  if (USERS[k].role === 'ADMIN') a.permissionCodes = new Set([...a.permissionCodes, ...Object.values(OV_NEEDS).flat()]);
+  if (!OV_NEEDS[name].some((c) => a.permissionCodes.has(c))) return fail(res, 403, 'You do not have permission to do this.');
+  try { ok(res, await ovCtl[name](a, req.query.days)); } catch (e) { fail(res, e && e.getStatus ? e.getStatus() : 500, String((e && e.getResponse && e.getResponse().message) || (e && e.message) || e)); }
 });
-ovRoute('farms', 'farms'); ovRoute('warehouses', 'warehouses'); ovRoute('operations', 'operations'); ovRoute('executive', 'executive');
+for (const n of ['farms', 'warehouses', 'operations', 'executive', 'sales', 'finance', 'system']) ovRoute(n);
+// the reports a role may download come from the REAL area rules and catalog
+const { reportAreas } = require(B + '/reports/report-areas');
+const { ReportCatalogService } = require(B + '/reports/report-catalog.service');
+const catalogSvc = new ReportCatalogService({}, undefined);
+app.get('/api/reports/catalog', (req, res) => { const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); const a = actorOf(k); if (!a.permissionCodes.has('reports.export')) return fail(res, 403, 'You do not have permission to do this.'); ok(res, catalogSvc.list(a)); });
+app.get('/api/reports/areas', (req, res) => { const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); ok(res, { areas: [...reportAreas(actorOf(k))] }); });
 const prevAfterReset = globalThis.__afterReset;
 globalThis.__afterReset = () => { if (prevAfterReset) prevAfterReset(); seedNotifs(); mirrored = X.notes.length; };
 seedNotifs();

@@ -30,6 +30,10 @@ export function SalesAnalytics({ accessToken }: { accessToken: string }) {
             <ChartCard id="sales-customers" title="Best customers" note="By order value."><PlaceBars label="Customers by value" rows={d.topCustomers.map((c) => ({ name: c.name, value: c.value }))} format={ghs} color="#C9972B" /></ChartCard>
             {d.company && <ChartCard id="sales-people" title="Salespeople compared" note="By order value."><PlaceBars label="Sales by salesperson" rows={d.bySalesperson.map((c) => ({ name: c.name, value: c.value }))} format={ghs} color="#6B4A2F" /></ChartCard>}
           </div>
+          <div data-testid="sales-debtors">
+            <p className="mb-2 text-sm font-medium text-paddy-900">{d.company ? 'Who owes us' : 'Who owes you'}</p>
+            <PlaceTable id="sales-debtors-table" columns={[{ key: 'name', label: 'Customer' }, { key: 'amount', label: 'Owes', align: 'right' }, { key: 'late', label: 'Of which late', align: 'right' }]} rows={d.debtors.map((c) => ({ name: c.name, amount: ghs(c.amount), late: c.late > 0 ? ghs(c.late) : '-' }))} />
+          </div>
           <PlaceTable id="sales-table" columns={[{ key: 'name', label: 'Customer' }, { key: 'orders', label: 'Orders', align: 'right' }, { key: 'value', label: 'Value', align: 'right' }]} rows={d.topCustomers.map((c) => ({ name: c.name, orders: c.orders, value: ghs(c.value) }))} />
         </div>
       )}

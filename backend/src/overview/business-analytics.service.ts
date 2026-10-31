@@ -10,6 +10,14 @@ const money = (v: number) => Math.round(v * 100) / 100;
  * The numbers behind the Overview pages of the Sales Officer, the Finance team and the System Administrator.
  * Read-only. A Sales Officer sees their own orders only; Finance and top management see the company's.
  */
+/** What is still owed on one invoice: its total less the VERIFIED payments applied to it (the same rule the Receivables service uses), and how late it is. */
+function stillOwed(inv: { totalAmount: unknown; dueDate: Date | null; issueDate: Date; allocations: { amountApplied: unknown; payment?: { status: string } | null }[] }, now: Date) {
+  const paid = inv.allocations.filter((a) => !a.payment || a.payment.status === 'VERIFIED').reduce((s, a) => s + num(a.amountApplied), 0);
+  const left = Math.max(0, num(inv.totalAmount) - paid);
+  const anchor = inv.dueDate ?? inv.issueDate;
+  return { left, lateDays: Math.floor((now.getTime() - anchor.getTime()) / DAY_MS) };
+}
+
 @Injectable()
 export class BusinessAnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -27,16 +35,20 @@ export class BusinessAnalyticsService {
     const company = actor.permissionCodes.has(PERMISSIONS.FINANCE_VIEW);
     const mine = company ? {} : { salesOfficerId: actor.id };
     const [owedRows, orders] = await Promise.all([
-      this.prisma.invoice.findMany({ where: { status: { in: ['OPEN', 'PARTIALLY_PAID'] }, ...(company ? {} : { salesOrder: { salesOfficerId: actor.id } }) }, select: { totalAmount: true, dueDate: true, allocations: { select: { amountApplied: true } } } }),
+      this.prisma.invoice.findMany({ where: { status: { not: 'CANCELLED' }, ...(company ? {} : { salesOrder: { salesOfficerId: actor.id } }) }, select: { totalAmount: true, dueDate: true, issueDate: true, customer: { select: { name: true } }, allocations: { select: { amountApplied: true, payment: { select: { status: true } } } } } }),
       this.prisma.salesOrder.findMany({
       where: { ...mine, createdAt: { gte: w.since }, status: { not: 'DRAFT' } },
       select: { createdAt: true, status: true, totalAmount: true, totalKg: true, customer: { select: { name: true } }, salesOfficer: { select: { firstName: true, lastName: true } } },
       }),
     ]);
     let owed = 0; let owedLate = 0;
+    const owing = new Map<string, { amount: number; late: number }>();
     for (const inv of owedRows) {
-      const left = Math.max(0, num(inv.totalAmount) - inv.allocations.reduce((a, x) => a + num(x.amountApplied), 0));
-      owed += left; if (inv.dueDate && inv.dueDate.getTime() < w.now.getTime()) owedLate += left;
+      const { left, lateDays } = stillOwed(inv as any, w.now);
+      if (left <= 0.001) continue;
+      owed += left; if (lateDays > 0) owedLate += left;
+      const k = inv.customer?.name ?? 'Unknown'; const o = owing.get(k) ?? { amount: 0, late: 0 };
+      o.amount += left; if (lateDays > 0) o.late += left; owing.set(k, o);
     }
     const trend = new Map(w.keys.map((k) => [k, { bucket: k, orders: 0, value: 0 }]));
     const status: Record<string, number> = {};
@@ -62,6 +74,7 @@ export class BusinessAnalyticsService {
       totals: { owed: money(owed), owedLate: money(owedLate), orders: orders.length, value: money(value), kg: round0(kg), fulfilled, inProgress, waitingForApproval: waiting, lost, averageOrder: orders.length ? money(value / orders.length) : 0 },
       trend: [...trend.values()].map((t) => ({ ...t, value: money(t.value) })),
       status: Object.entries(status).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
+      debtors: [...owing.entries()].map(([name, o]) => ({ name, amount: money(o.amount), late: money(o.late) })).sort((a, b) => b.amount - a.amount).slice(0, 6),
       topCustomers: rank(customers),
       bySalesperson: company ? rank(officers) : [],
     };
@@ -77,7 +90,7 @@ export class BusinessAnalyticsService {
       this.prisma.invoice.findMany({ where: { issueDate: { gte: w.since }, status: { not: 'CANCELLED' } }, select: { issueDate: true, totalAmount: true } }),
       this.prisma.payment.findMany({ where: { paymentDate: { gte: w.since }, status: { in: ['VERIFIED', 'PARTIALLY_APPLIED'] } }, select: { paymentDate: true, amount: true, method: true } }),
       this.prisma.expense.findMany({ where: { date: { gte: w.since }, status: { not: 'REJECTED' } }, select: { date: true, amount: true, category: { select: { name: true } } } }),
-      this.prisma.invoice.findMany({ where: { status: { in: ['OPEN', 'PARTIALLY_PAID'] } }, select: { totalAmount: true, dueDate: true, customer: { select: { name: true } }, allocations: { select: { amountApplied: true } } } }),
+      this.prisma.invoice.findMany({ where: { status: { not: 'CANCELLED' } }, select: { totalAmount: true, dueDate: true, issueDate: true, customer: { select: { name: true } }, allocations: { select: { amountApplied: true, payment: { select: { status: true } } } } } }),
     ]);
     const trend = new Map(w.keys.map((k) => [k, { bucket: k, invoiced: 0, collected: 0, spent: 0 }]));
     let invoiced = 0; let collected = 0; let spent = 0;
@@ -87,13 +100,12 @@ export class BusinessAnalyticsService {
     const cats = new Map<string, number>();
     for (const e of expenses) { const a = num(e.amount); spent += a; cats.set(e.category?.name ?? 'Other', (cats.get(e.category?.name ?? 'Other') ?? 0) + a); const t = trend.get(bucketOf(e.date, w.unit)); if (t) t.spent += a; }
     const aging = { current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90plus: 0 };
-    const debtors = new Map<string, number>();
+    const debtors = new Map<string, { amount: number; late: number }>();
     let outstanding = 0; let overdue = 0;
     for (const inv of openInvoices) {
-      const owed = Math.max(0, num(inv.totalAmount) - inv.allocations.reduce((s, a) => s + num(a.amountApplied), 0));
-      if (owed <= 0) continue;
-      outstanding += owed; debtors.set(inv.customer?.name ?? 'Unknown', (debtors.get(inv.customer?.name ?? 'Unknown') ?? 0) + owed);
-      const late = inv.dueDate ? Math.floor((w.now.getTime() - inv.dueDate.getTime()) / DAY_MS) : 0;
+      const { left: owed, lateDays: late } = stillOwed(inv as any, w.now);
+      if (owed <= 0.001) continue;
+      outstanding += owed; const dk = inv.customer?.name ?? 'Unknown'; const dv = debtors.get(dk) ?? { amount: 0, late: 0 }; dv.amount += owed; if (late > 0) dv.late += owed; debtors.set(dk, dv);
       if (late <= 0) aging.current += owed; else { overdue += owed; if (late <= 30) aging.d1_30 += owed; else if (late <= 60) aging.d31_60 += owed; else if (late <= 90) aging.d61_90 += owed; else aging.d90plus += owed; }
     }
     return {
@@ -103,7 +115,7 @@ export class BusinessAnalyticsService {
       expensesByCategory: [...cats.entries()].map(([name, amount]) => ({ name, amount: money(amount) })).sort((a, b) => b.amount - a.amount).slice(0, 8),
       paymentsByMethod: Object.entries(methods).map(([name, amount]) => ({ name, amount: money(amount) })),
       aging: Object.entries(aging).map(([name, amount]) => ({ name, amount: money(amount) })),
-      topDebtors: [...debtors.entries()].map(([name, amount]) => ({ name, amount: money(amount) })).sort((a, b) => b.amount - a.amount).slice(0, 6),
+      topDebtors: [...debtors.entries()].map(([name, v]) => ({ name, amount: money(v.amount), late: money(v.late) })).sort((a, b) => b.amount - a.amount).slice(0, 8),
     };
   }
 

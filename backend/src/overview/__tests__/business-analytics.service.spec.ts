@@ -39,11 +39,11 @@ describe('BusinessAnalyticsService.sales', () => {
 
 describe('BusinessAnalyticsService.finance', () => {
   const prisma: any = {
-    invoice: { findMany: jest.fn(async ({ where }: any) => (where.status.in
+    invoice: { findMany: jest.fn(async ({ where }: any) => (!where.issueDate
       ? [
-          { totalAmount: '1000', dueDate: recent(-5), customer: { name: 'A' }, allocations: [{ amountApplied: '200' }] },
-          { totalAmount: '500', dueDate: recent(40), customer: { name: 'B' }, allocations: [] },
-          { totalAmount: '300', dueDate: recent(100), customer: { name: 'B' }, allocations: [{ amountApplied: '300' }] },
+          { totalAmount: '1000', dueDate: recent(-5), issueDate: recent(30), customer: { name: 'A' }, allocations: [{ amountApplied: '200', payment: { status: 'VERIFIED' } }] },
+          { totalAmount: '500', dueDate: recent(40), issueDate: recent(60), customer: { name: 'B' }, allocations: [] },
+          { totalAmount: '300', dueDate: recent(100), issueDate: recent(120), customer: { name: 'B' }, allocations: [{ amountApplied: '300', payment: { status: 'VERIFIED' } }] },
         ]
       : [{ issueDate: recent(1), totalAmount: '1800' }, { issueDate: recent(4), totalAmount: '200' }])) },
     payment: { count: jest.fn(async () => 2), findMany: jest.fn(async () => [{ paymentDate: recent(1), amount: '900', method: 'BANK_TRANSFER' }, { paymentDate: recent(2), amount: '100', method: 'CASH' }]) },
@@ -63,7 +63,7 @@ describe('BusinessAnalyticsService.finance', () => {
     expect(r.totals.overdue).toBe(500);
     const by = Object.fromEntries(r.aging.map((a) => [a.name, a.amount]));
     expect(by).toMatchObject({ current: 800, d31_60: 500, d90plus: 0 });
-    expect(r.topDebtors[0]).toEqual({ name: 'A', amount: 800 });
+    expect(r.topDebtors[0]).toEqual({ name: 'A', amount: 800, late: 0 });
   });
 });
 
@@ -103,5 +103,28 @@ describe('analytics views are kept to each role\'s own area', () => {
     expect(() => c.sales(as('FARM_MANAGER'))).toThrow();
     expect(c.sales(as('SALES_OFFICER'))).resolves.toBe('s');
     expect(c.finance(as('FINANCE_OFFICER'))).resolves.toBe('x');
+  });
+});
+
+describe('what customers still owe follows the Receivables rule', () => {
+  const inv = (name: string, total: string, due: Date | null, allocs: [string, string][]) => ({ totalAmount: total, dueDate: due, issueDate: recent(40), customer: { name }, allocations: allocs.map(([a, st]) => ({ amountApplied: a, payment: { status: st } })) });
+  const rows = [
+    inv('Ama Retail', '1000', recent(10), [['300', 'VERIFIED'], ['200', 'PENDING_VERIFICATION']]),
+    inv('Kwesi Stores', '500', recent(-5), []),
+    inv('Paid Up Ltd', '400', recent(5), [['400', 'VERIFIED']]),
+  ];
+  it('counts only verified payments, names the customers, and splits out what is late (Finance)', async () => {
+    const prisma: any = { payment: { count: jest.fn(async () => 0), findMany: jest.fn(async () => []) }, expense: { count: jest.fn(async () => 0), findMany: jest.fn(async () => []) }, invoice: { findMany: jest.fn(async () => rows) } };
+    const r = await new BusinessAnalyticsService(prisma).finance(actor('f', ['finance.view'], 'FINANCE_DIRECTOR'), '30');
+    expect(r.topDebtors).toEqual([{ name: 'Ama Retail', amount: 700, late: 700 }, { name: 'Kwesi Stores', amount: 500, late: 0 }]);
+    expect(r.totals.outstanding).toBe(1200);
+    expect(r.totals.overdue).toBe(700);
+  });
+  it('shows a Sales Officer the customers who owe on their own orders', async () => {
+    const prisma: any = { invoice: { findMany: jest.fn(async () => rows) }, salesOrder: { findMany: jest.fn(async () => []) } };
+    const r = await new BusinessAnalyticsService(prisma).sales(actor('officer-1', ['sales.create']), '30');
+    expect(prisma.invoice.findMany.mock.calls[0][0].where.salesOrder).toEqual({ salesOfficerId: 'officer-1' });
+    expect(r.totals.owed).toBe(1200);
+    expect(r.debtors.map((d) => d.name)).toEqual(['Ama Retail', 'Kwesi Stores']);
   });
 });

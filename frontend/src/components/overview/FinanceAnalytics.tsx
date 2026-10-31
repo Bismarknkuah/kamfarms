@@ -2,7 +2,7 @@
 
 import { overviewApi, type OvFinance } from '@/lib/api-client';
 import { useOverviewAnalytics } from './useOverviewAnalytics';
-import { AnalyticsFrame, ChartCard, Kpi, MultiTrend, PlaceBars, ghs } from './analytics-parts';
+import { AnalyticsFrame, ChartCard, Kpi, MultiTrend, PlaceBars, PlaceTable, ghs } from './analytics-parts';
 
 const AGING: Record<string, string> = { current: 'Not yet due', d1_30: '1 to 30 days late', d31_60: '31 to 60 days late', d61_90: '61 to 90 days late', d90plus: 'Over 90 days late' };
 const METHOD = (m: string) => m.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
@@ -37,6 +37,10 @@ export function FinanceAnalytics({ accessToken }: { accessToken: string }) {
             <ChartCard id="fin-expenses" title="Where the spending goes" note="By category."><PlaceBars label="Spending by category" rows={d.expensesByCategory.map((x) => ({ name: x.name, value: x.amount }))} format={ghs} color="#6B4A2F" /></ChartCard>
             <ChartCard id="fin-debtors" title="Who owes the most"><PlaceBars label="Customers who owe" rows={d.topDebtors.map((x) => ({ name: x.name, value: x.amount }))} format={ghs} color="#C9972B" /></ChartCard>
             <ChartCard id="fin-methods" title="How customers pay" note="Verified payments."><PlaceBars label="Payments by method" rows={d.paymentsByMethod.map((x) => ({ name: METHOD(x.name), value: x.amount }))} format={ghs} color="#3B8266" /></ChartCard>
+          </div>
+          <div data-testid="fin-debtors-list">
+            <p className="mb-2 text-sm font-medium text-paddy-900">Customers who owe us</p>
+            <PlaceTable id="fin-debtors-table" columns={[{ key: 'name', label: 'Customer' }, { key: 'amount', label: 'Owes', align: 'right' }, { key: 'late', label: 'Of which late', align: 'right' }]} rows={d.topDebtors.map((x) => ({ name: x.name, amount: ghs(x.amount), late: x.late > 0 ? ghs(x.late) : '-' }))} />
           </div>
         </div>
       )}

@@ -2304,6 +2304,7 @@ export interface OvSales {
   status: { name: string; count: number }[];
   topCustomers: { name: string; value: number; orders: number }[];
   bySalesperson: { name: string; value: number; orders: number }[];
+  debtors: { name: string; amount: number; late: number }[];
 }
 export interface OvFinance {
   days: number; unit: 'day' | 'week';
@@ -2312,7 +2313,7 @@ export interface OvFinance {
   expensesByCategory: { name: string; amount: number }[];
   paymentsByMethod: { name: string; amount: number }[];
   aging: { name: string; amount: number }[];
-  topDebtors: { name: string; amount: number }[];
+  topDebtors: { name: string; amount: number; late: number }[];
 }
 export interface OvSystem {
   days: number; unit: 'day' | 'week';

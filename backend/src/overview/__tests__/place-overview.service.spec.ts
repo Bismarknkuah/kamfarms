@@ -66,3 +66,14 @@ describe('place routes are kept to the right area', () => {
   });
   it('(global oversight can still look)', async () => { expect(await c.myFarm(global('MD'))).toBe('f'); });
 });
+
+describe('the place routes ask for the permissions the roles really hold', () => {
+  it('lets a Farm Manager in without report access, and keeps out someone with no farm permission', () => {
+    const { PERMISSION_KEY } = require('../../common/decorators/require-permission.decorator');
+    const need = (fn: string) => Reflect.getMetadata(PERMISSION_KEY, (OverviewAnalyticsController.prototype as any)[fn]);
+    expect(need('myFarm')).toContain('farm.inventory.view');
+    expect(need('myWarehouse')).toContain('warehouse.inventory.view');
+    expect(need('myMill')).toContain('milling.view');
+    expect(need('myFarm')).not.toEqual('reports.view');
+  });
+});

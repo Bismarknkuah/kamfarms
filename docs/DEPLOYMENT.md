@@ -751,3 +751,11 @@ No database migration. Health reports `2026.10.31` with the feature `report-area
 - The MD / CEO get a "company today" pulse (`/pulse`), the Auditor gets a controls view (`/audit`), Sales shows what customers owe, and Finance shows
   payments to verify and expenses to approve.
 - No database change. Redeploy the API first, then the web app.
+
+## 2026.11.02 - Fixes to the place Overviews and who owes us
+
+- The place Overview routes no longer require `reports.view`. A Farm Manager, Warehouse Manager or Operations Officer is let in by the permission their
+  own role uses (farm inventory / paddy entry, warehouse inventory / receiving, milling / production entry). Scope is unchanged: each sees only their own place.
+- "Who owes us" now follows the Receivables rule (invoice total less VERIFIED payments only, late counted from the due date, or the issue date when there is none),
+  names the customers, and shows what is late. Sales shows the officer's own customers; Finance shows the company's.
+- No database change.

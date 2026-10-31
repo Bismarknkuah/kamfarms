@@ -41,19 +41,19 @@ export class OverviewAnalyticsController {
   @RequirePermission(PERMISSIONS.USERS_MANAGE) @Get('system') @Header('Cache-Control', 'no-store')
   system(@CurrentUser() actor: AuthenticatedUser, @Query('days') days?: string) { inArea(actor, ['admin']); return this.business.system(actor, days); }
 
-  @RequirePermission(PERMISSIONS.REPORTS_VIEW) @Get('pulse') @Header('Cache-Control', 'no-store')
+  @RequirePermission([PERMISSIONS.REPORTS_VIEW, PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.FINANCE_VIEW]) @Get('pulse') @Header('Cache-Control', 'no-store')
   pulse(@CurrentUser() actor: AuthenticatedUser, @Query('days') days?: string) { inArea(actor, ['oversight']); return this.business.pulse(actor, days); }
 
-  @RequirePermission(PERMISSIONS.REPORTS_VIEW) @Get('audit') @Header('Cache-Control', 'no-store')
+  @RequirePermission([PERMISSIONS.REPORTS_VIEW, PERMISSIONS.AUDIT_VIEW]) @Get('audit') @Header('Cache-Control', 'no-store')
   audit(@CurrentUser() actor: AuthenticatedUser, @Query('days') days?: string) { inArea(actor, ['oversight']); return this.business.audit(actor, days); }
 
   /** One farm, warehouse or milling center, for the people who work there: only the places they are assigned to. */
-  @RequirePermission(PERMISSIONS.REPORTS_VIEW) @Get('my-farm') @Header('Cache-Control', 'no-store')
+  @RequirePermission([PERMISSIONS.FARM_INVENTORY_VIEW, PERMISSIONS.PADDY_CREATE, PERMISSIONS.REPORTS_VIEW]) @Get('my-farm') @Header('Cache-Control', 'no-store')
   myFarm(@CurrentUser() actor: AuthenticatedUser, @Query('days') days?: string) { inArea(actor, ['farm', 'oversight']); return this.places.farms(actor, days); }
 
-  @RequirePermission(PERMISSIONS.REPORTS_VIEW) @Get('my-warehouse') @Header('Cache-Control', 'no-store')
+  @RequirePermission([PERMISSIONS.WAREHOUSE_INVENTORY_VIEW, PERMISSIONS.WAREHOUSE_RECEIVE, PERMISSIONS.REPORTS_VIEW]) @Get('my-warehouse') @Header('Cache-Control', 'no-store')
   myWarehouse(@CurrentUser() actor: AuthenticatedUser, @Query('days') days?: string) { inArea(actor, ['warehouse', 'oversight']); return this.places.warehouses(actor, days); }
 
-  @RequirePermission(PERMISSIONS.REPORTS_VIEW) @Get('my-mill') @Header('Cache-Control', 'no-store')
+  @RequirePermission([PERMISSIONS.MILLING_VIEW, PERMISSIONS.PRODUCTION_CREATE, PERMISSIONS.REPORTS_VIEW]) @Get('my-mill') @Header('Cache-Control', 'no-store')
   myMill(@CurrentUser() actor: AuthenticatedUser, @Query('days') days?: string) { inArea(actor, ['milling', 'oversight']); return this.places.mills(actor, days); }
 }

@@ -688,8 +688,8 @@ const bizPrisma = {
     { createdAt: dAgo(3), status: 'SUBMITTED', totalAmount: '4000', totalKg: '800', salesOfficerId: 'u-sales1', customer: { name: 'Kwesi Stores' }, salesOfficer: { firstName: 'Nana', lastName: 'Yeboah' } },
     { createdAt: dAgo(5), status: 'RESERVED', totalAmount: '9000', totalKg: '1800', salesOfficerId: 'u-sales2', customer: { name: 'Ama Retail' }, salesOfficer: { firstName: 'Akosua', lastName: 'Frimpong' } },
   ].filter((o) => !where.salesOfficerId || o.salesOfficerId === where.salesOfficerId) },
-  invoice: { findMany: async ({ where }) => (where.status && where.status.in
-    ? [{ totalAmount: '8000', dueDate: dAgo(10), customer: { name: 'Ama Retail' }, allocations: [{ amountApplied: '3000' }] }, { totalAmount: '2000', dueDate: dAgo(-5), customer: { name: 'Kwesi Stores' }, allocations: [] }]
+  invoice: { findMany: async ({ where }) => (!where.issueDate
+    ? [{ totalAmount: '8000', dueDate: dAgo(10), issueDate: dAgo(30), customer: { name: 'Ama Retail' }, allocations: [{ amountApplied: '3000', payment: { status: 'VERIFIED' } }] }, { totalAmount: '2000', dueDate: dAgo(-5), issueDate: dAgo(20), customer: { name: 'Kwesi Stores' }, allocations: [] }]
     : [{ issueDate: dAgo(2), totalAmount: '15000' }, { issueDate: dAgo(8), totalAmount: '6000' }]) },
   payment: { count: async () => 2, findMany: async () => [{ paymentDate: dAgo(2), amount: '9000', method: 'BANK_TRANSFER' }, { paymentDate: dAgo(6), amount: '1500', method: 'CASH' }] },
   expense: { count: async () => 1, findMany: async () => [{ date: dAgo(2), amount: '2400', category: { name: 'Fuel' } }, { date: dAgo(7), amount: '1800', category: { name: 'Labour' } }] },
@@ -709,7 +709,7 @@ const bizAll = {
   machine: { count: async () => 1 },
 };
 const ovCtl = new OverviewAnalyticsController(ovSvc, new BusinessAnalyticsService(bizAll), placeSvc);
-const OV_NEEDS = { farms: ['reports.view'], warehouses: ['reports.view'], operations: ['reports.view'], executive: ['reports.view'], sales: ['sales.view', 'sales.create', 'finance.view'], finance: ['finance.view'], system: ['users.manage'], pulse: ['reports.view'], audit: ['reports.view'], myFarm: ['reports.view'], myWarehouse: ['reports.view'], myMill: ['reports.view'] };
+const OV_NEEDS = { farms: ['reports.view'], warehouses: ['reports.view'], operations: ['reports.view'], executive: ['reports.view'], sales: ['sales.view', 'sales.create', 'finance.view'], finance: ['finance.view'], system: ['users.manage'], pulse: ['reports.view', 'dashboard.view', 'finance.view'], audit: ['reports.view', 'audit.view'], myFarm: ['farm.inventory.view', 'paddy.create', 'reports.view'], myWarehouse: ['warehouse.inventory.view', 'warehouse.receive', 'reports.view'], myMill: ['milling.view', 'production.create', 'reports.view'] };
 const ovRoute = (name) => app.get('/api/overview/analytics/' + name, async (req, res) => {
   const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.');
   const a = actorOf(k); a.permissionCodes = new Set([...a.permissionCodes, ...seedPerms(USERS[k].role)]);

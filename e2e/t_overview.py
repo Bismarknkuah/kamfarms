@@ -61,6 +61,13 @@ def run():
         check('the server gives a Warehouse Manager no farm view', http('/api/overview/analytics/my-farm', 'GET', 'tok-wm1')[0] == 403)
         check('the server gives a Sales Officer no place view', http('/api/overview/analytics/my-farm', 'GET', 'tok-sales1')[0] == 403 and http('/api/overview/analytics/pulse', 'GET', 'tok-sales1')[0] == 403)
 
+        # the people who owe are named for Sales and Finance
+        for key, bid, sel in (('sales1', 'sales-analytics', 'sales-debtors'), ('fd', 'finance-analytics', 'fin-debtors-list')):
+            ctx, page = as_user(b, key); page.goto(BASE + '/dashboard'); page.wait_for_selector(f'[data-testid={bid}] [data-testid={sel}]', timeout=15000)
+            t = page.locator(f'[data-testid={sel}]').inner_text()
+            check(f'{key}: the customers who owe are listed by name', 'Ama Retail' in t and 'Kwesi Stores' in t, t[:200])
+            ctx.close()
+
         # reports: each role gets only the reports of its own area
         def report_titles(key):
             ctx, page = as_user(b, key); page.goto(BASE + '/reports'); page.wait_for_selector('h1:has-text("Reports")'); page.wait_for_timeout(1200)

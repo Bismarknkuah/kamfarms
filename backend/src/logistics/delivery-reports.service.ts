@@ -11,6 +11,7 @@ import { RejectDeliveryReportDto } from './dto/reject-delivery-report.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { estimateKg } from '../common/constants/bag-weight';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SettingsService, settingNumber } from '../settings/settings.service';
 import { bagsLabel, personName } from './dispatch-request.util';
 
 // Only APPROVED (and the shipment-lifecycle statuses beyond it) locks
@@ -35,6 +36,7 @@ export class DeliveryReportsService {
     private readonly audit: AuditService,
     private readonly ledger: InventoryLedgerService,
     @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   /** There was no way to list delivery reports at all before this  - 
@@ -476,6 +478,10 @@ export class DeliveryReportsService {
       const existing = reused.find((o) => o.paddyGradeId === line.paddyGradeId);
       return existing ? { line, orderId: existing.id as string, grade: null as string | null } : { line, orderId: null as string | null, grade: line.paddyGradeId as string };
     });
+    // The Administrator's rule for how much one truck may carry (0 means no limit).
+    const maxBags = await settingNumber(this.settings, 'dispatch.max_bags_per_truck');
+    const loaded = plan.reduce((n, p) => n + Number(p.line.actualBagCount ?? 0), 0);
+    if (maxBags > 0 && loaded > maxBags) throw new BadRequestException(`One truck may carry at most ${maxBags} bags. This one has ${loaded}. Split it into two dispatches.`);
     const needsOrder = plan.filter((p) => p.orderId === null);
     if (needsOrder.length > 0) {
       const farm = await this.prisma.farm.findUnique({ where: { id: ctx.farmId } });

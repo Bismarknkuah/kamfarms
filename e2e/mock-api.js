@@ -53,7 +53,7 @@ const USERS = {
   oo: { id: 'u-oo', email: 'operationsofficer@kam.local', firstName: 'Ama', lastName: 'Frimpong', role: 'OPERATIONS_OFFICER', scopes: [{ scopeType: 'MILLING_CENTER', scopeId: '66666666-6666-4666-8666-666666666666' }], perms: ['dashboard.view', 'milling.view', 'production.create', 'supply.view', 'supply.request'] },
   fsup2: { id: 'u-fsup2', email: 'farmdirector.2@kam.local', firstName: 'Kofi', lastName: 'Ansah', role: 'FARM_DIRECTOR', scopes: [{ scopeType: 'FARM', scopeId: '33333333-3333-4333-8333-333333333333' }], perms: ['dispatch.track', 'inventory.adjust', 'supply.view', 'supply.fulfil', 'dashboard.view', 'delivery.create', 'delivery.view', 'delivery.approve', 'delivery.reject', 'farm.inventory.view', 'paddy.approve', 'tasks.assign', 'tasks.complete'] },
   ops2: { id: 'u-ops2', email: 'operationsmanager.2@kam.local', firstName: 'Esi', lastName: 'Quaye', role: 'OPERATIONS_MANAGER', scopes: [{ scopeType: 'MILLING_CENTER', scopeId: '66666666-6666-4666-8666-666666666666' }], perms: ['inventory.adjust', 'supply.view', 'supply.request', 'supply.forward', 'dashboard.view', 'milling.view', 'production.approve', 'reports.view', 'ai.view', 'ai.use'] },
-  admin: { id: 'u-admin', email: 'admin@kam.local', firstName: 'System', lastName: 'Administrator', role: 'ADMIN', scopes: GLOBAL, perms: ALL_PERMS },
+  admin: { id: 'u-admin', email: 'admin@kam.local', firstName: 'System', lastName: 'Administrator', role: 'ADMIN', scopes: GLOBAL, perms: ALL_PERMS.filter((c) => !require(B + '/auth/administrator-access').ADMIN_NEVER_DISPATCHES.includes(c)) },
 };
 const actorOf = (k) => { const u = USERS[k]; return { id: u.id, email: u.email, firstName: u.firstName, lastName: u.lastName, permissionCodes: new Set(u.perms), roles: [{ roleId: u.role, roleCode: u.role, permissions: u.perms, scopes: u.scopes }] }; };
 
@@ -151,7 +151,7 @@ app.post('/api/auth/login', (req, res) => {
 });
 app.post('/api/auth/refresh', (req, res) => { const k = String((req.body || {}).refreshToken || '').replace('ref-', ''); USERS[k] ? ok(res, { accessToken: 'tok-' + k, refreshToken: 'ref-' + k }) : fail(res, 401, 'Session expired.'); });
 app.post('/api/auth/logout', (req, res) => ok(res, null));
-app.get('/api/auth/me', async (req, res) => { const k = who(req); if (!k || !USERS[k]) return fail(res, 401, 'Please sign in again.'); if (ME.delay) await new Promise((r) => setTimeout(r, ME.delay)); const [r] = await accessSvc.restrict([{ roleCode: USERS[k].role, permissions: USERS[k].perms }]); ok(res, { ...meOf(k), permissions: r.permissions, hiddenFeatures: await accessSvc.hiddenFor([USERS[k].role]) }); });
+app.get('/api/auth/me', async (req, res) => { const k = who(req); if (!k || !USERS[k]) return fail(res, 401, 'Please sign in again.'); if (ME.delay) await new Promise((r) => setTimeout(r, ME.delay)); const withHome = [...new Set([...USERS[k].perms, ...seedPerms(USERS[k].role).filter((c) => ['reports.view', 'dashboard.view'].includes(c))])]; const [r] = await accessSvc.restrict([{ roleCode: USERS[k].role, permissions: withHome }]); ok(res, { ...meOf(k), permissions: r.permissions, hiddenFeatures: await accessSvc.hiddenFor([USERS[k].role]) }); });
 app.post('/__me_delay', (req, res) => { ME.delay = Number((req.body || {}).ms || 0); res.json(ME); });
 
 // ---- test controls ----
@@ -262,7 +262,7 @@ app.get('/api/audit-logs', (req, res) => ok(res, { items: [], total: 0 }));
 app.get('/api/reports/inventory-summary', (req, res) => ok(res, { paddy: { farmKg: 0, farmBags: 0, warehouseKg: 0, inTransitKg: 0, inTransitBags: 0, atMillingKg: 0, byFarm: [] }, finishedRice: [], riceHullKg: 0, brokenRiceKg: 0 }));
 app.get('/api/ai/feedback', (req, res) => ok(res, { available: false, reason: 'Not enough milling runs yet.', jurisdiction: { companyWide: true, label: 'The whole company', farms: [], warehouses: [] } }));
 app.get('/api/insights/watchlist', (req, res) => ok(res, { generatedAt: new Date().toISOString(), windowDays: 30, items: [], summary: { total: 0 }, findings: [], places: [] }));
-app.get('/api/users', (req, res) => ok(res, { items: X.users, total: X.users.length, page: 1, pageSize: 20 }));
+app.get('/api/users', (req, res) => req.query.search !== undefined ? ok(res, { items: Object.values(USERS).filter((u) => (`${u.firstName} ${u.lastName} ${u.email}`).toLowerCase().includes(String(req.query.search).toLowerCase())).slice(0, 8).map((u) => ({ id: u.id, email: u.email, firstName: u.firstName, lastName: u.lastName, phone: null, status: 'ACTIVE', roles: [{ role: { code: u.role, name: ROLE_NAMES[u.role] || u.role } }] })), total: 8, page: 1, pageSize: 8 }) : ok(res, { items: X.users, total: X.users.length, page: 1, pageSize: 20 }));
 
 // ---- the AI page: served from the REAL server yield maths, with fixture milling runs, so the page can be checked against the real numbers ----
 const Y = require(B + '/ai/ai-yield.util');
@@ -732,6 +732,23 @@ const { ReportCatalogService } = require(B + '/reports/report-catalog.service');
 const catalogSvc = new ReportCatalogService({}, undefined);
 app.get('/api/reports/catalog', (req, res) => { const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); const a = actorOf(k); if (!a.permissionCodes.has('reports.export')) return fail(res, 403, 'You do not have permission to do this.'); ok(res, catalogSvc.list(a)); });
 app.get('/api/reports/areas', (req, res) => { const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); ok(res, { areas: [...reportAreas(actorOf(k))] }); });
+// ---- the Administrator's help desk: the REAL UserSupportService over the stand-in users ----
+const { UserSupportService } = require(B + '/users/user-support.service');
+const SUP = { locked: {}, resets: [], audits: [] };
+const supUser = (id) => { const k = Object.keys(USERS).find((x) => USERS[x].id === id); if (!k) return null; const u = USERS[k]; return { id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email, status: 'ACTIVE', mustChangePassword: false, lockedUntil: SUP.locked[id] ? new Date(Date.now() + 600000) : null, failedLoginCount: 0, lastLoginAt: null, roles: [{ role: { code: u.role, name: ROLE_NAMES[u.role] || u.role, permissions: u.perms.map((code) => ({ permission: { code } })) }, scopes: (u.scopes || []).map((s) => ({ scopeType: s.scopeType, scopeId: s.scopeId })) }] }; };
+const supPrisma = {
+  user: { findFirst: async ({ where }) => supUser(where.id), update: async ({ where, data }) => { if ('lockedUntil' in data) SUP.locked[where.id] = data.lockedUntil; if (data.passwordHash) SUP.resets.push(where.id); return {}; } },
+  loginAttempt: { findMany: async () => [] }, refreshToken: { updateMany: async () => ({}) },
+  $transaction: async (fn) => fn(supPrisma),
+};
+const supSvc = new UserSupportService(supPrisma, { record: async (a) => { SUP.audits.push(a.action); } }, accessSvc);
+const adminOnly = (req, res) => { const k = who(req); if (!k) { fail(res, 401, 'Please sign in again.'); return null; } if (USERS[k].role !== 'ADMIN') { fail(res, 403, 'You do not have permission to do this.'); return null; } return actorOf(k); };
+const supErr = (res, e) => fail(res, e && e.getStatus ? e.getStatus() : 500, String((e && e.getResponse && e.getResponse().message) || (e && e.message) || e));
+app.get('/api/users/:id/access-check', async (req, res) => { if (!adminOnly(req, res)) return; try { ok(res, await supSvc.accessCheck(req.params.id)); } catch (e) { supErr(res, e); } });
+app.post('/api/users/:id/unlock', async (req, res) => { const a = adminOnly(req, res); if (!a) return; try { ok(res, await supSvc.unlock(req.params.id, a, {})); } catch (e) { supErr(res, e); } });
+app.post('/api/users/:id/reset-password', async (req, res) => { const a = adminOnly(req, res); if (!a) return; try { ok(res, await supSvc.resetPassword(req.params.id, (req.body || {}).temporaryPassword, a, {})); } catch (e) { supErr(res, e); } });
+app.post('/__lock', (req, res) => { SUP.locked[req.query.id] = true; res.json({ ok: true }); });
+app.get('/__support', (req, res) => res.json(SUP));
 const prevAfterReset = globalThis.__afterReset;
 globalThis.__afterReset = () => { if (prevAfterReset) prevAfterReset(); seedNotifs(); mirrored = X.notes.length; };
 seedNotifs();

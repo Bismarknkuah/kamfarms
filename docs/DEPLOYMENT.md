@@ -759,3 +759,18 @@ No database migration. Health reports `2026.10.31` with the feature `report-area
 - "Who owes us" now follows the Receivables rule (invoice total less VERIFIED payments only, late counted from the due date, or the issue date when there is none),
   names the customers, and shows what is late. Sales shows the officer's own customers; Finance shows the company's.
 - No database change.
+
+## 2026.11.03 - the Administrator, and managers' Overview
+
+- **Managers' Overview** (`my-farm`, `my-warehouse`, `my-mill`) is open to anyone with a dashboard and the permission of their own work, so switching off the
+  "Reports and analytics" feature for a role no longer locks that role out of its own Overview. The Overview also hides any block a person's permissions do not allow.
+- **The Administrator does not load dispatches.** The Administrator no longer holds the permissions to create, approve, reject or receive deliveries, to forward or fulfil
+  paddy requests, to request, approve or receive mill dispatches, to review damaged bags, or to fulfil sales orders (`ADMIN_NEVER_DISPATCHES` in
+  `backend/src/auth/administrator-access.ts`). They still see and track every dispatch, can ask for paddy, and everything else is theirs. The services no longer give
+  the Administrator a shortcut through those steps.
+- **Dispatch rules are the Administrator's to set** on the Settings page. New: "Most bags on one truck" (`dispatch.max_bags_per_truck`, 0 = no limit), enforced when a dispatch is made.
+- **User support** (Admin, first tab): find a person, see why they are stuck (disabled, locked, no role, no farm / warehouse / mill assigned, a feature switched off for
+  their role), unlock them, or give them a new temporary password (they are signed out everywhere and must choose their own). Both are recorded in the audit log.
+  Routes: `GET users/:id/access-check`, `POST users/:id/unlock`, `POST users/:id/reset-password` (permission `users.manage`).
+- Not built: the Administrator requesting **packaged rice** (only paddy). That needs its own fulfilment flow.
+- No database change.

@@ -346,7 +346,7 @@ export function visibleNavItems(me: MeResponse): NavItem[] {
  */
 export const ADMIN_NAV_SECTIONS: { title: string; hrefs: string[] }[] = [
   { title: 'Administration', hrefs: ['/dashboard', '/users', '/roles', '/organization', '/master-data', '/prices', '/settings', '/site-editor', '/audit-log', '/admin'] },
-  { title: 'Company data', hrefs: ['/reports', '/analytics', '/trace', '/inventory', '/farms', '/warehouses', '/shipments', '/site-deliveries', '/sales', '/finance', '/expenses', '/paddy-entries', '/deliveries', '/production', '/packaging', '/quality'] },
+  { title: 'Company data', hrefs: ['/reports', '/analytics', '/trace', '/inventory', '/farms', '/warehouses', '/track-dispatch', '/warehouse-requests', '/mill-dispatch', '/shipments', '/site-deliveries', '/sales', '/finance', '/expenses', '/paddy-entries', '/deliveries', '/production', '/packaging', '/quality'] },
   { title: 'Workspace', hrefs: ['/messages', '/tasks', '/notifications', '/assistant'] },
 ];
 

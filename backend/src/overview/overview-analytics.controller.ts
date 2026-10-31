@@ -48,12 +48,12 @@ export class OverviewAnalyticsController {
   audit(@CurrentUser() actor: AuthenticatedUser, @Query('days') days?: string) { inArea(actor, ['oversight']); return this.business.audit(actor, days); }
 
   /** One farm, warehouse or milling center, for the people who work there: only the places they are assigned to. */
-  @RequirePermission([PERMISSIONS.FARM_INVENTORY_VIEW, PERMISSIONS.PADDY_CREATE, PERMISSIONS.REPORTS_VIEW]) @Get('my-farm') @Header('Cache-Control', 'no-store')
+  @RequirePermission([PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.FARM_INVENTORY_VIEW, PERMISSIONS.PADDY_CREATE, PERMISSIONS.REPORTS_VIEW]) @Get('my-farm') @Header('Cache-Control', 'no-store')
   myFarm(@CurrentUser() actor: AuthenticatedUser, @Query('days') days?: string) { inArea(actor, ['farm', 'oversight']); return this.places.farms(actor, days); }
 
-  @RequirePermission([PERMISSIONS.WAREHOUSE_INVENTORY_VIEW, PERMISSIONS.WAREHOUSE_RECEIVE, PERMISSIONS.REPORTS_VIEW]) @Get('my-warehouse') @Header('Cache-Control', 'no-store')
+  @RequirePermission([PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.WAREHOUSE_INVENTORY_VIEW, PERMISSIONS.WAREHOUSE_RECEIVE, PERMISSIONS.REPORTS_VIEW]) @Get('my-warehouse') @Header('Cache-Control', 'no-store')
   myWarehouse(@CurrentUser() actor: AuthenticatedUser, @Query('days') days?: string) { inArea(actor, ['warehouse', 'oversight']); return this.places.warehouses(actor, days); }
 
-  @RequirePermission([PERMISSIONS.MILLING_VIEW, PERMISSIONS.PRODUCTION_CREATE, PERMISSIONS.REPORTS_VIEW]) @Get('my-mill') @Header('Cache-Control', 'no-store')
+  @RequirePermission([PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.MILLING_VIEW, PERMISSIONS.PRODUCTION_CREATE, PERMISSIONS.REPORTS_VIEW]) @Get('my-mill') @Header('Cache-Control', 'no-store')
   myMill(@CurrentUser() actor: AuthenticatedUser, @Query('days') days?: string) { inArea(actor, ['milling', 'oversight']); return this.places.mills(actor, days); }
 }

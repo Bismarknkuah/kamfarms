@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
+import { UserSupportService } from './user-support.service';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -14,7 +15,7 @@ import { AuthenticatedUser } from '../auth/types/authenticated-user';
 @ApiBearerAuth()
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService, private readonly support: UserSupportService) {}
 
   private meta(req: Request) {
     return { ipAddress: req.ip, userAgent: req.headers['user-agent'] as string | undefined };
@@ -77,5 +78,24 @@ export class UsersController {
   @RequirePermission(PERMISSIONS.ROLES_MANAGE)
   removeRole(@Param('id') id: string, @Param('roleCode') roleCode: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.usersService.removeRole(id, roleCode, actor);
+  }
+
+  /** Why is this person stuck? Their status, lock, role, assigned places and switched-off features, in plain words. */
+  @Get(':id/access-check')
+  @RequirePermission(PERMISSIONS.USERS_MANAGE)
+  accessCheck(@Param('id') id: string) {
+    return this.support.accessCheck(id);
+  }
+
+  @Post(':id/unlock')
+  @RequirePermission(PERMISSIONS.USERS_MANAGE)
+  unlock(@Param('id') id: string, @CurrentUser() actor: AuthenticatedUser, @Req() req: Request) {
+    return this.support.unlock(id, actor, this.meta(req));
+  }
+
+  @Post(':id/reset-password')
+  @RequirePermission(PERMISSIONS.USERS_MANAGE)
+  resetPassword(@Param('id') id: string, @Body() body: { temporaryPassword: string }, @CurrentUser() actor: AuthenticatedUser, @Req() req: Request) {
+    return this.support.resetPassword(id, body?.temporaryPassword, actor, this.meta(req));
   }
 }

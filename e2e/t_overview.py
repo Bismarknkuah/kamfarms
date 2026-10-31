@@ -61,6 +61,29 @@ def run():
         check('the server gives a Warehouse Manager no farm view', http('/api/overview/analytics/my-farm', 'GET', 'tok-wm1')[0] == 403)
         check('the server gives a Sales Officer no place view', http('/api/overview/analytics/my-farm', 'GET', 'tok-sales1')[0] == 403 and http('/api/overview/analytics/pulse', 'GET', 'tok-sales1')[0] == 403)
 
+        # the Administrator: no dispatch work, a help desk that finds and fixes what blocks people
+        ctx, page = as_user(b, 'admin'); page.goto(BASE + '/admin'); page.wait_for_selector('[data-testid=user-support]', timeout=15000)
+        page.fill('[data-testid=support-q]', 'farmmanager@'); page.click('[data-testid=support-search]')
+        page.wait_for_selector('[data-testid=support-person]', timeout=10000); page.click('[data-testid=support-person]')
+        page.wait_for_selector('[data-testid=support-check]', timeout=10000)
+        check('User support names the fault: this farm manager has no farm in the stand-in, or is fine', page.locator('[data-testid=support-problems], [data-testid=support-ok]').count() == 1)
+        http('/__lock?id=u-fm', 'POST')
+        page.reload(); page.wait_for_selector('[data-testid=user-support]'); page.fill('[data-testid=support-q]', 'farmmanager@'); page.click('[data-testid=support-search]')
+        page.wait_for_selector('[data-testid=support-person]'); page.click('[data-testid=support-person]'); page.wait_for_selector('[data-testid=support-unlock]', timeout=10000)
+        check('a locked account says so and offers to unlock it', 'locked' in page.locator('[data-testid=support-problems]').inner_text().lower())
+        page.click('[data-testid=support-unlock]'); page.wait_for_selector('[data-testid=support-note]', timeout=10000)
+        check('unlocking works and the lock warning goes', page.locator('[data-testid=support-unlock]').count() == 0)
+        page.once('dialog', lambda d: d.accept()); page.click('[data-testid=support-reset]'); page.wait_for_selector('[data-testid=support-temp]', timeout=10000)
+        check('a password reset shows the temporary password once', len(page.locator('[data-testid=support-temp] code').inner_text()) >= 12)
+        aud = http('/__support')[1]['audits']; check('both actions were recorded in the audit trail', 'user.unlock' in aud and 'user.password_reset' in aud, aud)
+        ctx.close()
+        ctx, page = as_user(b, 'admin'); page.goto(BASE + '/dashboard'); page.wait_for_selector('[data-testid=system-analytics]', timeout=15000)
+        menu = page.locator('nav').inner_text()
+        check('the Administrator can follow dispatch and ask for paddy, but has no page to load a dispatch', 'Track dispatch' in menu and 'Paddy requests' in menu and page.locator('nav a[href="/dispatch-quick"]').count() == 0 and page.locator('nav a[href="/stock-correction"]').count() == 0, menu[:300])
+        ctx.close()
+        for key in ('fm', 'sales1', 'fd'):
+            check(f'{key} cannot use the help desk', http('/api/users/u-fm/access-check', 'GET', f'tok-{key}')[0] == 403)
+
         # the people who owe are named for Sales and Finance
         for key, bid, sel in (('sales1', 'sales-analytics', 'sales-debtors'), ('fd', 'finance-analytics', 'fin-debtors-list')):
             ctx, page = as_user(b, key); page.goto(BASE + '/dashboard'); page.wait_for_selector(f'[data-testid={bid}] [data-testid={sel}]', timeout=15000)

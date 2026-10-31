@@ -7,21 +7,27 @@ import { JwtStrategy } from '../strategies/jwt.strategy';
 import { PermissionGuard } from '../../common/guards/permission.guard';
 import { PERMISSION_KEY } from '../../common/decorators/require-permission.decorator';
 import { PERMISSIONS, PERMISSION_CATALOG } from '../../common/constants/permissions';
-import { ADMINISTRATOR_ROLE_CODE, EVERY_PERMISSION_CODE, grantAdministratorAccess, isAdministrator } from '../administrator-access';
+import { ADMIN_NEVER_DISPATCHES, ADMIN_PERMISSION_CODES, ADMINISTRATOR_ROLE_CODE, EVERY_PERMISSION_CODE, grantAdministratorAccess, isAdministrator } from '../administrator-access';
 import { ResolvedRole } from '../types/authenticated-user';
 
 const role = (roleCode: string, permissions: string[] = [], scopes: ResolvedRole['scopes'] = []): ResolvedRole => ({ roleId: `id-${roleCode}`, roleCode, permissions, scopes });
 
 describe('grantAdministratorAccess', () => {
+  it('never lets the Administrator load, approve or receive a dispatch, even if the stored role lists those', () => {
+    const [admin] = grantAdministratorAccess([role('ADMIN', ['delivery.create', 'delivery.approve', 'supply.fulfil', 'milldispatch.approve'])]);
+    for (const code of ADMIN_NEVER_DISPATCHES) expect(admin.permissions).not.toContain(code);
+    for (const code of ['dispatch.track', 'supply.request', 'settings.manage', 'users.manage', 'roles.manage']) expect(admin.permissions).toContain(code);
+  });
+
   it('gives the System Administrator every permission in the catalog, even from an empty stored list', () => {
     const [admin] = grantAdministratorAccess([role('ADMIN')]);
-    expect(admin.permissions.sort()).toEqual([...EVERY_PERMISSION_CODE].sort());
-    expect(admin.permissions.length).toBe(PERMISSION_CATALOG.length);
+    expect(admin.permissions.sort()).toEqual([...ADMIN_PERMISSION_CODES].sort());
+    expect(admin.permissions.length).toBe(PERMISSION_CATALOG.length - ADMIN_NEVER_DISPATCHES.length);
   });
 
   it('includes the permissions that were missing in production: the homepage editor and the watchlist', () => {
     const [admin] = grantAdministratorAccess([role('ADMIN', ['users.manage'])]);
-    for (const code of ['site.manage', 'insights.view', 'settings.manage', 'sales.approve', 'finance.approve', 'delivery.create']) {
+    for (const code of ['site.manage', 'insights.view', 'settings.manage', 'sales.approve', 'finance.approve', 'supply.request', 'supply.view', 'dispatch.track', 'delivery.view']) {
       expect(admin.permissions).toContain(code);
     }
   });
@@ -54,7 +60,7 @@ describe('grantAdministratorAccess', () => {
   it('widens only the Administrator role for someone who holds several roles', () => {
     const farm = role('FARM_MANAGER', ['farm.view']);
     const [admin, manager] = grantAdministratorAccess([role('ADMIN'), farm]);
-    expect(admin.permissions.length).toBe(PERMISSION_CATALOG.length);
+    expect(admin.permissions.length).toBe(PERMISSION_CATALOG.length - ADMIN_NEVER_DISPATCHES.length);
     expect(manager).toBe(farm);
   });
 
@@ -75,7 +81,7 @@ describe('JwtStrategy: the Administrator is never limited by a stored list', () 
   it('an Administrator whose database role is missing site.manage still holds it (the bug in the screenshot)', async () => {
     const out = await strategy(user('ADMIN', ['users.manage', 'settings.manage'], [{ scopeType: 'GLOBAL', scopeId: null }])).validate({ sub: 'u1' } as any);
     expect(out.permissionCodes.has('site.manage')).toBe(true);
-    expect(out.permissionCodes.size).toBe(PERMISSION_CATALOG.length);
+    expect(out.permissionCodes.size).toBe(PERMISSION_CATALOG.length - ADMIN_NEVER_DISPATCHES.length);
   });
 
   it('a Managing Director whose database role lacks site.manage does not get it', async () => {
@@ -92,7 +98,7 @@ describe('JwtStrategy: the Administrator is never limited by a stored list', () 
       const ctx = { getHandler: () => null, getClass: () => null, switchToHttp: () => ({ getRequest: () => ({ user: u }) }) } as unknown as ExecutionContext;
       return () => new PermissionGuard(reflector).canActivate(ctx);
     };
-    for (const code of EVERY_PERMISSION_CODE) expect(guard(adminUser, code)()).toBe(true);
+    for (const code of ADMIN_PERMISSION_CODES) expect(guard(adminUser, code)()).toBe(true);
     expect(guard(mdUser, 'site.manage')).toThrow(ForbiddenException);
   });
 });

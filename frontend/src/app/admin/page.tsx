@@ -1,12 +1,13 @@
 'use client';
 
 import { DemoModeSwitch } from '@/components/admin/DemoModeSwitch';
+import { UserSupport } from '@/components/admin/UserSupport';
 import { useEffect, useState } from 'react';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { DashboardShell } from '@/components/DashboardShell';
 import { backupApi, systemResetApi, ResetRequest, ApiError } from '@/lib/api-client';
 
-const TABS = ['Backups', 'System reset', 'Demo access'] as const;
+const TABS = ['User support', 'Backups', 'System reset', 'Demo access'] as const;
 const RESET_TYPES = ['CLEAR_TEST_DATA', 'RESET_INVENTORY', 'RESET_TRANSACTIONS', 'RESET_MODULE', 'RESET_DATE_RANGE', 'FULL_OPERATIONAL_RESET', 'OTHER'] as const;
 // Only these tables can actually be executed once fully approved -
 // confirmed directly against the backend's own allowlist, not assumed.
@@ -18,7 +19,7 @@ const EXECUTABLE_TABLES = ['InventoryTransaction', 'InventoryBalance'];
 
 export default function AdminPage() {
   const { me, accessToken, loading, error, hasPermission } = useCurrentUser();
-  const [tab, setTab] = useState<(typeof TABS)[number]>('Backups');
+  const [tab, setTab] = useState<(typeof TABS)[number]>('User support');
   const [backupStatus, setBackupStatus] = useState<{
     lastSuccess: { completedAt: string | null } | null;
     lastFailure: { completedAt: string | null } | null;
@@ -108,6 +109,8 @@ export default function AdminPage() {
       </div>
 
       {pageError && <p className="mt-4 text-sm text-red-600">{pageError}</p>}
+
+      {tab === 'User support' && accessToken && <div className="mt-4"><UserSupport accessToken={accessToken} /></div>}
 
       {tab === 'Backups' && (
         hasPermission('backup.manage') ? (

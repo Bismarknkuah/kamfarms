@@ -73,7 +73,7 @@ export class MillDispatchService {
   /** The rules that apply to this person for a step: the main one and/or the extra one, whichever their role is. */
   private rulesFor(actor: AuthenticatedUser, dir: Direction, step: Step) {
     const admin = isAdmin(actor); const mine = rolesOf(actor);
-    return [RULES[dir][step], ALSO[dir]?.[step]].filter((r): r is { roles: string[]; place: Place } => !!r).filter((r) => admin || mine.some((x) => r.roles.includes(x)));
+    return [RULES[dir][step], ALSO[dir]?.[step]].filter((r): r is { roles: string[]; place: Place } => !!r).filter((r) => mine.some((x) => r.roles.includes(x)));
   }
   private may(actor: AuthenticatedUser, dir: Direction, step: Step, ids: { warehouseId: string; millingCenterId: string }): boolean {
     return this.rulesFor(actor, dir, step).some((rule) => {
@@ -95,7 +95,7 @@ export class MillDispatchService {
     const roles = rolesOf(actor); const admin = isAdmin(actor);
     const out: { toMill: any; toWarehouse: any } = { toMill: null, toWarehouse: null };
     // A Warehouse Manager sends paddy to the mills of their warehouses; an Operations Officer asks for paddy for their own mills (from those mills' warehouses).
-    const isWm = admin || roles.includes('WAREHOUSE_MANAGER'); const isOfficer = !isWm && roles.includes('OPERATIONS_OFFICER');
+    const isWm = roles.includes('WAREHOUSE_MANAGER'); const isOfficer = !isWm && roles.includes('OPERATIONS_OFFICER');
     if (isWm || isOfficer) {
       const sc = scopedLocationIds(actor, 'WAREHOUSE'); const msc = scopedLocationIds(actor, 'MILLING_CENTER');
       const myMills = isOfficer ? await this.prisma.millingCenter.findMany({ where: { isActive: true, ...(msc.isGlobal ? {} : { id: { in: msc.ids } }) } as any, select: { id: true, warehouseId: true } }) : [];
@@ -110,7 +110,7 @@ export class MillDispatchService {
       }
       out.toMill = { places, asOfficer: isOfficer };
     }
-    if (admin || roles.includes('OPERATIONS_OFFICER')) {
+    if (roles.includes('OPERATIONS_OFFICER')) {
       const sc = scopedLocationIds(actor, 'MILLING_CENTER');
       const mills = await this.prisma.millingCenter.findMany({ where: { isActive: true, ...(sc.isGlobal ? {} : { id: { in: sc.ids } }) } as any, select: { id: true, name: true, warehouseId: true }, orderBy: { name: 'asc' } });
       const whs = await this.prisma.warehouse.findMany({ where: { id: { in: mills.map((m) => m.warehouseId) } }, select: { id: true, name: true } });

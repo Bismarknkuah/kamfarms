@@ -9,7 +9,6 @@ import { scopedLocationIds, assertScope } from '../common/utils/scope.util';
 
 export interface ReviewLine { shipmentId: string; paddyGradeId: string; gradeLabel: string; sentBags: number; receivedBags: number; damagedBags: number; damagedKg: number }
 const holdId = (shipmentId: string) => `hold:${shipmentId}`;
-const isAdmin = (a: AuthenticatedUser) => a.roles.some((r: any) => r.roleCode === 'ADMIN');
 const hasRole = (a: AuthenticatedUser, code: string) => a.roles.some((r: any) => r.roleCode === code);
 
 /**
@@ -57,7 +56,7 @@ export class ReceiptReviewsService {
   private async decide(id: string, outcome: 'APPROVED' | 'REJECTED', note: string | undefined, actor: AuthenticatedUser) {
     const review = await this.prisma.receiptReview.findUnique({ where: { id } });
     if (!review) throw new NotFoundException('That review was not found.');
-    if (!isAdmin(actor) && !hasRole(actor, 'WAREHOUSE_SUPERVISOR')) throw new ForbiddenException('Only the Warehouse Supervisor decides on damaged bags.');
+    if (!hasRole(actor, 'WAREHOUSE_SUPERVISOR')) throw new ForbiddenException('Only the Warehouse Supervisor decides on damaged bags.');
     assertScope(actor, 'WAREHOUSE', review.warehouseId, 'this warehouse');
     if (review.status !== 'PENDING') throw new BadRequestException(`This was already ${review.status === 'APPROVED' ? 'approved' : 'refused'}.`);
     if (review.submittedById === actor.id) throw new ForbiddenException('You cannot decide on a report you made yourself. Someone else must.');

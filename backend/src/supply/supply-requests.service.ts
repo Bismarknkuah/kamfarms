@@ -16,9 +16,9 @@ const isAdmin = (a: AuthenticatedUser) => a.roles.some((r: any) => r.roleCode ==
 const holds = (a: AuthenticatedUser, code: string) => !!a.permissionCodes?.has(code);
 const rolesOf = (a: AuthenticatedUser) => a.roles.map((r: any) => r.roleCode as string);
 /** Who sends a request on: a warehouse's request goes through its Warehouse Supervisor; a mill's through the Operations Manager. */
-const mayReview = (a: AuthenticatedUser, kind: string) => isAdmin(a) || rolesOf(a).includes(kind === 'WAREHOUSE' ? 'WAREHOUSE_SUPERVISOR' : 'OPERATIONS_MANAGER');
+const mayReview = (a: AuthenticatedUser, kind: string) => rolesOf(a).includes(kind === 'WAREHOUSE' ? 'WAREHOUSE_SUPERVISOR' : 'OPERATIONS_MANAGER');
 /** Who answers it: a warehouse's request by the Farm Director (from the farms' stock); a mill's by the Warehouse Supervisor (from the warehouse's stock). */
-const maySupply = (a: AuthenticatedUser, kind: string) => isAdmin(a) || rolesOf(a).includes(kind === 'WAREHOUSE' ? 'FARM_DIRECTOR' : 'WAREHOUSE_SUPERVISOR');
+const maySupply = (a: AuthenticatedUser, kind: string) => rolesOf(a).includes(kind === 'WAREHOUSE' ? 'FARM_DIRECTOR' : 'WAREHOUSE_SUPERVISOR');
 
 /**
  * Paddy requests, passed up the chain so each person only does their own part:
@@ -257,7 +257,7 @@ export class SupplyRequestsService {
     const row = await this.load(id);
     if (row.kind !== 'MILL') throw new BadRequestException('Only a milling center confirms paddy it has received.');
     if (row.status !== 'READY') throw new BadRequestException(row.status === 'RECEIVED' ? 'The mill has already confirmed this paddy.' : 'This paddy is not ready yet.');
-    if (!(isAdmin(actor) || rolesOf(actor).some((r) => ['OPERATIONS_OFFICER', 'OPERATIONS_MANAGER'].includes(r)))) throw new ForbiddenException('Only the mill confirms that the paddy has reached it.');
+    if (!rolesOf(actor).some((r) => ['OPERATIONS_OFFICER', 'OPERATIONS_MANAGER'].includes(r))) throw new ForbiddenException('Only the mill confirms that the paddy has reached it.');
     assertScope(actor, 'MILLING_CENTER', row.millingCenterId as string, 'this milling center');
     if (!this.millReceipts) throw new BadRequestException('Recording paddy received at the mill is not available right now.');
     const claimed = await this.prisma.supplyRequest.updateMany({ where: { id, status: 'READY' }, data: { status: 'RECEIVED', receivedById: actor.id, receivedAt: new Date() } });

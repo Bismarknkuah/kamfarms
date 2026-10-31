@@ -340,10 +340,10 @@ describe('the right ROLE does each step, not just anyone holding the permission'
     await expect(h.service.assign('sr1', { sourceFarmId: FARM_A }, actor('ws-1'))).rejects.toThrow(/Only the Farm Director chooses the farm/);
     await expect(h.service.assign('sr1', { sourceFarmId: FARM_A }, actor('fd-1'))).resolves.toMatchObject({ status: 'ASSIGNED' });
   });
-  it('the Administrator can do any step', async () => {
+  it('the Administrator cannot forward or assign a request: they set the rules, the people do the work', async () => {
     const h = build(); await h.service.create(ask(), actor('wm-1'));
-    await expect(h.service.forward('sr1', {}, actor('ad-1'))).resolves.toMatchObject({ status: 'FORWARDED' });
-    await expect(h.service.assign('sr1', { sourceFarmId: FARM_A }, actor('ad-1'))).resolves.toMatchObject({ status: 'ASSIGNED' });
+    await expect(h.service.forward('sr1', {}, actor('ad-1'))).rejects.toThrow();
+    await expect(h.service.assign('sr1', { sourceFarmId: FARM_A }, actor('ad-1'))).rejects.toThrow();
   });
 });
 
@@ -464,7 +464,8 @@ describe('the mill confirms the paddy has reached it', () => {
     expect(h.rows[0].status).toBe('READY');
     const h2 = build(); await h2.service.create(ask(), actor('wm-1'));
     await expect(h2.service.receivedAtMill('sr1', {}, actor('ad-1'))).rejects.toThrow('Only a milling center');
-    const done = await h.service.receivedAtMill('sr1', {}, actor('ad-1')); // the Administrator may
+    await expect(h.service.receivedAtMill('sr1', {}, actor('ad-1'))).rejects.toThrow('Only the mill confirms'); // not the Administrator either
+    const done = await h.service.receivedAtMill('sr1', {}, actor('oo-1'));
     expect(done.status).toBe('RECEIVED');
   });
 

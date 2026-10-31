@@ -517,6 +517,13 @@ export interface PaginatedUsers {
   pageSize: number;
 }
 
+export interface SupportCheck {
+  user: { id: string; name: string; email: string; status: string; mustChangePassword: boolean; lockedUntil: string | null; failedLoginCount: number; lastLoginAt: string | null };
+  roles: { code: string; name: string; scopes: { type: string; id: string | null }[]; permissionCount: number; switchedOff: string[] }[];
+  problems: { code: string; text: string; fix: string }[];
+  recentFailedSignIns: { at: string; reason: string }[];
+}
+
 export interface DirectoryUser {
   id: string;
   firstName: string;
@@ -526,6 +533,10 @@ export interface DirectoryUser {
 }
 
 export const usersApi = {
+  search: (accessToken: string, q: string) => request<PaginatedUsers>(`/users?search=${encodeURIComponent(q)}&pageSize=8`, { method: 'GET' }, accessToken),
+  accessCheck: (accessToken: string, id: string) => request<SupportCheck>(`/users/${id}/access-check`, { method: 'GET', cache: 'no-store' }, accessToken),
+  unlock: (accessToken: string, id: string) => request<{ unlocked: boolean }>(`/users/${id}/unlock`, { method: 'POST' }, accessToken),
+  resetPassword: (accessToken: string, id: string, temporaryPassword: string) => request<{ reset: boolean }>(`/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ temporaryPassword }) }, accessToken),
   directory: (accessToken: string) => request<DirectoryUser[]>('/users/directory', { method: 'GET' }, accessToken),
   list: (accessToken: string) => request<PaginatedUsers>('/users', { method: 'GET' }, accessToken),
   create: (

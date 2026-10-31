@@ -34,9 +34,17 @@ export const BLOCKS_BY_ROLE: Record<string, Block[]> = {
   SALES_OFFICER: ['sales'],
 };
 
+/** What a person must hold for a block to appear. A feature switched off for their role takes the permission away, and the block goes with it. */
+const BLOCK_NEEDS: Record<Block, string[]> = {
+  executive: ['reports.view', 'dashboard.view'], finance: ['finance.view'], sales: ['sales.view', 'sales.create', 'finance.view'],
+  farm: ['reports.view'], warehouse: ['reports.view'], operations: ['reports.view'], system: ['users.manage'],
+  farmPlace: ['dashboard.view', 'farm.inventory.view', 'paddy.create'], warehousePlace: ['dashboard.view', 'warehouse.inventory.view', 'warehouse.receive'], millPlace: ['dashboard.view', 'milling.view', 'production.create'],
+  pulse: ['reports.view', 'dashboard.view', 'finance.view'], audit: ['reports.view', 'audit.view'],
+};
+
 export function blocksFor(me: MeResponse, hasPermission: (c: string | string[]) => boolean): Block[] {
   const out: Block[] = [];
-  const add = (b: Block) => { if (!out.includes(b)) out.push(b); };
+  const add = (b: Block) => { if (!out.includes(b) && hasPermission(BLOCK_NEEDS[b])) out.push(b); };
   for (const r of me.roles) {
     const known = BLOCKS_BY_ROLE[r.code];
     if (known) { known.forEach(add); continue; }

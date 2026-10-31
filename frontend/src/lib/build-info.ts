@@ -3,7 +3,7 @@
  * which features it has (GET /health); the website knows which it needs. When something is missing the Admin
  * dashboard says so in plain words, instead of pages quietly failing with "404".
  */
-export const REQUIRED_API_FEATURES = ['site-content', 'insights', 'settings-registry', 'system-overview', 'reports-catalog', 'admin-access', 'ai-predictions', 'sales-chain', 'ai-feedback', 'multi-size-intake', 'dispatch-requests', 'dispatch-desk', 'paddy-requests', 'paddy-transfers', 'control-center', 'dispatch-tracking', 'quick-search', 'mill-dispatch', 'damaged-bags-review', 'role-access', 'finance-center', 'invoices-awaiting', 'size3', 'category-picker', 'role-features-v2', 'overview-analytics', 'notification-clear', 'report-areas', 'place-overview', 'debts-by-customer'] as const;
+export const REQUIRED_API_FEATURES = ['site-content', 'insights', 'settings-registry', 'system-overview', 'reports-catalog', 'admin-access', 'ai-predictions', 'sales-chain', 'ai-feedback', 'multi-size-intake', 'dispatch-requests', 'dispatch-desk', 'paddy-requests', 'paddy-transfers', 'control-center', 'dispatch-tracking', 'quick-search', 'mill-dispatch', 'damaged-bags-review', 'role-access', 'finance-center', 'invoices-awaiting', 'size3', 'category-picker', 'role-features-v2', 'overview-analytics', 'notification-clear', 'report-areas', 'place-overview', 'debts-by-customer', 'admin-support'] as const;
 
 export const FEATURE_LABELS: Record<string, string> = {
   'site-content': 'The homepage editor',
@@ -31,6 +31,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   'report-areas': 'Reports and analytics kept to each role\'s own area of work (a Farm Supervisor gets no warehouse report), and analytics for Sales, Finance and the Administrator',
   'place-overview': 'A Farm Manager, Warehouse Manager or Operations Officer sees an Overview of only their own farm, warehouse or milling center',
   'debts-by-customer': 'Sales and Finance name the customers who owe, counting only verified payments',
+  'admin-support': 'The Administrator\'s help desk: unlock accounts, reset passwords and see why someone is blocked; dispatch loading is left to the people who do it',
   'notification-clear': 'Deleting old notifications, one by one or in bulk, for every role',
   'ai-predictions': 'The AI predictions and answers limited to each person\'s own places',
 };

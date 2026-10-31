@@ -46,8 +46,8 @@ describe('mill dispatch: who may ask, approve and count in', () => {
     expect(() => svc.assertMay(actor('OPERATIONS_OFFICER', [mill('M1')]), 'TO_MILL', 'request', elsewhere)).toThrow();
     expect(() => svc.assertMay(actor('OPERATIONS_OFFICER', [mill('M1')]), 'TO_MILL', 'request', here)).not.toThrow();
   });
-  it('the Administrator may do any step anywhere', () => {
-    for (const [dir, step] of [['TO_MILL', 'request'], ['TO_MILL', 'approve'], ['TO_WAREHOUSE', 'receive']] as const) expect(svc.may(actor('ADMIN', GLOBAL), dir, step, elsewhere)).toBe(true);
+  it('the Administrator may NOT load, approve or receive anything: they set the rules, the people do the work', () => {
+    for (const [dir, step] of [['TO_MILL', 'request'], ['TO_MILL', 'approve'], ['TO_WAREHOUSE', 'receive']] as const) expect(svc.may(actor('ADMIN', GLOBAL), dir, step, elsewhere)).toBe(false);
   });
 });
 

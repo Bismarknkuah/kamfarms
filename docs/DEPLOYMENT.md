@@ -720,3 +720,15 @@ No database change. `/api/health` should show `2026.10.18`. See `docs/EXECUTIVE_
 - Paddy sizes are now **Size 3** and **Size 4**. Size 5 is retired: it is no longer seeded or shown on any form. `prisma/sync-expense-categories.ts` (run on every deploy) makes sure Size 3 and Size 4 exist. An existing Size 5 row in the database is left alone so old records keep their history; to hide it from the "Another size" list, switch it off under Master data > Paddy sizes.
 - Logging an expense: the category is picked from a list that pops up. If the right name is not there, type the exact name in the box under the list. It is saved on the expense with the "Other" category.
 - Settings > "Who can use what" now covers more features (money pages, approving expenses, messages to everyone, giving out tasks, quality checks, stock corrections), grouped by area. Changes reach signed-in people within 15 seconds.
+
+## 2026.10.24 - Redesigned Overview, analytics for supervisors and top management, clearing old notifications
+
+**What changed**
+- Every role's Overview now opens with the same header: a greeting, what needs you right now (tap a card to go there), and your four most-used pages.
+- Farm Supervisor / Farm Director, Warehouse Supervisor, Operations Manager and the MD/CEO now have an analytics block on their Overview (intake, stock, deliveries, recovery, energy, trends, farm / warehouse / mill comparisons) with a 7 / 30 / 90 day switch.
+- Every user can delete their own old notifications: one at a time, "Clear read", "Older than 30 days", or "Clear all" (each asks to confirm). Nobody can delete another person's notifications.
+
+**Server**
+- New read-only endpoints: `GET /api/overview/analytics/{farms,warehouses,operations,executive}?days=7|30|90`. They need `reports.view` and only count the places the person is scoped to, so a farm-scoped Farm Director sees only that farm.
+- New: `DELETE /api/notifications/:id` and `DELETE /api/notifications?scope=read|older|all&days=N`.
+- No database migration is needed. Health reports version `2026.10.24` and the features `overview-analytics` and `notification-clear`. Deploy the API before (or together with) the website; the Admin dashboard says so if the server is behind.

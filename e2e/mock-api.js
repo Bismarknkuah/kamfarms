@@ -267,10 +267,10 @@ const sample = (i, paddyKg, kwh, rice, broken, hull, waste) => ({ paddyKg: paddy
 const RUNS = [
   ...Array.from({ length: 6 }, (_, i) => ({ grade: 'g4', center: 'c1', s: sample(i, 400, 11, 272, 48, 72, 8) })),
   ...Array.from({ length: 2 }, (_, i) => ({ grade: 'g4', center: 'c2', s: sample(i, 400, 12, 266, 50, 74, 10) })),
-  ...Array.from({ length: 4 }, (_, i) => ({ grade: 'g5', center: 'c2', s: sample(i, 800, 24, 520, 100, 160, 20) })),
+  ...Array.from({ length: 4 }, (_, i) => ({ grade: 'g3', center: 'c2', s: sample(i, 800, 24, 520, 100, 160, 20) })),
   ...Array.from({ length: 2 }, (_, i) => ({ grade: 'g6', center: 'c2', s: sample(i, 600, 18, 380, 80, 120, 20) })),
 ];
-const GRADES = { g4: 'Size 4', g5: 'Size 5', g6: 'Size 6' }, CENTERS = { c1: 'Tamale Mill', c2: 'Kumasi Mill' };
+const GRADES = { g4: 'Size 4', g3: 'Size 3', g6: 'Size 6' }, CENTERS = { c1: 'Tamale Mill', c2: 'Kumasi Mill' };
 const ratesOf = (rows) => Y.ratesFromRuns(rows.map((r) => r.s), { halfLifeRuns: 40 });
 const scopeRates = (scope) => {
   if (scope === 'all') return { rates: ratesOf(RUNS), label: 'the whole company' };
@@ -312,8 +312,8 @@ const { CreateStockTransferDto } = require(B + '/warehouses/dto/create-stock-tra
 const { ReceiveStockTransferDto } = require(B + '/warehouses/dto/receive-stock-transfer.dto');
 const { ReceiveShipmentDto } = require(B + '/logistics/dto/receive-shipment.dto');
 const { CreatePaddyRequestDto } = require(B + '/logistics/dto/create-paddy-request.dto');
-const FARM = '33333333-3333-4333-8333-333333333333', G4 = '44444444-4444-4444-8444-444444444444', G5 = '55555555-5555-4555-8555-555555555555';
-const GRADES2 = [{ id: G4, code: 'SIZE_4', label: 'Size 4', isActive: true }, { id: G5, code: 'SIZE_5', label: 'Size 5', isActive: true }];
+const FARM = '33333333-3333-4333-8333-333333333333', G4 = '44444444-4444-4444-8444-444444444444', G3 = '99995555-9999-4999-8999-999955555555';
+const GRADES2 = [{ id: G3, code: 'SIZE_3', label: 'Size 3', isActive: true }, { id: G4, code: 'SIZE_4', label: 'Size 4', isActive: true }];
 let X;
 function seedX() { X = { farmActive: true, failNext: null, seq: 0, users: [], reports: [], lastPassword: null, order: { id: '00000000-0000-4000-8000-0000000000d1', orderNumber: 'DO-2026-000001', status: 'PENDING', farmId: FARM, destinationWarehouseId: WH1, paddyGradeId: G4, bagCount: 100, totalKg: 5200, totalKgEstimated: true, farm: { name: 'Nkawkaw Farm' }, destinationWarehouse: { name: 'Tamale Warehouse' }, paddyGrade: { label: 'Size 4' }, requestedDate: new Date().toISOString() } }; }
 seedX();
@@ -375,7 +375,7 @@ seedX = function () {
     fr(5, 'REJECTED', { rejectionReason: 'The weight does not match the bags' }),
   ];
   X.shipments = []; X.vehicles = { 'veh-f3': { plateNumber: 'GT-5521-21', vehicleType: 'Truck' } }; X.drivers = { 'drv-f3': { name: 'Yaw Boateng', phone: '0244111222' } };
-  X.tasks = []; X.notes = []; X.stock = { [G4]: 100, [G5]: 100 }; X.noManager = false;
+  X.tasks = []; X.notes = []; X.stock = { [G4]: 100, [G3]: 100 }; X.noManager = false;
 };
 seedX();
 const whOf = (id) => ({ id, name: WAREHOUSES[id], location: LOCATIONS[id] ?? null });
@@ -445,7 +445,7 @@ app.post('/api/delivery-reports/dispatch', async (req, res) => { const k = who(r
 app.post('/api/delivery-reports/dispatch/:ref/submit', async (req, res) => { const k = who(req); log(req, { item: req.params.ref }); try { ok(res, await reportsService.submitDispatch(req.params.ref, actorOf(k))); } catch (e) { apiErr(res, e); } });
 app.post('/api/delivery-reports/dispatch/:ref/approve', async (req, res) => { const k = who(req); log(req, { item: req.params.ref }); try { ok(res, await reportsService.approveDispatch(req.params.ref, actorOf(k))); } catch (e) { apiErr(res, e); } });
 app.post('/api/delivery-reports/dispatch/:ref/reject', async (req, res) => { const k = who(req); log(req, { item: req.params.ref }); const d = await body(res, RejectDeliveryReportDto, req.body); if (!d) return; try { ok(res, await reportsService.rejectDispatch(req.params.ref, d, actorOf(k))); } catch (e) { apiErr(res, e); } });
-app.get('/api/farms/:id/inventory', (req, res) => { const by = [[G4, 'SIZE_4', 'Size 4'], [G5, 'SIZE_5', 'Size 5']].map(([id, code, label]) => ({ gradeCode: code, gradeLabel: label, bagCount: X.stock[id] ?? 0, totalKg: (X.stock[id] ?? 0) * 50 })); ok(res, { farmId: req.params.id, byGrade: by, totalKg: by.reduce((t, g) => t + g.totalKg, 0), totalBags: by.reduce((t, g) => t + g.bagCount, 0), dispatchedByGrade: [], dispatchedTotalKg: 0, dispatchedTotalBags: 0 }); });
+app.get('/api/farms/:id/inventory', (req, res) => { const by = [[G4, 'SIZE_4', 'Size 4'], [G3, 'SIZE_3', 'Size 3']].map(([id, code, label]) => ({ gradeCode: code, gradeLabel: label, bagCount: X.stock[id] ?? 0, totalKg: (X.stock[id] ?? 0) * 50 })); ok(res, { farmId: req.params.id, byGrade: by, totalKg: by.reduce((t, g) => t + g.totalKg, 0), totalBags: by.reduce((t, g) => t + g.bagCount, 0), dispatchedByGrade: [], dispatchedTotalKg: 0, dispatchedTotalBags: 0 }); });
 
 // ---- paddy requests: the REAL service and the REAL whereabouts, over the same in-memory picture as the dispatch ----
 const { SupplyRequestsService } = require(B + '/supply/supply-requests.service');
@@ -455,9 +455,9 @@ const MC1 = '66666666-6666-4666-8666-666666666666';
 const FARM_B = '77777777-7777-4777-8777-777777777777';
 const FARMS_ALL = () => [{ id: FARM, name: 'Nkawkaw Farm', isActive: true, managers: X.noManager ? [] : [{ user: who2 }] }, { id: FARM_B, name: 'Techiman Farm', isActive: true, managers: [] }];
 const prevSeed = seedX;
-seedX = function () { prevSeed(); X.supply = []; X.transfers = []; X.millReceipts = []; X.txns = []; X.road = {}; X.whStock = { [WH1]: { [G4]: 12, [G5]: 3 }, [WH2]: { [G4]: 40, [G5]: 9 } }; };
+seedX = function () { prevSeed(); X.supply = []; X.transfers = []; X.millReceipts = []; X.txns = []; X.road = {}; X.whStock = { [WH1]: { [G4]: 12, [G3]: 3 }, [WH2]: { [G4]: 40, [G3]: 9 } }; };
 seedX();
-stLedger.getBalancesForLocation = async (type, id) => Object.entries(type === 'WAREHOUSE' ? X.whStock[id] ?? {} : id === FARM_B ? { [G4]: 5, [G5]: 0 } : X.stock).map(([paddyGradeId, bagCount]) => ({ paddyGradeId, bagCount }));
+stLedger.getBalancesForLocation = async (type, id) => Object.entries(type === 'WAREHOUSE' ? X.whStock[id] ?? {} : id === FARM_B ? { [G4]: 5, [G3]: 0 } : X.stock).map(([paddyGradeId, bagCount]) => ({ paddyGradeId, bagCount }));
 const matchS = (r, w = {}) => Object.entries(w).every(([k, v]) => (k === 'OR' ? v.some((c) => matchS(r, c)) : v && typeof v === 'object' && 'in' in v ? v.in.includes(r[k]) : v && typeof v === 'object' && 'notIn' in v ? !v.notIn.includes(r[k]) : r[k] === v));
 const userRows = () => Object.values(USERS).map((u) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName, role: u.role, scopes: u.scopes ?? [] }));
 const sTx = { supplyRequest: { create: async ({ data }) => { const row = { id: uuidn(), createdAt: new Date().toISOString(), forwardedAt: null, decidedAt: null, forwardedById: null, decidedById: null, sourceFarmId: null, dispatchRequestRef: null, parentRequestId: null, millingCenterId: null, forwardNote: null, decisionNote: null, ...data }; X.supply.push(row); return row; } } };
@@ -574,7 +574,82 @@ sRoute('get', '/api/control-center', null, (d, a) => ccService.forActor(a));
 app.get('/__transfers', (req, res) => res.json(X.transfers));
 app.get('/__millreceipts', (req, res) => res.json(X.millReceipts));
 app.get('/__whstock', (req, res) => res.json({ warehouses: X.whStock, road: X.road, txns: X.txns }));
-app.get('/api/notifications', (req, res) => { const k = who(req); const mine = X.notes.filter((n) => k && n.userIds.includes(USERS[k].id)); ok(res, mine.map((n, i) => ({ id: `n${i}`, title: n.title, body: n.body, isRead: false, createdAt: new Date().toISOString(), entityType: n.entityType, entityId: n.entityId, type: n.type }))); });
+// ---- notifications you can delete: the REAL NotificationsService over a small table, so scope (own rows only) and the three clear modes are the real code ----
+const { NotificationsService } = require(B + '/notifications/notifications.service');
+let NOTIFS = [];
+const ago = (d) => new Date(Date.now() - d * 86400e3).toISOString();
+function seedNotifs() {
+  NOTIFS = [];
+  for (const k of ['fsup', 'sup', 'ops', 'md', 'fm']) {
+    const u = USERS[k].id;
+    NOTIFS.push(
+      { id: `${k}-new1`, userId: u, title: 'Dispatch approved', body: 'A truck is on its way.', isRead: false, createdAt: ago(0.1), type: 'info' },
+      { id: `${k}-new2`, userId: u, title: 'Task assigned', body: 'Please review the stock count.', isRead: true, createdAt: ago(2), type: 'info' },
+      { id: `${k}-old1`, userId: u, title: 'Old: delivery counted in', body: 'Counted in last month.', isRead: true, createdAt: ago(45), type: 'info' },
+      { id: `${k}-old2`, userId: u, title: 'Old: still unread', body: 'Never opened.', isRead: false, createdAt: ago(60), type: 'info' },
+    );
+  }
+}
+const hasDate = (v, c) => (c.lt ? new Date(v) < c.lt : true);
+const notifPrisma = { notification: {
+  deleteMany: async ({ where }) => { const keep = []; let n = 0; for (const r of NOTIFS) { const hit = r.userId === where.userId && (where.id === undefined || r.id === where.id) && (where.isRead === undefined || r.isRead === where.isRead) && (where.createdAt === undefined || hasDate(r.createdAt, where.createdAt)); if (hit) n++; else keep.push(r); } NOTIFS = keep; return { count: n }; },
+} };
+const notifSvc = new NotificationsService(notifPrisma);
+let mirrored = 0;
+app.get('/api/notifications', (req, res) => {
+  const k = who(req);
+  while (mirrored < X.notes.length) { const n = X.notes[mirrored++]; for (const uid2 of n.userIds) NOTIFS.push({ id: `nx${mirrored}-${uid2}`, userId: uid2, title: n.title, body: n.body, isRead: false, createdAt: new Date().toISOString(), entityType: n.entityType, entityId: n.entityId, type: n.type }); }
+  ok(res, NOTIFS.filter((n) => k && n.userId === USERS[k].id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+});
+app.post('/api/notifications/:id/read', (req, res) => { const k = who(req); const r = NOTIFS.find((n) => n.id === req.params.id && k && n.userId === USERS[k].id); if (r) r.isRead = true; ok(res, null); });
+app.delete('/api/notifications/:id', async (req, res) => { const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); ok(res, (await notifSvc.remove(req.params.id, USERS[k].id)).data); });
+app.delete('/api/notifications', async (req, res) => { const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.'); const sc = ['all', 'older'].includes(req.query.scope) ? req.query.scope : 'read'; ok(res, (await notifSvc.clear(USERS[k].id, sc, req.query.days === undefined ? 30 : Number(req.query.days))).data); });
+app.get('/__notifs', (req, res) => res.json(NOTIFS));
+
+// ---- overview analytics: the REAL service over small tables (two farms, two warehouses, one mill), with the seed's own idea of who holds reports.view ----
+const { OverviewAnalyticsService } = require(B + '/overview/overview-analytics.service');
+const OV_FARM_B = '88888888-8888-4888-8888-888888888888', MILL1 = '66666666-6666-4666-8666-666666666666', MILL2 = '77777777-7777-4777-8777-777777777777';
+const dAgo = (d) => new Date(Date.now() - d * 86400e3);
+const OV = {
+  farms: [{ id: FARM, name: 'Nkawkaw Farm' }, { id: OV_FARM_B, name: 'Sefwi Farm' }],
+  whs: [{ id: WH1, name: 'Tamale Warehouse' }, { id: WH2, name: 'Kumasi Warehouse' }],
+  mills: [{ id: MILL1, name: 'Tamale Mill' }, { id: MILL2, name: 'Kumasi Mill' }],
+};
+const ovEntries = () => [
+  { farmId: FARM, entryDate: dAgo(2), weightKg: 4000, moisturePercent: 13, paddyGrade: { label: 'Size 3' } },
+  { farmId: FARM, entryDate: dAgo(9), weightKg: 2500, moisturePercent: 14, paddyGrade: { label: 'Size 4' } },
+  { farmId: OV_FARM_B, entryDate: dAgo(5), weightKg: 6000, moisturePercent: 15, paddyGrade: { label: 'Size 3' } },
+];
+const ovProd = () => [
+  { millingCenterId: MILL1, date: dAgo(1), paddyProcessedKg: 10000, recoveredRiceKg: 7000, brokenRiceKg: 1500, riceHullKg: 1200, wasteLossKg: 300, energyConsumptionKwh: 500, machineRuntimeMin: 240, massBalanceFlag: false },
+  { millingCenterId: MILL1, date: dAgo(8), paddyProcessedKg: 8000, recoveredRiceKg: 5400, brokenRiceKg: 1200, riceHullKg: 1100, wasteLossKg: 300, energyConsumptionKwh: 480, machineRuntimeMin: 200, massBalanceFlag: true },
+  { millingCenterId: MILL2, date: dAgo(3), paddyProcessedKg: 12000, recoveredRiceKg: 7200, brokenRiceKg: 2000, riceHullKg: 2300, wasteLossKg: 500, energyConsumptionKwh: 900, machineRuntimeMin: 300, massBalanceFlag: false },
+];
+const inList = (where, key, rows) => (where[key] && where[key].in ? rows.filter((r) => where[key].in.includes(r.id)) : rows);
+const ovPrisma = {
+  farm: { findMany: async ({ where }) => inList(where, 'id', OV.farms) },
+  warehouse: { findMany: async ({ where }) => inList(where, 'id', OV.whs) },
+  millingCenter: { findMany: async ({ where }) => inList(where, 'id', OV.mills) },
+  paddyEntry: { findMany: async ({ where }) => ovEntries().filter((e) => where.farmId.in.includes(e.farmId)), groupBy: async ({ where }) => (where.status === 'SUBMITTED' ? [{ farmId: FARM, _count: { _all: 2 } }] : [{ farmId: OV_FARM_B, _count: { _all: 1 } }]) },
+  inventoryBalance: { findMany: async ({ where }) => (where.locationType === 'FARM' ? [{ locationId: FARM, quantityKg: 9000 }, { locationId: OV_FARM_B, quantityKg: 3000 }] : [{ locationId: WH1, quantityKg: 20000, paddyGradeId: 'g', productId: null }, { locationId: WH2, quantityKg: 8000, paddyGradeId: 'g', productId: null }, { locationId: WH1, quantityKg: 5000, paddyGradeId: null, productId: 'p' }, { locationId: WH2, quantityKg: 1500, paddyGradeId: null, productId: 'p' }]) },
+  shipment: { findMany: async ({ where }) => {
+    if (where.farmId) return [{ farmId: FARM, expectedKg: 5000, receivedAt: null, deliveryReport: { totalDeliveryCost: 1500 } }, { farmId: OV_FARM_B, expectedKg: 4000, receivedAt: dAgo(1), deliveryReport: { totalDeliveryCost: 1000 } }];
+    if (where.receivedAt === null) return [{ warehouseId: WH1, expectedKg: 5000 }];
+    return [{ warehouseId: WH1, receivedAt: dAgo(1), receivedKg: 3900, varianceKg: -100, varianceRequiresApproval: true }, { warehouseId: WH2, receivedAt: dAgo(4), receivedKg: 4000, varianceKg: 0, varianceRequiresApproval: false }];
+  } },
+  productionRecord: { findMany: async ({ where }) => ovProd().filter((r) => where.millingCenterId.in.includes(r.millingCenterId)), count: async () => 3 },
+  machine: { groupBy: async () => [{ status: 'RUNNING', _count: { _all: 3 } }, { status: 'FAULT', _count: { _all: 1 } }, { status: 'MAINTENANCE', _count: { _all: 1 } }] },
+};
+const ovSvc = new OverviewAnalyticsService(ovPrisma);
+const ovRoute = (name, fn) => app.get('/api/overview/analytics/' + name, async (req, res) => {
+  const k = who(req); if (!k) return fail(res, 401, 'Please sign in again.');
+  if (!seedPerms(USERS[k].role).includes('reports.view')) return fail(res, 403, 'You do not have permission to do this.');
+  try { ok(res, await ovSvc[fn](actorOf(k), req.query.days)); } catch (e) { fail(res, 500, String(e && e.message || e)); }
+});
+ovRoute('farms', 'farms'); ovRoute('warehouses', 'warehouses'); ovRoute('operations', 'operations'); ovRoute('executive', 'executive');
+const prevAfterReset = globalThis.__afterReset;
+globalThis.__afterReset = () => { if (prevAfterReset) prevAfterReset(); seedNotifs(); mirrored = X.notes.length; };
+seedNotifs();
 app.get('/__supply', (req, res) => res.json(X.supply));
 app.get('/__orders', (req, res) => res.json(X.orders));
 // ---- dispatch tracking and quick search: the real services, behind stand-in tables with real timestamps ----
@@ -592,9 +667,9 @@ seedX = function () {
   const shp = (id, report, wh, grade, bags, depH, recH = null, recBy = null, recBags = null) => ({ id, deliveryReportId: report, paddyGradeId: grade, expectedBags: bags, receivedBags: recBags, departedAt: ago(depH), receivedAt: recH === null ? null : ago(recH), receivedById: recBy, warehouseId: wh, createdAt: ago(depH) });
   // A: two sizes on one truck, still on the road and long overdue. B: delivered on time. C: delivered late because the approval sat for days. R: asked for, not loaded.
   X.trk = {
-    orders: [ord('trk-oA4', 1, FARM, WH1, G4, 17, 144, -4), ord('trk-oA5', 1, FARM, WH1, G5, 3, 144, -4), ord('trk-oB', 2, FARM_B, WH2, G4, 10, 96, -1), ord('trk-oC', 3, FARM, WH2, G4, 12, 156, -5), ord('trk-oR', 5, FARM_B, WH1, G5, 20, 24, 2, 'PENDING')],
-    reports: [rep('trk-rA4', 1, 'trk-oA4', FARM, WH1, G4, 17, 'DS-2026-000101', 'APPROVED', 132, 120), rep('trk-rA5', 2, 'trk-oA5', FARM, WH1, G5, 3, 'DS-2026-000101', 'APPROVED', 132, 120), rep('trk-rB', 3, 'trk-oB', FARM_B, WH2, G4, 10, 'DS-2026-000102', 'RECONCILED', 91, 84), rep('trk-rC', 4, 'trk-oC', FARM, WH2, G4, 12, 'DS-2026-000103', 'RECONCILED', 150, 70)],
-    shipments: [shp('trk-sA4', 'trk-rA4', WH1, G4, 17, 119.5), shp('trk-sA5', 'trk-rA5', WH1, G5, 3, 119.5), shp('trk-sB', 'trk-rB', WH2, G4, 10, 83, 48, 'u-wm2', 10), shp('trk-sC', 'trk-rC', WH2, G4, 12, 69, 24, 'u-wm2', 12)],
+    orders: [ord('trk-oA4', 1, FARM, WH1, G4, 17, 144, -4), ord('trk-oA5', 1, FARM, WH1, G3, 3, 144, -4), ord('trk-oB', 2, FARM_B, WH2, G4, 10, 96, -1), ord('trk-oC', 3, FARM, WH2, G4, 12, 156, -5), ord('trk-oR', 5, FARM_B, WH1, G3, 20, 24, 2, 'PENDING')],
+    reports: [rep('trk-rA4', 1, 'trk-oA4', FARM, WH1, G4, 17, 'DS-2026-000101', 'APPROVED', 132, 120), rep('trk-rA5', 2, 'trk-oA5', FARM, WH1, G3, 3, 'DS-2026-000101', 'APPROVED', 132, 120), rep('trk-rB', 3, 'trk-oB', FARM_B, WH2, G4, 10, 'DS-2026-000102', 'RECONCILED', 91, 84), rep('trk-rC', 4, 'trk-oC', FARM, WH2, G4, 12, 'DS-2026-000103', 'RECONCILED', 150, 70)],
+    shipments: [shp('trk-sA4', 'trk-rA4', WH1, G4, 17, 119.5), shp('trk-sA5', 'trk-rA5', WH1, G3, 3, 119.5), shp('trk-sB', 'trk-rB', WH2, G4, 10, 83, 48, 'u-wm2', 10), shp('trk-sC', 'trk-rC', WH2, G4, 12, 69, 24, 'u-wm2', 12)],
   };
   X.cc.stockTransfers.forEach((t, i) => Object.assign(t, { id: `trk-rt${i + 1}`, transferNumber: `TRF-2026-00000${i + 1}`, sourceWarehouseId: t.destWarehouseId === WH1 ? WH2 : WH1, productId: 'prod1', packagingSizeId: 'ps1', bagCount: 20, requestedById: 'u-sup', dispatchedAt: ago(30), createdAt: ago(30), receivedById: t.status === 'RECEIVED' ? 'u-wm1' : null, receivedAt: t.status === 'RECEIVED' ? ago(6) : null, receivedBagCount: t.status === 'RECEIVED' ? 20 : null }));
 };
@@ -631,7 +706,8 @@ const SEARCH = { delay: 0, fail: false };
 const slowTracking = { list: async (a, o) => { if (SEARCH.delay) await new Promise((r) => setTimeout(r, SEARCH.delay)); if (SEARCH.fail) throw new Error('simulated failure in the slow part'); return trackingService.list(a, o); } };
 const newSearch = () => new SearchService(searchPrisma, slowTracking, supplyService, accessSvc);
 let searchService = newSearch();
-globalThis.__afterReset = () => { SEARCH.delay = 0; SEARCH.fail = false; searchService = newSearch(); accessSvc.invalidate(); };
+const prevReset2 = globalThis.__afterReset;
+globalThis.__afterReset = () => { if (prevReset2) prevReset2(); SEARCH.delay = 0; SEARCH.fail = false; searchService = newSearch(); accessSvc.invalidate(); };
 app.post('/__search_mode', (req, res) => { SEARCH.delay = Number((req.body || {}).delay || 0); SEARCH.fail = !!(req.body || {}).fail; searchService = newSearch(); res.json(SEARCH); });
 sRoute('get', '/api/search', null, (d, a, req) => searchService.search(a, String(req.query.q ?? ''), req.query.scope === 'fast' || req.query.scope === 'slow' ? req.query.scope : undefined));
 
@@ -671,7 +747,7 @@ app.get('/__reviews', (req, res) => res.json({ reviews: X.reviews, ledger: X.rev
 sRoute('get', '/api/access/features', null, () => accessSvc.matrix());
 sRoute('put', '/api/access/features/:roleCode', SetRoleFeaturesDto, (d, a, req) => accessSvc.setForRole(req.params.roleCode, d.denied, a));
 // ---- the overview figures the Farm Supervisor's and Operations Manager's home pages draw (empty lists would make those widgets fail) ----
-app.get('/api/reports/farm-overview', (req, res) => ok(res, { paddy: { received: [{ gradeLabel: 'Size 4', bags: 120, kg: 6000 }], available: [{ gradeLabel: 'Size 4', bags: 83, kg: 4150 }, { gradeLabel: 'Size 5', bags: 97, kg: 4850 }], dispatched: [] } }));
+app.get('/api/reports/farm-overview', (req, res) => ok(res, { paddy: { received: [{ gradeLabel: 'Size 4', bags: 120, kg: 6000 }], available: [{ gradeLabel: 'Size 4', bags: 83, kg: 4150 }, { gradeLabel: 'Size 3', bags: 97, kg: 4850 }], dispatched: [] } }));
 app.get('/api/reports/production-overview', (req, res) => ok(res, { processed: [], recoveredRiceKg: 0, brokenRiceKg: 0, riceHullKg: 0, recoveryPercent: 0, energyConsumedKwh: 0 }));
 // ---- the company's money: the REAL service over fixed figures (the same set the unit tests use), always "now" = 15 October 2026 ----
 const { FinanceCenterService } = require(B + '/finance/finance-center.service');

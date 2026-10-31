@@ -491,6 +491,11 @@ export const notificationsApi = {
     request<number>('/notifications/unread-count', { method: 'GET' }, accessToken),
   markRead: (accessToken: string, id: string) =>
     request<null>(`/notifications/${id}/read`, { method: 'POST' }, accessToken),
+  /** Delete one notification of your own. */
+  remove: (accessToken: string, id: string) => request<{ deleted: number }>(`/notifications/${id}`, { method: 'DELETE' }, accessToken),
+  /** Clear your old notifications: only the ones already read, everything older than N days, or all. */
+  clear: (accessToken: string, scope: 'read' | 'older' | 'all', days?: number) =>
+    request<{ deleted: number }>(`/notifications?scope=${scope}${scope === 'older' && days !== undefined ? `&days=${days}` : ''}`, { method: 'DELETE' }, accessToken),
 };
 
 export interface AppUser {
@@ -2265,4 +2270,34 @@ export const millDispatchApi = {
   reject: (accessToken: string, id: string, reason: string) => request<MillDispatchView>(`/mill-dispatches/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }, accessToken),
   cancel: (accessToken: string, id: string, note?: string) => request<MillDispatchView>(`/mill-dispatches/${id}/cancel`, { method: 'POST', body: JSON.stringify({ note }) }, accessToken),
   receive: (accessToken: string, id: string, data: { lines: { key: string; bags?: number; kg?: number }[]; notes?: string }) => request<MillDispatchView>(`/mill-dispatches/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }, accessToken),
+};
+
+
+// ── Overview analytics (Farm Director, Warehouse Supervisor, Operations Manager, top management) ──
+export type OverviewDays = 7 | 30 | 90;
+export interface OvFarmRow { id: string; name: string; stockKg: number; intakeKg: number; pendingEntries: number; rejectedEntries: number; dispatchedKg: number; inTransitKg: number; deliveryCost: number; costPerTonne: number | null; avgMoisture: number | null }
+export interface OvFarms {
+  days: number; unit: 'day' | 'week'; farms: OvFarmRow[];
+  trend: { bucket: string; total: number; byFarm: Record<string, number> }[];
+  bySize?: { label: string; kg: number }[];
+  totals: { stockKg: number; intakeKg: number; pendingEntries: number; rejectedEntries: number; dispatchedKg: number; inTransitKg: number; deliveryCost: number };
+}
+export interface OvWarehouseRow { id: string; name: string; paddyKg: number; packagedKg: number; incomingKg: number; incomingTrucks: number; receivedKg: number; varianceKg: number; variancePct: number | null; awaitingReview: number }
+export interface OvWarehouses {
+  days: number; unit: 'day' | 'week'; warehouses: OvWarehouseRow[];
+  trend: { bucket: string; total: number; byWarehouse: Record<string, number> }[];
+  totals: { paddyKg: number; packagedKg: number; incomingKg: number; receivedKg: number; varianceKg: number; awaitingReview: number };
+}
+export interface OvMillRow { id: string; name: string; processedKg: number; recoveredKg: number; brokenKg: number; hullKg: number; lossKg: number; recoveryPct: number | null; brokenPct: number | null; kwhPerTonne: number | null; runs: number; flagged: number; runtimeHours: number }
+export interface OvOperations {
+  days: number; unit: 'day' | 'week'; mills: OvMillRow[];
+  trend: { bucket: string; processedKg: number; recoveryPct: number | null; kwhPerTonne: number | null }[];
+  machines: Record<string, number>;
+  totals: { processedKg: number; recoveredKg: number; brokenKg: number; hullKg: number; lossKg: number; recoveryPct: number | null; kwhPerTonne: number | null; runs: number; flagged: number; awaitingApproval: number };
+}
+export const overviewApi = {
+  farms: (t: string, days: OverviewDays) => request<OvFarms>(`/overview/analytics/farms?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
+  warehouses: (t: string, days: OverviewDays) => request<OvWarehouses>(`/overview/analytics/warehouses?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
+  operations: (t: string, days: OverviewDays) => request<OvOperations>(`/overview/analytics/operations?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
+  executive: (t: string, days: OverviewDays) => request<{ farm: OvFarms; warehouse: OvWarehouses; operations: OvOperations }>(`/overview/analytics/executive?days=${days}`, { method: 'GET', cache: 'no-store' }, t),
 };

@@ -2,7 +2,7 @@ import os, re, sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)
 from lib import *
 
 WH1 = '11111111-1111-4111-8111-111111111111'; WH2 = '22222222-2222-4222-8222-222222222222'
-G4 = '44444444-4444-4444-8444-444444444444'; G5 = '55555555-5555-4555-8555-555555555555'
+G4 = '44444444-4444-4444-8444-444444444444'; G3 = '99995555-9999-4999-8999-999955555555'
 EVERYONE = ['sales1', 'sales2', 'fd', 'md', 'ceo', 'ops', 'ops2', 'sup', 'sup2', 'wm1', 'wm2', 'fsup', 'fsup2', 'fm', 'oo', 'admin']
 def txt(l): return l.inner_text()
 def api(path, key, method='GET', body=None):
@@ -73,7 +73,7 @@ with sync_playwright() as pw:
     ctx, p = open_cc(b, 'fsup2'); check('the Farm Supervisor of one farm sees nothing of the other farm', 'Techiman' not in txt(p.get_by_test_id('control-center')) and 'Nkawkaw Farm' in txt(p.get_by_test_id('cc-jurisdiction'))); ctx.close()
 
     # =============== 4. The figures are live ===============
-    st, r = api('/supply-requests', 'wm1', 'POST', {'warehouseId': WH1, 'lines': [{'paddyGradeId': G4, 'bagCount': 17}, {'paddyGradeId': G5, 'bagCount': 3}], 'neededBy': '2026-10-09'})
+    st, r = api('/supply-requests', 'wm1', 'POST', {'warehouseId': WH1, 'lines': [{'paddyGradeId': G4, 'bagCount': 17}, {'paddyGradeId': G3, 'bagCount': 3}], 'neededBy': '2026-10-09'})
     check('Tamale asks for paddy (through the real service)', st == 200 or st == 201, (st, r))
     def fig(key): ctx, p = open_cc(b, key); t = tiles(p); ctx.close(); return t
     t = fig('sup'); check('the supervisor now has 1 request waiting for their move, 1 open, and 1 new task', (t['supply-waiting'], t['supply-open'], t['my-tasks']) == (1, 1, 1), t)

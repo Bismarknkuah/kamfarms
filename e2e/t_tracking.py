@@ -1,7 +1,7 @@
 import os, re, sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lib import *
 
-G4 = '44444444-4444-4444-8444-444444444444'; G5 = '55555555-5555-4555-8555-555555555555'
+G4 = '44444444-4444-4444-8444-444444444444'; G3 = '99995555-9999-4999-8999-999955555555'
 A, B, C, R = 'DS-2026-000101', 'DS-2026-000102', 'DS-2026-000103', 'RQ-2026-009105'
 def txt(l): return l.inner_text()
 def api(path, key, method='GET', body=None):
@@ -40,7 +40,7 @@ with sync_playwright() as pw:
 
     # =============== 3. Where each dispatch is, and the time it was supposed to arrive ===============
     ctx, p = open_tracker(b, 'md'); a, bb, c, r = card(p, A), card(p, B), card(p, C), card(p, R)
-    check('A: one truck, both sizes on one card, still IN TRANSIT, and it says how overdue it is', a.get_attribute('data-status') == 'IN_TRANSIT' and 'Size 4: 17' in txt(a.get_by_test_id('journey-sizes')) and 'Size 5: 3' in txt(a.get_by_test_id('journey-sizes')) and 'Overdue by' in txt(a.get_by_test_id('journey-late')), txt(a))
+    check('A: one truck, both sizes on one card, still IN TRANSIT, and it says how overdue it is', a.get_attribute('data-status') == 'IN_TRANSIT' and 'Size 4: 17' in txt(a.get_by_test_id('journey-sizes')) and 'Size 3: 3' in txt(a.get_by_test_id('journey-sizes')) and 'Overdue by' in txt(a.get_by_test_id('journey-late')), txt(a))
     check('B: DELIVERED on time (and does not say it was late)', bb.get_attribute('data-status') == 'DELIVERED' and bb.get_by_test_id('journey-ontime').count() == 1 and bb.get_by_test_id('journey-late').count() == 0, txt(bb))
     check('C: DELIVERED, but late, and it says by how long', c.get_attribute('data-status') == 'DELIVERED' and 'Late by' in txt(c.get_by_test_id('journey-late')) and 'days' in txt(c.get_by_test_id('journey-late')), txt(c))
     check('R: asked for, not loaded yet', 'Requested: not loaded yet' in txt(r.get_by_test_id('journey-status')))
@@ -62,7 +62,7 @@ with sync_playwright() as pw:
     check('the counts say what is on the way, delivered and late', chips == {'all': 'All (7)', 'open': 'On the way (4)', 'delivered': 'Delivered (3)', 'late': 'Late (2)'}, chips)
     p.get_by_test_id('filter-late').click(); p.wait_for_timeout(200); check('"Late" shows the overdue truck and the late delivery, nothing else', sorted(x.get_attribute('data-ref') for x in p.get_by_test_id('journey').all()) == sorted([A, C]))
     p.get_by_test_id('filter-all').click(); p.get_by_test_id('track-search').fill('techiman'); p.wait_for_timeout(200)
-    check('searching by farm finds that farm\'s dispatches', sorted(x.get_attribute('data-ref') for x in p.get_by_test_id('journey').all()) == sorted([B, R]))
+    got = sorted(x.get_attribute('data-ref') for x in p.get_by_test_id('journey').all()); check('searching by farm finds that farm\'s dispatches', got == sorted([B, R]), got)
     p.get_by_test_id('track-search').fill('zzzz'); p.wait_for_timeout(200); check('and says plainly when nothing matches', 'No dispatch matches' in txt(p.get_by_test_id('track-empty'))); ctx.close()
 
     # =============== 6. The warehouse manager confirms the truck has arrived ===============
@@ -70,10 +70,10 @@ with sync_playwright() as pw:
     for key in ('wm1', 'sup', 'md', 'fm'):
         ctx, p = open_tracker(b, key); who[key] = card(p, A).get_by_test_id('act-confirm').count(); ctx.close()
     check('only the Warehouse Manager of the warehouse the truck is going to is offered "Truck received"', who == {'wm1': 1, 'sup': 0, 'md': 0, 'fm': 0}, who)
-    st, _ = api('/shipments/dispatch/' + A + '/receive', 'wm2', 'POST', {'lines': [{'paddyGradeId': G4, 'receivedBags': 17}, {'paddyGradeId': G5, 'receivedBags': 3}]})
+    st, _ = api('/shipments/dispatch/' + A + '/receive', 'wm2', 'POST', {'lines': [{'paddyGradeId': G4, 'receivedBags': 17}, {'paddyGradeId': G3, 'receivedBags': 3}]})
     check('another warehouse\'s manager cannot count it in (refused by the server), and nothing changed', st == 403 and all(s['receivedAt'] is None for s in http('/__trk')[1]['shipments'] if s['id'] in ('trk-sA4', 'trk-sA5')), st)
     ctx, p = open_tracker(b, 'wm1'); a = card(p, A); a.get_by_test_id('act-confirm').click(); cf = a.get_by_test_id('confirm-form'); cf.wait_for(); cf.get_by_label('Arrived bags of Size 4').wait_for(); p.wait_for_timeout(400)
-    check('the count starts at what was sent, with a big plus and minus for each size', cf.get_by_label('Arrived bags of Size 4').input_value() == '17' and cf.get_by_label('Arrived bags of Size 5').input_value() == '3' and 'sent: 17' in txt(cf))
+    check('the count starts at what was sent, with a big plus and minus for each size', cf.get_by_label('Arrived bags of Size 4').input_value() == '17' and cf.get_by_label('Arrived bags of Size 3').input_value() == '3' and 'sent: 17' in txt(cf))
     cf.get_by_label('Arrived bags of Size 4').fill('16'); cf.get_by_test_id('confirm-note').fill('One bag torn'); cf.get_by_test_id('confirm-submit').click(); p.get_by_test_id('track-notice').wait_for(); p.wait_for_timeout(500)
     notice = txt(p.get_by_test_id('track-notice'))
     check('one confirmation counts in the whole truck, and says it is now delivered, with the bag that was short', 'Delivered' in notice and '1 short' in notice, notice)
@@ -85,7 +85,7 @@ with sync_playwright() as pw:
     check('the last step now shows who counted it in and the shortage', last.get_attribute('data-state') == 'done' and 'Kwabena Adjei' in txt(last) and '1 bag short' in txt(last), txt(last))
     check('it also says how late it was, since it arrived after its day', 'Late by' in txt(a.get_by_test_id('journey-late'))); ctx.close()
     ctx, p = open_tracker(b, 'md'); check('the Managing Director sees it as delivered too', card(p, A).get_attribute('data-status') == 'DELIVERED'); ctx.close()
-    st, r2 = api('/shipments/dispatch/' + A + '/receive', 'wm1', 'POST', {'lines': [{'paddyGradeId': G4, 'receivedBags': 17}, {'paddyGradeId': G5, 'receivedBags': 3}]})
+    st, r2 = api('/shipments/dispatch/' + A + '/receive', 'wm1', 'POST', {'lines': [{'paddyGradeId': G4, 'receivedBags': 17}, {'paddyGradeId': G3, 'receivedBags': 3}]})
     check('counting it in a second time is refused', st == 400 and 'already been counted in' in str(r2), (st, r2))
 
     # =============== 7. A phone ===============

@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, Factory, Package, Truck, Wheat } from 'luc
 import { type MeResponse, inventoryApi, type InventorySummary } from '@/lib/api-client';
 import { useEffect, useState } from 'react';
 import { ControlCenter, hasControlCenter } from '@/components/ControlCenter';
+import { ExecutiveAnalyticsView } from '@/components/overview/ExecutiveAnalytics';
 import { ReleaseDesk } from '@/components/SalesDesks';
 import { ResetApprovalQueue } from '@/components/review/ResetApprovalQueue';
 import { WatchlistCard } from '@/components/WatchlistCard';
@@ -50,6 +51,8 @@ export function MdDashboard({ me, accessToken, hasPermission }: { me: MeResponse
       </div>
 
       {hasControlCenter(me) && <ControlCenter accessToken={accessToken} me={me} />}
+
+      {hasPermission('reports.view') && <ExecutiveAnalyticsView accessToken={accessToken} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2" data-testid="exec-desk">

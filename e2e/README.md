@@ -29,6 +29,7 @@ python3 e2e/t_deliveries.py      # deliveries between warehouses, the Farm Direc
 python3 e2e/t_dispatch.py        # the Dispatch desk: request, task, ONE dispatch for both sizes, approval (62)
 python3 e2e/t_executive.py       # 2026.10.17/18: the three dashboards (that they differ, each role's figures, and every task performed), spending by place, the money ledger and who may see it
 python3 e2e/t_update.py          # 2026.10.16: control center buttons, the install pop-up, search under slow/failing parts, damaged bags, who can use what (82)
+python3 e2e/t_overview.py        # 2026.10.24: the redesigned Overview header, analytics for Farm/Warehouse/Operations/top management, scope isolation, and deleting notifications for every role (56)
 ```
 Each script exits non-zero if any check fails. `POST http://localhost:4000/__reset` restores the seed data between runs.
 If the build cannot reach Google Fonts (an offline machine), build with a temporary stand-in for the two `next/font/google` fonts in

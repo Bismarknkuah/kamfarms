@@ -76,4 +76,24 @@ export class NotificationsService {
     });
     return { success: true, message: 'All notifications marked as read.', errorCode: null, data: null };
   }
+
+  /** Delete one of the caller's own notifications. Scoped to the owner in the WHERE clause, like markRead. */
+  async remove(id: string, userId: string) {
+    const r = await this.prisma.notification.deleteMany({ where: { id, userId } });
+    return { success: true, message: r.count ? 'Notification deleted.' : 'Nothing to delete.', errorCode: null, data: { deleted: r.count } };
+  }
+
+  /**
+   * Clear the caller's old notifications. `scope`: 'read' (only ones already read), 'older' (anything older than `days`, default 30, read or not),
+   * or 'all'. Only ever touches the caller's own rows.
+   */
+  async clear(userId: string, scope: 'read' | 'older' | 'all' = 'read', days = 30) {
+    const safeDays = Number.isFinite(days) && days >= 0 ? Math.min(Math.floor(days), 3650) : 30;
+    const where =
+      scope === 'all' ? { userId }
+      : scope === 'older' ? { userId, createdAt: { lt: new Date(Date.now() - safeDays * 86_400_000) } }
+      : { userId, isRead: true };
+    const r = await this.prisma.notification.deleteMany({ where });
+    return { success: true, message: r.count ? `${r.count} notification${r.count === 1 ? '' : 's'} deleted.` : 'There was nothing to delete.', errorCode: null, data: { deleted: r.count } };
+  }
 }

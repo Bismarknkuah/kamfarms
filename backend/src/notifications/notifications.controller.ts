@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -31,5 +31,17 @@ export class NotificationsController {
   @Post('read-all')
   markAllRead(@CurrentUser() actor: AuthenticatedUser) {
     return this.notificationsService.markAllRead(actor.id);
+  }
+
+  /** Clear old notifications: ?scope=read (default) | older (&days=30) | all. Declared before :id so "clear" is not read as an id. */
+  @Delete()
+  clear(@CurrentUser() actor: AuthenticatedUser, @Query('scope') scope?: string, @Query('days') days?: string) {
+    const s = scope === 'all' || scope === 'older' ? scope : 'read';
+    return this.notificationsService.clear(actor.id, s, days === undefined ? 30 : Number(days));
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string, @CurrentUser() actor: AuthenticatedUser) {
+    return this.notificationsService.remove(id, actor.id);
   }
 }

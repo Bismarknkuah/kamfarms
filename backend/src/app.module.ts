@@ -30,6 +30,7 @@ import { CustomersModule } from './customers/customers.module';
 import { SalesModule } from './sales/sales.module';
 import { SiteModule } from './site/site.module';
 import { InsightsModule } from './insights/insights.module';
+import { OverviewModule } from './overview/overview.module';
 import { FinanceModule } from './finance/finance.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SettingsModule } from './settings/settings.module';
@@ -79,6 +80,7 @@ import { SystemOverviewModule } from './system-overview/system-overview.module';
     SalesModule,
     SiteModule,
     InsightsModule,
+    OverviewModule,
     SystemOverviewModule,
     FinanceModule,
     MessagingModule,

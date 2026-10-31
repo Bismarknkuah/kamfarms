@@ -22,7 +22,7 @@ with sync_playwright() as pw:
     b = pw.chromium.launch()
     SCENARIOS = [  # (mode, amount, scope label for the page, scope key for the real maths)
         ('paddy', 5, 'Size 4', 'grade:Size 4'),          # "when they milled 5 bags of Size 4"
-        ('paddy', 5, 'Size 5', 'grade:Size 5'),
+        ('paddy', 5, 'Size 3', 'grade:Size 3'),
         ('rice', 100, None, 'all'),                      # "I recovered / I want 100 bags of rice"
         ('rice', 50, 'Size 4', 'grade:Size 4'),
         ('power', 10, 'Tamale Mill', 'center:Tamale Mill'),

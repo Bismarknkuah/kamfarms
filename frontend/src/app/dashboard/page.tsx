@@ -18,6 +18,10 @@ import { Wheat, Truck, Factory, Package, DollarSign } from 'lucide-react';
 import { WatchlistCard } from '@/components/WatchlistCard';
 import { AdminDashboard } from '@/components/admin/AdminDashboard';
 import { OutputFeedbackCard } from '@/components/OutputFeedbackCard';
+import { OverviewHeader } from '@/components/overview/OverviewHeader';
+import { FarmAnalytics } from '@/components/overview/FarmAnalytics';
+import { WarehouseAnalytics } from '@/components/overview/WarehouseAnalytics';
+import { OperationsAnalytics } from '@/components/overview/OperationsAnalytics';
 import {
   reportsApi,
   ExecutiveSummary,
@@ -774,34 +778,13 @@ export default function DashboardPage() {
 
   return (
     <DashboardShell me={me}>
-      <div className="mb-8">
-        <h1 className="font-display text-2xl font-medium text-paddy-900">
-          Welcome, {me.firstName} {me.lastName}
-        </h1>
-        <p className="text-sm text-ink-500">{me.roles.map((r) => roleLabel(r.code)).join(', ')}</p>
-      </div>
+      <OverviewHeader me={me} attention={attention} hasControlCenter={false} />
 
       {accessToken && hasControlCenter(me) && <div className="mb-8"><ControlCenter accessToken={accessToken} me={me} /></div>}
 
-      {attention.length > 0 && (
-        <div className="mb-8 overflow-hidden rounded-2xl bg-paddy-900">
-          {attention.map((item, i) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={`flex items-center justify-between px-6 py-4 transition hover:bg-paddy-700 ${i > 0 ? 'border-t border-paddy-700' : ''}`}
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-husk-500 text-sm font-medium text-white">
-                  {item.count}
-                </span>
-                <span className="text-sm font-medium text-rice-50">{item.label}</span>
-              </div>
-              <span className="text-xs font-medium text-husk-300">Review &rarr;</span>
-            </Link>
-          ))}
-        </div>
-      )}
+      {accessToken && isFarmDirector && <FarmAnalytics accessToken={accessToken} />}
+      {accessToken && isWarehouseSupervisor && <WarehouseAnalytics accessToken={accessToken} />}
+      {accessToken && isOperationsManager && <OperationsAnalytics accessToken={accessToken} />}
 
       {accessToken && (
         <>
